@@ -795,6 +795,15 @@
     <!-- Filters -->
     <div class="filters-section">
         <div class="filters-row">
+            <span class="filter-label">📅 Fecha Entrega:</span>
+            <div class="filter-chip active" data-date="all" onclick="filterByDate('all')">Todas</div>
+            <div class="filter-chip" data-date="yesterday" onclick="filterByDate('yesterday')">Ayer</div>
+            <div class="filter-chip" data-date="today" onclick="filterByDate('today')">Hoy</div>
+            <div class="filter-chip" data-date="tomorrow" onclick="filterByDate('tomorrow')">Mañana</div>
+            <div class="filter-chip" data-date="pending" onclick="filterByDate('pending')">Sin Entregar</div>
+        </div>
+        
+        <div class="filters-row" style="margin-top: 10px;">
             <span class="filter-label">📍 Zona:</span>
             <div class="filter-chip active" data-zone="all" onclick="filterByZone('all')">Todas</div>
             <div class="filter-chip" data-zone="capital" onclick="filterByZone('capital')">Capital</div>
@@ -859,6 +868,7 @@
             currentFilter: {
                 status: 'all',
                 zone: 'all',
+                date: 'all',
                 search: ''
             },
             sortBy: 'date_desc'
@@ -1213,6 +1223,52 @@
             applyFilters();
         }
         
+        function filterByDate(dateFilter) {
+            // Update UI
+            document.querySelectorAll('[data-date]').forEach(chip => {
+                chip.classList.remove('active');
+            });
+            
+            document.querySelector(`[data-date="${dateFilter}"]`)?.classList.add('active');
+            
+            state.currentFilter.date = dateFilter;
+            applyFilters();
+        }
+        
+        function isDeliveryDate(shipment, targetDate) {
+            // Get estimated delivery date or actual delivery date
+            const deliveryDate = shipment.shipping_option?.estimated_delivery_time?.date ||
+                                shipment.estimated_delivery_time?.date ||
+                                shipment.date_delivered;
+            
+            if (!deliveryDate) return false;
+            
+            const shipDate = new Date(deliveryDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const shipDateOnly = new Date(shipDate);
+            shipDateOnly.setHours(0, 0, 0, 0);
+            
+            switch (targetDate) {
+                case 'today':
+                    return shipDateOnly.getTime() === today.getTime();
+                case 'yesterday':
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return shipDateOnly.getTime() === yesterday.getTime();
+                case 'tomorrow':
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    return shipDateOnly.getTime() === tomorrow.getTime();
+                case 'pending':
+                    // Not delivered yet
+                    return shipment.status !== 'delivered' && shipment.status !== 'cancelled';
+                default:
+                    return true;
+            }
+        }
+        
         function applyFilters() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             state.currentFilter.search = searchTerm;
@@ -1228,6 +1284,11 @@
                 if (state.currentFilter.zone !== 'all') {
                     const zone = getShipmentZone(shipment);
                     if (zone !== state.currentFilter.zone) return false;
+                }
+                
+                // Date filter
+                if (state.currentFilter.date !== 'all') {
+                    if (!isDeliveryDate(shipment, state.currentFilter.date)) return false;
                 }
                 
                 // Search filter
@@ -1289,6 +1350,20 @@
                 const status = getShipmentStatus(shipment);
                 const zone = getShipmentZone(shipment);
                 const address = shipment.receiver_address || {};
+                const fullAddress = [
+                    address.street_name,
+                    address.street_number,
+                    address.floor,
+                    address.apartment
+                ].filter(Boolean).join(' ');
+                
+                const deliveryDate = shipment.shipping_option?.estimated_delivery_time?.date ||
+                                    shipment.estimated_delivery_time?.date ||
+                                    shipment.date_delivered;
+                
+                const carrier = shipment.shipping_option?.name ||
+                               shipment.logistic_type ||
+                               'No especificado';
                 
                 return `
                     <div class="shipment-card">
@@ -1313,16 +1388,25 @@
                             <div class="detail-item">
                                 <span class="detail-icon">📍</span>
                                 <div class="detail-text">
-                                    <span class="detail-label">Ubicación</span>
-                                    <div class="detail-value">${address.city?.name || 'No disponible'}</div>
+                                    <span class="detail-label">Dirección Completa</span>
+                                    <div class="detail-value">${fullAddress || 'No disponible'}<br>
+                                    ${address.city?.name || ''}, ${address.state?.name || ''} (${address.zip_code || ''})</div>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-icon">🚚</span>
+                                <div class="detail-text">
+                                    <span class="detail-label">Transportista</span>
+                                    <div class="detail-value">${carrier}</div>
                                 </div>
                             </div>
                             
                             <div class="detail-item">
                                 <span class="detail-icon">📅</span>
                                 <div class="detail-text">
-                                    <span class="detail-label">Fecha</span>
-                                    <div class="detail-value">${formatDate(shipment.date_created)}</div>
+                                    <span class="detail-label">Fecha Entrega Estimada</span>
+                                    <div class="detail-value">${deliveryDate ? formatDate(deliveryDate) : 'No disponible'}</div>
                                 </div>
                             </div>
                             
