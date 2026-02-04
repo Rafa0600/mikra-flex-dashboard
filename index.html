@@ -365,8 +365,21 @@
             content.innerHTML = `<div class="loading">Cargando ${titulo}...</div>`;
             
             try {
-                // Get shipments by status
-                const response = await fetch(`${CONFIG.API_BASE}/shipments/search?seller_id=${sellerId}&status=${orderStatus}&offset=0&limit=20`, {
+                // Get orders with shipping status filter
+                // For "in transit": order.shipping.status = shipped or handling
+                // For "delivered": tags include "delivered"
+                
+                let searchParams = `seller=${sellerId}&offset=0&limit=50`;
+                
+                // Add tag filter based on status
+                if (orderStatus === 'delivered') {
+                    searchParams += '&tags=delivered';
+                } else if (orderStatus === 'shipped,handling') {
+                    // For in transit, we need to get recent orders and filter
+                    searchParams += '&sort=date_desc';
+                }
+                
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?${searchParams}`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 
@@ -378,14 +391,49 @@
                 console.log('📦 DATOS COMPLETOS:', data);
                 
                 if (!data.results || data.results.length === 0) {
+                    content.innerHTML = `<div class="error">No se encontraron órdenes</div>`;
+                    return;
+                }
+                
+                // Get shipping details for each order
+                const ordersWithShipping = await Promise.all(
+                    data.results.map(async (order) => {
+                        try {
+                            const shippingId = order.shipping?.id;
+                            if (!shippingId) return null;
+                            
+                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            });
+                            const shipping = await shipResponse.json();
+                            return { order, shipping };
+                        } catch (e) {
+                            return null;
+                        }
+                    })
+                );
+                
+                // Filter by status if looking for in transit
+                let filtered = ordersWithShipping.filter(item => item !== null);
+                
+                if (orderStatus === 'shipped,handling') {
+                    filtered = filtered.filter(item => {
+                        const status = item.shipping?.status?.toLowerCase() || '';
+                        return status === 'shipped' || status === 'handling';
+                    });
+                }
+                
+                console.log(`Filtered ${filtered.length} shipments with status matching criteria`);
+                
+                if (filtered.length === 0) {
                     content.innerHTML = `<div class="error">No se encontraron envíos con estado: ${orderStatus}</div>`;
                     return;
                 }
                 
                 // Display shipments
-                let html = `<h2 style="margin-top:20px;">${titulo}: ${data.results.length} ENVÍOS</h2>`;
+                let html = `<h2 style="margin-top:20px;">${titulo}: ${filtered.length} ENVÍOS</h2>`;
                 
-                data.results.forEach((shipping, index) => {
+                filtered.forEach(({ order, shipping }, index) => {
                     html += `
                         <div class="order-card">
                             <div class="order-header">
@@ -394,7 +442,12 @@
                             
                             <div class="data-row">
                                 <div class="data-label">Order ID:</div>
-                                <div class="data-value">${shipping.order_id || 'N/A'}</div>
+                                <div class="data-value">${order.id || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Comprador:</div>
+                                <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
                             </div>
                             
                             <div class="data-row">
