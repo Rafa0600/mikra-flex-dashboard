@@ -757,6 +757,10 @@
                     <span class="icon">🚪</span>
                     <span>Cerrar Sesión</span>
                 </button>
+                <button class="sync-btn" onclick="showDebugInfo()" style="background: #9b59b6; margin-left: 10px;">
+                    <span class="icon">🔍</span>
+                    <span>Ver Datos Raw</span>
+                </button>
             </div>
         </div>
     </header>
@@ -1092,6 +1096,13 @@
                     console.log('  - estimated_delivery_time:', state.shipments[0].estimated_delivery_time);
                 }
                 
+                // Fetch complete shipping details for each shipment
+                console.log('📦 Fetching complete shipping details...');
+                await enrichShipmentsWithDetails();
+                
+                console.log('✅ Shipments enriched with details');
+                
+                
                 // Apply filters and render
                 applyFilters();
                 updateStats();
@@ -1168,6 +1179,61 @@
                 localStorage.clear();
                 showAuthModal();
             }
+        }
+        
+        async function enrichShipmentsWithDetails() {
+            // Fetch complete shipping details for each shipment
+            const enrichedShipments = await Promise.all(
+                state.shipments.map(async (shipment) => {
+                    try {
+                        // Get shipping details using the shipping ID
+                        const shippingId = shipment.id || shipment.full_order?.shipping?.id;
+                        
+                        if (!shippingId) {
+                            console.warn('No shipping ID for shipment:', shipment);
+                            return shipment;
+                        }
+                        
+                        console.log(`📦 Fetching details for shipping ${shippingId}...`);
+                        
+                        const response = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                            headers: {
+                                'Authorization': `Bearer ${state.accessToken}`
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            console.error(`Failed to fetch shipping ${shippingId}:`, response.status);
+                            return shipment;
+                        }
+                        
+                        const shippingDetails = await response.json();
+                        console.log(`✅ Got details for ${shippingId}:`, shippingDetails);
+                        
+                        // Merge the complete shipping details
+                        return {
+                            ...shipment,
+                            // Override with complete shipping details
+                            receiver_address: shippingDetails.receiver_address,
+                            shipping_option: shippingDetails.shipping_option,
+                            estimated_delivery_time: shippingDetails.estimated_delivery_time,
+                            logistic_type: shippingDetails.logistic_type,
+                            tracking_number: shippingDetails.tracking_number,
+                            tracking_method: shippingDetails.tracking_method,
+                            status: shippingDetails.status,
+                            substatus: shippingDetails.substatus,
+                            // Keep complete shipping object
+                            complete_shipping: shippingDetails
+                        };
+                    } catch (error) {
+                        console.error(`Error enriching shipment ${shipment.id}:`, error);
+                        return shipment;
+                    }
+                })
+            );
+            
+            state.shipments = enrichedShipments;
+            console.log('📦 Sample enriched shipment:', state.shipments[0]);
         }
         
         function updateStats() {
@@ -1382,8 +1448,15 @@
                 const status = getShipmentStatus(shipment);
                 const zone = getShipmentZone(shipment);
                 
-                // Get address (it should be in receiver_address now)
-                const address = shipment.receiver_address || {};
+                // Get shipping data from full_order if available
+                const shipping = shipment.full_order?.shipping || shipment.full_shipping || {};
+                const order = shipment.full_order || {};
+                
+                // Get address from the shipping object
+                const address = shipping.receiver_address || {};
+                
+                console.log('🔍 Shipping data for', shipment.id, ':', shipping);
+                console.log('🔍 Address data:', address);
                 
                 // Build full address string
                 const addressParts = [
@@ -1397,31 +1470,38 @@
                 const cityState = [address.city?.name, address.state?.name].filter(Boolean).join(', ');
                 const zipCode = address.zip_code ? `(CP: ${address.zip_code})` : '';
                 
-                // Get delivery date
-                const deliveryDate = shipment.estimated_delivery_time?.date ||
-                                    shipment.shipping_option?.estimated_delivery_time?.date;
+                // Get delivery date from shipping
+                const deliveryDate = shipping.shipping_option?.estimated_delivery_time?.date ||
+                                    shipping.estimated_delivery_time?.date;
                 
-                // Get carrier/logistics
-                const carrier = shipment.shipping_option?.name ||
-                               shipment.logistic_type ||
+                // Get carrier from shipping
+                const carrier = shipping.shipping_option?.name ||
+                               shipping.logistic_type ||
                                'No especificado';
                 
                 // Get buyer name
+                const buyer = order.buyer || {};
                 const buyerName = address.receiver_name ||
-                                 `${shipment.buyer?.first_name || ''} ${shipment.buyer?.last_name || ''}`.trim() ||
+                                 (buyer.first_name && `${buyer.first_name} ${buyer.last_name}`.trim()) ||
+                                 buyer.nickname ||
                                  'No disponible';
                 
                 // Get shipping status detail
-                const statusDetail = shipment.substatus ? 
-                    `${shipment.status} - ${shipment.substatus}` : 
-                    shipment.status || 'Desconocido';
+                const shippingStatus = shipping.status || shipment.status;
+                const shippingSubstatus = shipping.substatus || shipment.substatus;
+                const statusDetail = shippingSubstatus ? 
+                    `${shippingStatus} - ${shippingSubstatus}` : 
+                    shippingStatus || 'Desconocido';
+                
+                // Get tracking
+                const trackingNumber = shipping.tracking_number || shipment.tracking_number;
                 
                 return `
                     <div class="shipment-card">
                         <div class="shipment-header">
                             <div class="shipment-id">
                                 ID: <span>${shipment.id}</span>
-                                ${shipment.order_id ? `<br><small style="opacity: 0.7;">Orden: ${shipment.order_id}</small>` : ''}
+                                ${order.id ? `<br><small style="opacity: 0.7;">Orden: ${order.id}</small>` : ''}
                             </div>
                             <div class="status-badge ${status}">
                                 ${getStatusLabel(status)}
@@ -1480,12 +1560,12 @@
                                 </div>
                             </div>
                             
-                            ${shipment.tracking_number ? `
+                            ${trackingNumber ? `
                             <div class="detail-item">
                                 <span class="detail-icon">🔢</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Tracking</span>
-                                    <div class="detail-value">${shipment.tracking_number}</div>
+                                    <div class="detail-value">${trackingNumber}</div>
                                 </div>
                             </div>
                             ` : ''}
@@ -1568,6 +1648,27 @@
                     location.reload();
                 }, 1000);
             }
+        }
+        
+        function showDebugInfo() {
+            if (state.shipments.length === 0) {
+                alert('No hay envíos cargados');
+                return;
+            }
+            
+            const firstShipment = state.shipments[0];
+            const debugInfo = {
+                'Total envíos': state.shipments.length,
+                'Primer envío': firstShipment,
+                'receiver_address': firstShipment.receiver_address,
+                'shipping_option': firstShipment.shipping_option,
+                'estimated_delivery_time': firstShipment.estimated_delivery_time,
+                'full_shipping': firstShipment.full_shipping,
+                'full_order': firstShipment.full_order
+            };
+            
+            console.log('🐛 DEBUG INFO:', debugInfo);
+            alert('Información mostrada en la consola (F12). Hacé una captura y mandámela.');
         }
         
         function formatDateTime(dateString) {
