@@ -116,6 +116,8 @@
         <h1>🔍 DEBUG - Datos RAW de MercadoLibre</h1>
         <button onclick="conectar()">Conectar con MercadoLibre</button>
         <button onclick="cargarDatos()" id="loadBtn" style="display:none;">Cargar Últimas Ventas</button>
+        <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none; background:#00d9ff;">🚚 Cargar EN CAMINO</button>
+        <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none; background:#00ff88;">✅ Cargar ENTREGADOS</button>
         
         <div id="content"></div>
     </div>
@@ -139,6 +141,8 @@
                 handleAuthCallback(code);
             } else if (accessToken && sellerId) {
                 document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadTransitBtn').style.display = 'inline-block';
+                document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
             }
         }
         
@@ -178,6 +182,8 @@
                 
                 content.innerHTML = '<div class="loading">✅ Conectado! Ahora cargá las ventas</div>';
                 document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadTransitBtn').style.display = 'inline-block';
+                document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
                 
                 // Remove code from URL
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -334,6 +340,132 @@
                                 <pre>${JSON.stringify(shipping, null, 2)}</pre>
                             </details>
                             ` : ''}
+                        </div>
+                    `;
+                });
+                
+                content.innerHTML = html;
+                
+            } catch (error) {
+                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                console.error(error);
+            }
+        }
+        
+        async function cargarEnCamino() {
+            await cargarPorEstado('shipped,handling', '🚚 EN CAMINO');
+        }
+        
+        async function cargarEntregados() {
+            await cargarPorEstado('delivered', '✅ ENTREGADOS');
+        }
+        
+        async function cargarPorEstado(orderStatus, titulo) {
+            const content = document.getElementById('content');
+            content.innerHTML = `<div class="loading">Cargando ${titulo}...</div>`;
+            
+            try {
+                // Get shipments by status
+                const response = await fetch(`${CONFIG.API_BASE}/shipments/search?seller_id=${sellerId}&status=${orderStatus}&offset=0&limit=20`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('📦 DATOS COMPLETOS:', data);
+                
+                if (!data.results || data.results.length === 0) {
+                    content.innerHTML = `<div class="error">No se encontraron envíos con estado: ${orderStatus}</div>`;
+                    return;
+                }
+                
+                // Display shipments
+                let html = `<h2 style="margin-top:20px;">${titulo}: ${data.results.length} ENVÍOS</h2>`;
+                
+                data.results.forEach((shipping, index) => {
+                    html += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div class="order-id">ENVÍO #${index + 1} - Shipping ID: ${shipping.id}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Order ID:</div>
+                                <div class="data-value">${shipping.order_id || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Fecha Creación:</div>
+                                <div class="data-value">${shipping.date_created}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">logistic_type:</div>
+                                <div class="data-value">${shipping.logistic_type || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Transportista:</div>
+                                <div class="data-value">${shipping.shipping_option?.name || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Envío:</div>
+                                <div class="data-value">${shipping.status || 'N/A'} - ${shipping.substatus || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">substatus_history:</div>
+                                <div class="data-value">
+                                    ${shipping.substatus_history?.length || 0} eventos
+                                    ${shipping.substatus_history?.length > 0 ? `<br>Último: ${shipping.substatus_history[shipping.substatus_history.length - 1]?.substatus}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">status_history:</div>
+                                <div class="data-value">
+                                    shipped: ${shipping.status_history?.date_shipped || '❌'}<br>
+                                    delivered: ${shipping.status_history?.date_delivered || '❌'}<br>
+                                    handling: ${shipping.status_history?.date_handling || '❌'}<br>
+                                    ready_to_ship: ${shipping.status_history?.date_ready_to_ship || '❌'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
+                                <div class="data-value" style="font-size: 18px; font-weight: bold;">
+                                    ${shipping.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
+                                      shipping.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
+                                      shipping.logistic_type === 'fulfillment' ? '🏢 FULL' :
+                                      '❓ OTRO: ' + shipping.logistic_type}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-value" style="font-size: 16px;">
+                                    ${categorizeStatus(shipping)}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Dirección:</div>
+                                <div class="data-value">
+                                    ${shipping.receiver_address?.street_name || ''} 
+                                    ${shipping.receiver_address?.street_number || ''}, 
+                                    ${shipping.receiver_address?.city?.name || ''}, 
+                                    ${shipping.receiver_address?.state?.name || ''}
+                                </div>
+                            </div>
+                            
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
+                                <pre>${JSON.stringify(shipping, null, 2)}</pre>
+                            </details>
                         </div>
                     `;
                 });
