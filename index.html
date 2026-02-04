@@ -1,657 +1,220 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug - Datos de MercadoLibre (Mejorado)</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
-            color: #fff;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        h1 {
-            color: #FFE600;
-            margin-bottom: 20px;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        
-        button {
-            background: #3483FA;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        
-        button:hover {
-            background: #2968c8;
-        }
-        
-        button:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
-        
-        .btn-success { background: #00ff88; }
-        .btn-success:hover { background: #00cc6a; }
-        
-        .btn-warning { background: #ff9800; }
-        .btn-warning:hover { background: #e68900; }
-        
-        .btn-info { background: #00d9ff; }
-        .btn-info:hover { background: #00b8d4; }
-        
-        .btn-purple { background: #9c27b0; }
-        .btn-purple:hover { background: #7b1fa2; }
-        
-        .stats-panel {
-            background: #2a2a2a;
-            border: 2px solid #FFE600;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: #1a1a1a;
-            border-radius: 6px;
-        }
-        
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #FFE600;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 14px;
-            color: #aaa;
-        }
-        
-        .order-card {
-            background: #2a2a2a;
-            border: 1px solid #444;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .order-card.flex-in-transit {
-            border: 3px solid #00ff88;
-            background: #1a2a1a;
-        }
-        
-        .order-header {
-            border-bottom: 2px solid #FFE600;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .order-id {
-            font-size: 18px;
-            font-weight: bold;
-            color: #FFE600;
-        }
-        
-        .badge {
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .badge-flex { background: #00ff88; color: #000; }
-        .badge-colecta { background: #ff9800; color: #000; }
-        .badge-full { background: #9c27b0; color: #fff; }
-        .badge-transit { background: #00d9ff; color: #000; }
-        .badge-delivered { background: #4caf50; color: #fff; }
-        .badge-pending { background: #ffeb3b; color: #000; }
-        
-        .data-row {
-            display: grid;
-            grid-template-columns: 200px 1fr;
-            gap: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid #333;
-        }
-        
-        .data-label {
-            font-weight: bold;
-            color: #aaa;
-        }
-        
-        .data-value {
-            color: #fff;
-        }
-        
-        .json-data {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 15px;
-            overflow-x: auto;
-        }
-        
-        pre {
-            color: #0f0;
-            font-size: 12px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            font-size: 20px;
-        }
-        
-        .error {
-            background: #f44336;
-            color: white;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
-        
-        .progress {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .progress-bar {
-            background: #333;
-            height: 30px;
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .progress-fill {
-            background: linear-gradient(90deg, #3483FA, #00d9ff);
-            height: 100%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔍 DEBUG - Datos RAW de MercadoLibre (Mejorado)</h1>
-        
-        <div class="button-group">
-            <button onclick="conectar()">Conectar con MercadoLibre</button>
-            <button onclick="cargarTodas()" id="loadAllBtn" style="display:none;">📦 Cargar Últimas 100 Ventas</button>
-            <button onclick="cargarFlexEnCamino()" id="loadFlexBtn" style="display:none;" class="btn-success">🏍️ Solo FLEX en Camino</button>
-            <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none;" class="btn-info">🚚 Todos en Camino</button>
-            <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none;" class="btn-success">✅ Entregados</button>
-            <button onclick="cargarPendientes()" id="loadPendingBtn" style="display:none;" class="btn-warning">📋 Pendientes</button>
-        </div>
-        
-        <div id="stats" style="display:none;"></div>
-        <div id="progress" style="display:none;"></div>
-        <div id="content"></div>
-    </div>
+<meta charset="UTF-8">
+<title>🚚 Panel FLEX - Mikra</title>
 
-    <script>
-        const CONFIG = {
-            CLIENT_ID: '6723747350775490',
-            CLIENT_SECRET: 'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
-            REDIRECT_URI: window.location.origin + window.location.pathname,
-            API_BASE: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api'
-        };
-        
-        let accessToken = localStorage.getItem('ml_access_token');
-        let sellerId = localStorage.getItem('ml_seller_id');
-        let allOrders = []; // Cache de todas las órdenes
-        
-        function init() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
-            
-            if (code) {
-                handleAuthCallback(code);
-            } else if (accessToken && sellerId) {
-                showButtons();
-            }
+<style>
+
+body{
+    background:#0f1115;
+    color:white;
+    font-family:system-ui;
+    padding:30px;
+}
+
+h1{
+    color:#FFE600;
+}
+
+button{
+    background:#3483FA;
+    border:none;
+    padding:14px 22px;
+    border-radius:8px;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+    margin-right:10px;
+}
+
+button:hover{
+    transform:scale(1.05);
+}
+
+.card{
+    background:#1a1d24;
+    padding:18px;
+    border-radius:10px;
+    margin-top:15px;
+    border-left:6px solid #00ff88;
+}
+
+.row{
+    margin:6px 0;
+}
+
+.loading{
+    font-size:20px;
+}
+
+.badge{
+    background:#00ff88;
+    padding:4px 10px;
+    border-radius:6px;
+    color:black;
+    font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>🏍️ FLEX EN CAMINO</h1>
+
+<button onclick="conectar()">Conectar MercadoLibre</button>
+<button onclick="cargarFlex()">Buscar FLEX</button>
+
+<div id="app"></div>
+
+<script>
+
+const CONFIG = {
+    CLIENT_ID:'6723747350775490',
+    CLIENT_SECRET:'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
+    REDIRECT_URI: window.location.origin + window.location.pathname,
+    API:'https://mikra-flex-proxy.rafaelassir.workers.dev/api'
+};
+
+let token = localStorage.getItem('ml_token');
+
+function conectar(){
+
+    const url=`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
+
+    window.location.href=url;
+}
+
+async function auth(code){
+
+    const r = await fetch(`${CONFIG.API}/oauth/token`,{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({
+            grant_type:'authorization_code',
+            client_id:CONFIG.CLIENT_ID,
+            client_secret:CONFIG.CLIENT_SECRET,
+            code,
+            redirect_uri:CONFIG.REDIRECT_URI
+        })
+    });
+
+    const data = await r.json();
+
+    token=data.access_token;
+
+    localStorage.setItem('ml_token',token);
+
+    history.replaceState({},document.title,location.pathname);
+
+    alert("✅ Conectado!");
+}
+
+async function cargarFlex(){
+
+    if(!token){
+        alert("Primero conectá MercadoLibre");
+        return;
+    }
+
+    const app=document.getElementById('app');
+
+    app.innerHTML='<div class="loading">Buscando FLEX en camino...</div>';
+
+    try{
+
+        let offset=0;
+        let resultados=[];
+
+        while(resultados.length < 80){
+
+            const r=await fetch(
+                `${CONFIG.API}/shipments/search?status=shipped&logistic_type=self_service&limit=50&offset=${offset}`,
+                {headers:{Authorization:`Bearer ${token}`}}
+            );
+
+            const data=await r.json();
+
+            if(!data.results || data.results.length===0) break;
+
+            resultados.push(...data.results);
+
+            offset+=50;
         }
-        
-        function showButtons() {
-            document.getElementById('loadAllBtn').style.display = 'inline-block';
-            document.getElementById('loadFlexBtn').style.display = 'inline-block';
-            document.getElementById('loadTransitBtn').style.display = 'inline-block';
-            document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
-            document.getElementById('loadPendingBtn').style.display = 'inline-block';
+
+        if(resultados.length===0){
+
+            app.innerHTML="<h2>No hay FLEX en camino 🎉</h2>";
+            return;
         }
-        
-        function conectar() {
-            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
-            window.location.href = authUrl;
-        }
-        
-        async function handleAuthCallback(code) {
-            const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Autenticando...</div>';
-            
-            try {
-                const response = await fetch(`${CONFIG.API_BASE}/oauth/token`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        grant_type: 'authorization_code',
-                        client_id: CONFIG.CLIENT_ID,
-                        client_secret: CONFIG.CLIENT_SECRET,
-                        code: code,
-                        redirect_uri: CONFIG.REDIRECT_URI
-                    })
-                });
-                
-                const data = await response.json();
-                accessToken = data.access_token;
-                localStorage.setItem('ml_access_token', accessToken);
-                
-                // Get user ID
-                const userResponse = await fetch(`${CONFIG.API_BASE}/users/me`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                const userData = await userResponse.json();
-                sellerId = userData.id;
-                localStorage.setItem('ml_seller_id', sellerId);
-                
-                content.innerHTML = '<div class="loading">✅ Conectado! Ahora podés cargar las ventas</div>';
-                showButtons();
-                
-                // Remove code from URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-            } catch (error) {
-                content.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-            }
-        }
-        
-        function updateProgress(current, total, message) {
-            const progressDiv = document.getElementById('progress');
-            progressDiv.style.display = 'block';
-            const percent = Math.round((current / total) * 100);
-            
-            progressDiv.innerHTML = `
-                <div class="progress">
-                    <div style="margin-bottom: 10px;">${message}</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${percent}%">
-                            ${current} / ${total} (${percent}%)
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        async function cargarTodas() {
-            const content = document.getElementById('content');
-            const progressDiv = document.getElementById('progress');
-            const statsDiv = document.getElementById('stats');
-            
-            content.innerHTML = '<div class="loading">Cargando últimas 100 ventas...</div>';
-            progressDiv.style.display = 'none';
-            statsDiv.style.display = 'none';
-            
-            try {
-                // Get orders
-                updateProgress(0, 100, 'Obteniendo órdenes de MercadoLibre...');
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=100&sort=date_desc`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                const data = await response.json();
-                console.log('📦 DATOS COMPLETOS:', data);
-                
-                if (!data.results || data.results.length === 0) {
-                    content.innerHTML = '<div class="error">No se encontraron ventas</div>';
-                    progressDiv.style.display = 'none';
-                    return;
-                }
-                
-                const totalOrders = data.results.length;
-                
-                // Get shipping details for each order
-                const ordersWithShipping = [];
-                for (let i = 0; i < data.results.length; i++) {
-                    const order = data.results[i];
-                    updateProgress(i + 1, totalOrders, `Obteniendo detalles de envío... (${i + 1}/${totalOrders})`);
-                    
-                    try {
-                        const shippingId = order.shipping?.id;
-                        if (!shippingId) {
-                            ordersWithShipping.push({ order, shipping: null });
-                            continue;
-                        }
-                        
-                        const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                            headers: { 'Authorization': `Bearer ${accessToken}` }
-                        });
-                        const shipping = await shipResponse.json();
-                        ordersWithShipping.push({ order, shipping });
-                        
-                        // Small delay to avoid rate limiting
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    } catch (e) {
-                        console.error('Error loading shipping:', e);
-                        ordersWithShipping.push({ order, shipping: null });
-                    }
-                }
-                
-                allOrders = ordersWithShipping;
-                progressDiv.style.display = 'none';
-                
-                // Calculate statistics
-                showStatistics(ordersWithShipping);
-                
-                // Display all orders
-                displayOrders(ordersWithShipping, '📦 ÚLTIMAS 100 VENTAS');
-                
-            } catch (error) {
-                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-                progressDiv.style.display = 'none';
-                console.error(error);
-            }
-        }
-        
-        function showStatistics(orders) {
-            const statsDiv = document.getElementById('stats');
-            statsDiv.style.display = 'block';
-            
-            const stats = {
-                total: orders.length,
-                flex: 0,
-                colecta: 0,
-                full: 0,
-                enCamino: 0,
-                flexEnCamino: 0,
-                entregados: 0,
-                pendientes: 0,
-                otros: 0
-            };
-            
-            orders.forEach(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const logisticType = shippingInfo.logistic_type;
-                const status = (shippingInfo.status || '').toLowerCase();
-                
-                // Count by logistic type
-                if (logisticType === 'self_service') stats.flex++;
-                else if (logisticType === 'cross_docking') stats.colecta++;
-                else if (logisticType === 'fulfillment') stats.full++;
-                else if (logisticType) stats.otros++;
-                
-                // Count by status
-                if (status === 'shipped' || status === 'handling') {
-                    stats.enCamino++;
-                    if (logisticType === 'self_service') stats.flexEnCamino++;
-                } else if (status === 'delivered') {
-                    stats.entregados++;
-                } else if (status === 'ready_to_ship') {
-                    stats.pendientes++;
-                }
-            });
-            
-            statsDiv.innerHTML = `
-                <div class="stats-panel">
-                    <div class="stat-item">
-                        <div class="stat-value">${stats.total}</div>
-                        <div class="stat-label">Total Ventas</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00ff88;">${stats.flexEnCamino}</div>
-                        <div class="stat-label">🏍️ FLEX en Camino</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00d9ff;">${stats.enCamino}</div>
-                        <div class="stat-label">🚚 Total en Camino</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #4caf50;">${stats.entregados}</div>
-                        <div class="stat-label">✅ Entregados</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #ffeb3b;">${stats.pendientes}</div>
-                        <div class="stat-label">📋 Pendientes</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00ff88;">${stats.flex}</div>
-                        <div class="stat-label">🏍️ Total FLEX</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #ff9800;">${stats.colecta}</div>
-                        <div class="stat-label">📮 Total Colecta</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #9c27b0;">${stats.full}</div>
-                        <div class="stat-label">🏢 Total Full</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        async function cargarFlexEnCamino() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const flexInTransit = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                const logisticType = shippingInfo.logistic_type;
-                
-                return (status === 'shipped' || status === 'handling') && 
-                       logisticType === 'self_service';
-            });
-            
-            displayOrders(flexInTransit, '🏍️ FLEX EN CAMINO', true);
-        }
-        
-        async function cargarEnCamino() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const inTransit = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'shipped' || status === 'handling';
-            });
-            
-            displayOrders(inTransit, '🚚 TODOS EN CAMINO');
-        }
-        
-        async function cargarEntregados() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const delivered = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'delivered';
-            });
-            
-            displayOrders(delivered, '✅ ENTREGADOS');
-        }
-        
-        async function cargarPendientes() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const pending = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'ready_to_ship';
-            });
-            
-            displayOrders(pending, '📋 PENDIENTES (Listos para Enviar)');
-        }
-        
-        function displayOrders(orders, titulo, highlightFlex = false) {
-            const content = document.getElementById('content');
-            
-            if (orders.length === 0) {
-                content.innerHTML = `<div class="error">No se encontraron órdenes para: ${titulo}</div>`;
-                return;
-            }
-            
-            let html = `<h2 style="margin-top:20px;">${titulo}: ${orders.length} ENVÍOS</h2>`;
-            
-            orders.forEach(({ order, shipping }, index) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const logisticType = shippingInfo.logistic_type;
-                const isFlex = logisticType === 'self_service';
-                const cardClass = highlightFlex && isFlex ? 'order-card flex-in-transit' : 'order-card';
-                
-                // Determine badges
-                let badges = [];
-                if (isFlex) badges.push('<span class="badge badge-flex">🏍️ FLEX</span>');
-                else if (logisticType === 'cross_docking') badges.push('<span class="badge badge-colecta">📮 COLECTA</span>');
-                else if (logisticType === 'fulfillment') badges.push('<span class="badge badge-full">🏢 FULL</span>');
-                
-                const status = (shippingInfo.status || '').toLowerCase();
-                if (status === 'shipped' || status === 'handling') badges.push('<span class="badge badge-transit">🚚 EN CAMINO</span>');
-                else if (status === 'delivered') badges.push('<span class="badge badge-delivered">✅ ENTREGADO</span>');
-                else if (status === 'ready_to_ship') badges.push('<span class="badge badge-pending">📋 PENDIENTE</span>');
-                
-                html += `
-                    <div class="${cardClass}">
-                        <div class="order-header">
-                            <div class="order-id">ENVÍO #${index + 1} - Order: ${order.id}</div>
-                            <div>${badges.join(' ')}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Shipping ID:</div>
-                            <div class="data-value">${shippingInfo.id || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Comprador:</div>
-                            <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Fecha Creación:</div>
-                            <div class="data-value">${shippingInfo.date_created || order.date_created}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">logistic_type:</div>
-                            <div class="data-value">${shippingInfo.logistic_type || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">shipping_method_id:</div>
-                            <div class="data-value" style="color: ${shippingInfo.shipping_method_id === 100009 ? '#0f0' : '#fff'};">
-                                ${shippingInfo.shipping_method_id || 'N/A'}
-                                ${shippingInfo.shipping_method_id === 100009 ? ' ← 🏍️ FLEX!' : ''}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Transportista:</div>
-                            <div class="data-value">${shippingInfo.shipping_option?.name || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Estado Envío:</div>
-                            <div class="data-value">${shippingInfo.status || 'N/A'} - ${shippingInfo.substatus || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">status_history:</div>
-                            <div class="data-value">
-                                shipped: ${shippingInfo.status_history?.date_shipped || '❌'}<br>
-                                delivered: ${shippingInfo.status_history?.date_delivered || '❌'}<br>
-                                handling: ${shippingInfo.status_history?.date_handling || '❌'}<br>
-                                ready_to_ship: ${shippingInfo.status_history?.date_ready_to_ship || '❌'}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">substatus_history:</div>
-                            <div class="data-value">
-                                ${shippingInfo.substatus_history?.length || 0} eventos
-                                ${shippingInfo.substatus_history?.length > 0 ? `<br>Último: ${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.substatus} (${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.date_created})` : ''}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Dirección:</div>
-                            <div class="data-value">
-                                ${shippingInfo.receiver_address?.street_name || ''} 
-                                ${shippingInfo.receiver_address?.street_number || ''}, 
-                                ${shippingInfo.receiver_address?.city?.name || ''}, 
-                                ${shippingInfo.receiver_address?.state?.name || ''}
-                            </div>
-                        </div>
-                        
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON Completo (Orden)</summary>
-                            <pre>${JSON.stringify(order, null, 2)}</pre>
-                        </details>
-                        
-                        ${shipping ? `
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
-                            <pre>${JSON.stringify(shipping, null, 2)}</pre>
-                        </details>
-                        ` : ''}
-                    </div>
-                `;
-            });
-            
-            content.innerHTML = html;
-        }
-        
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
+
+        render(resultados);
+
+    }catch(e){
+
+        app.innerHTML=`Error: ${e.message}`;
+    }
+}
+
+function render(envios){
+
+    const app=document.getElementById('app');
+
+    let html=`<h2>Total: ${envios.length}</h2>`;
+
+    envios.forEach(s=>{
+
+        html+=`
+
+        <div class="card">
+
+            <div class="row">
+                <span class="badge">EN CAMINO</span>
+            </div>
+
+            <div class="row">
+                <b>Shipping ID:</b> ${s.id}
+            </div>
+
+            <div class="row">
+                <b>Dirección:</b>
+                ${s.receiver_address?.street_name || ''}
+                ${s.receiver_address?.street_number || ''},
+                ${s.receiver_address?.city?.name || ''}
+            </div>
+
+            <div class="row">
+                <b>Comprador:</b> ${s.receiver_address?.receiver_name || '-'}
+            </div>
+
+            <div class="row">
+                <b>Fecha enviado:</b>
+                ${s.status_history?.date_shipped || '-'}
+            </div>
+
+        </div>
+
+        `;
+    });
+
+    app.innerHTML=html;
+}
+
+(function init(){
+
+    const params=new URLSearchParams(location.search);
+    const code=params.get('code');
+
+    if(code){
+        auth(code);
+    }
+
+})();
+
+</script>
+
 </body>
 </html>
+```
