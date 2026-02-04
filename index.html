@@ -1039,17 +1039,41 @@
                 // Process shipments or orders
                 if (data.results) {
                     state.shipments = data.results.map(item => {
-                        // If it's an order, extract shipping info
+                        // If it's an order, extract and merge all shipping info
                         if (item.shipping) {
                             return {
+                                // IDs
                                 id: item.shipping.id || item.id,
                                 order_id: item.id,
+                                
+                                // Status
                                 status: item.shipping.status || item.status,
                                 substatus: item.shipping.substatus,
-                                tracking_number: item.shipping.tracking_number,
+                                
+                                // Dates
                                 date_created: item.date_created,
+                                date_shipped: item.shipping.date_created,
+                                
+                                // Tracking
+                                tracking_number: item.shipping.tracking_number,
+                                tracking_method: item.shipping.tracking_method,
+                                
+                                // Address (from shipping object)
                                 receiver_address: item.shipping.receiver_address,
-                                ...item.shipping
+                                
+                                // Shipping details
+                                shipping_option: item.shipping.shipping_option,
+                                logistic_type: item.shipping.logistic_type,
+                                estimated_delivery_time: item.shipping.shipping_option?.estimated_delivery_time,
+                                
+                                // Buyer info (useful for contact)
+                                buyer: item.buyer,
+                                
+                                // Keep full shipping object for detailed view
+                                full_shipping: item.shipping,
+                                
+                                // Keep full order for reference
+                                full_order: item
                             };
                         }
                         return item;
@@ -1059,6 +1083,14 @@
                 }
                 
                 console.log('✅ Processed Shipments:', state.shipments.length);
+                console.log('📦 Sample shipment data:', state.shipments[0]);
+                
+                if (state.shipments.length > 0) {
+                    console.log('🔍 First shipment structure:');
+                    console.log('  - receiver_address:', state.shipments[0].receiver_address);
+                    console.log('  - shipping_option:', state.shipments[0].shipping_option);
+                    console.log('  - estimated_delivery_time:', state.shipments[0].estimated_delivery_time);
+                }
                 
                 // Apply filters and render
                 applyFilters();
@@ -1349,27 +1381,47 @@
             container.innerHTML = state.filteredShipments.map(shipment => {
                 const status = getShipmentStatus(shipment);
                 const zone = getShipmentZone(shipment);
+                
+                // Get address (it should be in receiver_address now)
                 const address = shipment.receiver_address || {};
-                const fullAddress = [
+                
+                // Build full address string
+                const addressParts = [
                     address.street_name,
                     address.street_number,
-                    address.floor,
-                    address.apartment
-                ].filter(Boolean).join(' ');
+                    address.floor && `Piso ${address.floor}`,
+                    address.apartment && `Depto ${address.apartment}`
+                ].filter(Boolean);
                 
-                const deliveryDate = shipment.shipping_option?.estimated_delivery_time?.date ||
-                                    shipment.estimated_delivery_time?.date ||
-                                    shipment.date_delivered;
+                const fullAddress = addressParts.length > 0 ? addressParts.join(' ') : 'No disponible';
+                const cityState = [address.city?.name, address.state?.name].filter(Boolean).join(', ');
+                const zipCode = address.zip_code ? `(CP: ${address.zip_code})` : '';
                 
+                // Get delivery date
+                const deliveryDate = shipment.estimated_delivery_time?.date ||
+                                    shipment.shipping_option?.estimated_delivery_time?.date;
+                
+                // Get carrier/logistics
                 const carrier = shipment.shipping_option?.name ||
                                shipment.logistic_type ||
                                'No especificado';
+                
+                // Get buyer name
+                const buyerName = address.receiver_name ||
+                                 `${shipment.buyer?.first_name || ''} ${shipment.buyer?.last_name || ''}`.trim() ||
+                                 'No disponible';
+                
+                // Get shipping status detail
+                const statusDetail = shipment.substatus ? 
+                    `${shipment.status} - ${shipment.substatus}` : 
+                    shipment.status || 'Desconocido';
                 
                 return `
                     <div class="shipment-card">
                         <div class="shipment-header">
                             <div class="shipment-id">
                                 ID: <span>${shipment.id}</span>
+                                ${shipment.order_id ? `<br><small style="opacity: 0.7;">Orden: ${shipment.order_id}</small>` : ''}
                             </div>
                             <div class="status-badge ${status}">
                                 ${getStatusLabel(status)}
@@ -1381,7 +1433,7 @@
                                 <span class="detail-icon">👤</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Destinatario</span>
-                                    <div class="detail-value">${address.receiver_name || 'No disponible'}</div>
+                                    <div class="detail-value">${buyerName}</div>
                                 </div>
                             </div>
                             
@@ -1389,8 +1441,10 @@
                                 <span class="detail-icon">📍</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Dirección Completa</span>
-                                    <div class="detail-value">${fullAddress || 'No disponible'}<br>
-                                    ${address.city?.name || ''}, ${address.state?.name || ''} (${address.zip_code || ''})</div>
+                                    <div class="detail-value">
+                                        ${fullAddress}<br>
+                                        ${cityState} ${zipCode}
+                                    </div>
                                 </div>
                             </div>
                             
@@ -1411,12 +1465,30 @@
                             </div>
                             
                             <div class="detail-item">
+                                <span class="detail-icon">📦</span>
+                                <div class="detail-text">
+                                    <span class="detail-label">Estado Detallado</span>
+                                    <div class="detail-value">${statusDetail}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
                                 <span class="detail-icon">🏷️</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Zona</span>
                                     <div class="detail-value">${getZoneLabel(zone)}</div>
                                 </div>
                             </div>
+                            
+                            ${shipment.tracking_number ? `
+                            <div class="detail-item">
+                                <span class="detail-icon">🔢</span>
+                                <div class="detail-text">
+                                    <span class="detail-label">Tracking</span>
+                                    <div class="detail-value">${shipment.tracking_number}</div>
+                                </div>
+                            </div>
+                            ` : ''}
                         </div>
                         
                         ${renderTracking(shipment)}
