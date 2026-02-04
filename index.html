@@ -1103,24 +1103,45 @@
                 // FILTER: Only show FLEX shipments (exclude colectas/correo)
                 state.shipments = state.shipments.filter(shipment => {
                     const shipping = shipment.complete_shipping || shipment.full_shipping || {};
-                    const logisticType = (shipping.logistic_type || '').toLowerCase();
-                    const shippingMode = (shipping.shipping_mode || '').toLowerCase();
-                    const shippingMethod = (shipping.shipping_option?.name || '').toLowerCase();
+                    const order = shipment.full_order || {};
+                    const orderShipping = order.shipping || {};
                     
-                    // Only include FLEX shipments (moto delivery)
-                    // Exclude: cross_docking (colecta), self_service, etc.
+                    const logisticType = (shipping.logistic_type || orderShipping.logistic_type || '').toLowerCase();
+                    const shippingMode = (shipping.shipping_mode || '').toLowerCase();
+                    const shippingMethod = (shipping.shipping_option?.name || orderShipping.shipping_option?.name || '').toLowerCase();
+                    const shippingId = shipping.shipping_method_id || orderShipping.shipping_method_id;
+                    
+                    console.log(`${shipment.id}: logisticType="${logisticType}", shippingMethod="${shippingMethod}", shippingId=${shippingId}`);
+                    
+                    // Exclude colectas (cross_docking, self_service)
+                    const isColecta = logisticType.includes('cross_docking') ||
+                                     logisticType.includes('self_service') ||
+                                     shippingMethod.includes('colecta') ||
+                                     shippingMethod.includes('correo') ||
+                                     shippingMethod.includes('oca') ||
+                                     shippingMethod.includes('andreani');
+                    
+                    // If it's clearly a colecta, exclude it
+                    if (isColecta) {
+                        console.log(`  ❌ Excluded: colecta/correo`);
+                        return false;
+                    }
+                    
+                    // Include FLEX shipments
                     const isFlex = logisticType.includes('fulfillment') || 
                                    logisticType.includes('flex') ||
                                    shippingMode.includes('me2') ||
-                                   shippingMethod.includes('flex');
+                                   shippingMethod.includes('flex') ||
+                                   shippingMethod.includes('moto');
                     
-                    const isColecta = logisticType.includes('cross_docking') ||
-                                     logisticType.includes('self_service') ||
-                                     shippingMethod.includes('colecta');
+                    // If we can't determine, include it (safer to show than hide)
+                    if (logisticType === '' && shippingMethod === '') {
+                        console.log(`  ⚠️ Unknown type, including by default`);
+                        return true;
+                    }
                     
-                    console.log(`${shipment.id}: logisticType=${logisticType}, isFlex=${isFlex}, isColecta=${isColecta}`);
-                    
-                    return isFlex && !isColecta;
+                    console.log(`  ${isFlex ? '✅' : '❌'} isFlex=${isFlex}`);
+                    return isFlex || logisticType === ''; // Include if FLEX or unknown
                 });
                 
                 console.log('✅ FLEX Shipments after filter:', state.shipments.length);
