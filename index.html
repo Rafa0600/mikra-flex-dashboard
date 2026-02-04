@@ -223,6 +223,8 @@
         .stat-card.transit .stat-value { color: var(--info); }
         .stat-card.delayed .stat-value { color: var(--warning); }
         .stat-card.problem .stat-value { color: var(--danger); }
+        .stat-card.cancelled { background: #2c2c2c; border-color: #555; }
+        .stat-card.cancelled .stat-value { color: #999; }
         .stat-card.pending .stat-value { color: var(--text-secondary); }
         
         .stat-label {
@@ -418,6 +420,11 @@
         .status-badge.problem {
             background: rgba(255, 56, 56, 0.2);
             color: var(--danger);
+        }
+        
+        .status-badge.cancelled {
+            background: rgba(100, 100, 100, 0.2);
+            color: #888;
         }
         
         .status-badge.pending {
@@ -788,6 +795,11 @@
                 <div class="stat-value" id="statProblem">0</div>
                 <div class="stat-label">Problemas</div>
             </div>
+            <div class="stat-card cancelled" data-status="cancelled" onclick="filterByStatus('cancelled')" style="background: #2c2c2c; border-color: #555;">
+                <div class="stat-icon">❌</div>
+                <div class="stat-value" id="statCancelled">0</div>
+                <div class="stat-label">Cancelados</div>
+            </div>
             <div class="stat-card pending" data-status="pending" onclick="filterByStatus('pending')">
                 <div class="stat-icon">📋</div>
                 <div class="stat-value" id="statPending">0</div>
@@ -1087,6 +1099,31 @@
                 }
                 
                 console.log('✅ Processed Shipments:', state.shipments.length);
+                
+                // FILTER: Only show FLEX shipments (exclude colectas/correo)
+                state.shipments = state.shipments.filter(shipment => {
+                    const shipping = shipment.complete_shipping || shipment.full_shipping || {};
+                    const logisticType = (shipping.logistic_type || '').toLowerCase();
+                    const shippingMode = (shipping.shipping_mode || '').toLowerCase();
+                    const shippingMethod = (shipping.shipping_option?.name || '').toLowerCase();
+                    
+                    // Only include FLEX shipments (moto delivery)
+                    // Exclude: cross_docking (colecta), self_service, etc.
+                    const isFlex = logisticType.includes('fulfillment') || 
+                                   logisticType.includes('flex') ||
+                                   shippingMode.includes('me2') ||
+                                   shippingMethod.includes('flex');
+                    
+                    const isColecta = logisticType.includes('cross_docking') ||
+                                     logisticType.includes('self_service') ||
+                                     shippingMethod.includes('colecta');
+                    
+                    console.log(`${shipment.id}: logisticType=${logisticType}, isFlex=${isFlex}, isColecta=${isColecta}`);
+                    
+                    return isFlex && !isColecta;
+                });
+                
+                console.log('✅ FLEX Shipments after filter:', state.shipments.length);
                 console.log('📦 Sample shipment data:', state.shipments[0]);
                 
                 if (state.shipments.length > 0) {
@@ -1242,6 +1279,7 @@
                 transit: 0,
                 delayed: 0,
                 problem: 0,
+                cancelled: 0,
                 pending: 0
             };
             
@@ -1256,17 +1294,95 @@
             document.getElementById('statTransit').textContent = stats.transit;
             document.getElementById('statDelayed').textContent = stats.delayed;
             document.getElementById('statProblem').textContent = stats.problem;
+            document.getElementById('statCancelled').textContent = stats.cancelled;
             document.getElementById('statPending').textContent = stats.pending;
         }
         
         function getShipmentStatus(shipment) {
-            const status = shipment.status || shipment.substatus;
+            const status = (shipment.status || '').toLowerCase();
+            const substatus = (shipment.substatus || '').toLowerCase();
+            const shipping = shipment.complete_shipping || {};
+            const shippingStatus = (shipping.status || '').toLowerCase();
+            const shippingSubstatus = (shipping.substatus || '').toLowerCase();
             
-            if (status === 'delivered') return 'delivered';
-            if (status === 'shipped' || status === 'ready_to_ship') return 'transit';
-            if (status === 'delayed') return 'delayed';
-            if (status === 'cancelled' || status === 'not_delivered') return 'problem';
+            // Use shipping status if available, otherwise use order status
+            const finalStatus = shippingStatus || status;
+            const finalSubstatus = shippingSubstatus || substatus;
+            
+            console.log(`📦 Status check for ${shipment.id}:`, {
+                status, substatus, shippingStatus, shippingSubstatus, finalStatus, finalSubstatus
+            });
+            
+            // CANCELLED - separate category
+            if (finalStatus === 'cancelled' || finalStatus === 'canceled') {
+                return 'cancelled';
+            }
+            
+            // DELIVERED
+            if (finalStatus === 'delivered' || finalSubstatus === 'delivered') {
+                return 'delivered';
+            }
+            
+            // IN TRANSIT - all shipping-in-progress statuses
+            const transitStatuses = ['shipped', 'handling', 'ready_to_ship', 'in_transit', 
+                                    'out_for_delivery', 'picked_up', 'in_hub', 'in_packaging',
+                                    'ready_to_print', 'printed', 'stale_ready_to_ship'];
+            
+            if (transitStatuses.includes(finalStatus) || transitStatuses.includes(finalSubstatus)) {
+                return 'transit';
+            }
+            
+            // PROBLEMS (returned, lost, damaged, etc.)
+            if (finalStatus === 'returned' || finalStatus === 'lost' || 
+                finalSubstatus.includes('return') || finalSubstatus === 'damaged' ||
+                finalSubstatus === 'not_delivered' || finalSubstatus === 'receiver_absent') {
+                return 'problem';
+            }
+            
+            // DELAYED
+            if (finalSubstatus === 'delayed' || finalSubstatus === 'contact_buyer' ||
+                finalSubstatus === 'delayed_in_warehouse' || finalSubstatus === 'stale') {
+                return 'delayed';
+            }
+            
+            // PENDING (paid but not shipped yet)
             return 'pending';
+        }
+        
+        function getDetailedStatus(shipment) {
+            // Get the most detailed status available
+            const shipping = shipment.complete_shipping || {};
+            const substatus = shipping.substatus || shipment.substatus || '';
+            const status = shipping.status || shipment.status || '';
+            
+            // Spanish translations for substatuses
+            const statusLabels = {
+                'ready_to_print': 'Listo para imprimir',
+                'printed': 'Etiqueta impresa',
+                'ready_to_ship': 'Listo para enviar',
+                'picked_up': 'Recogido',
+                'in_hub': 'En centro de distribución',
+                'in_packaging': 'En empaque',
+                'shipped': 'Enviado',
+                'in_transit': 'En tránsito',
+                'out_for_delivery': 'En reparto',
+                'delivered': 'Entregado',
+                'cancelled': 'Cancelado',
+                'delayed': 'Demorado',
+                'delayed_in_warehouse': 'Demorado en depósito',
+                'receiver_absent': 'Destinatario ausente',
+                'not_delivered': 'No entregado',
+                'returned': 'Devuelto',
+                'lost': 'Extraviado',
+                'damaged': 'Dañado',
+                'contact_buyer': 'Contactar comprador',
+                'stale': 'Estancado',
+                'stale_ready_to_ship': 'Demorado (listo para enviar)',
+                'paid': 'Pagado - Pendiente de envío',
+                'handling': 'En preparación'
+            };
+            
+            return statusLabels[substatus] || statusLabels[status] || status || 'Desconocido';
         }
         
         function getShipmentZone(shipment) {
@@ -1448,15 +1564,16 @@
                 const status = getShipmentStatus(shipment);
                 const zone = getShipmentZone(shipment);
                 
-                // Get shipping data from full_order if available
-                const shipping = shipment.full_order?.shipping || shipment.full_shipping || {};
+                // Get shipping data from complete_shipping (this has ALL the data)
+                const shipping = shipment.complete_shipping || {};
                 const order = shipment.full_order || {};
                 
-                // Get address from the shipping object
+                // Get address from complete_shipping
                 const address = shipping.receiver_address || {};
                 
-                console.log('🔍 Shipping data for', shipment.id, ':', shipping);
-                console.log('🔍 Address data:', address);
+                console.log('🔍 Using complete_shipping for', shipment.id);
+                console.log('  - address:', address);
+                console.log('  - shipping_option:', shipping.shipping_option);
                 
                 // Build full address string
                 const addressParts = [
@@ -1470,13 +1587,15 @@
                 const cityState = [address.city?.name, address.state?.name].filter(Boolean).join(', ');
                 const zipCode = address.zip_code ? `(CP: ${address.zip_code})` : '';
                 
-                // Get delivery date from shipping
-                const deliveryDate = shipping.shipping_option?.estimated_delivery_time?.date ||
-                                    shipping.estimated_delivery_time?.date;
+                // Get delivery date from shipping_option
+                const deliveryDate = shipping.shipping_option?.estimated_delivery_final?.date ||
+                                    shipping.shipping_option?.estimated_delivery_time?.date ||
+                                    shipping.shipping_option?.estimated_schedule_limit?.date;
                 
-                // Get carrier from shipping
+                // Get carrier/logistics
                 const carrier = shipping.shipping_option?.name ||
                                shipping.logistic_type ||
+                               shipping.tracking_method ||
                                'No especificado';
                 
                 // Get buyer name
@@ -1486,15 +1605,46 @@
                                  buyer.nickname ||
                                  'No disponible';
                 
-                // Get shipping status detail
+                // Get current shipping status from substatus_history (most recent)
+                const substatusHistory = shipping.substatus_history || [];
+                const currentSubstatus = substatusHistory.length > 0 ? 
+                    substatusHistory[substatusHistory.length - 1] : null;
+                
                 const shippingStatus = shipping.status || shipment.status;
-                const shippingSubstatus = shipping.substatus || shipment.substatus;
-                const statusDetail = shippingSubstatus ? 
-                    `${shippingStatus} - ${shippingSubstatus}` : 
-                    shippingStatus || 'Desconocido';
+                const shippingSubstatus = currentSubstatus?.substatus || shipping.substatus || '';
+                
+                // Map substatus to friendly Spanish names
+                const substatusLabels = {
+                    'ready_to_print': 'Listo para imprimir',
+                    'picked_up': 'Retirado',
+                    'in_hub': 'En centro de distribución',
+                    'in_packaging': 'En empaque',
+                    'ready_to_ship': 'Listo para enviar',
+                    'in_transit': 'En tránsito',
+                    'out_for_delivery': 'En reparto',
+                    'delivered': 'Entregado',
+                    'delayed': 'Demorado',
+                    'cancelled': 'Cancelado',
+                    'printed': 'Etiqueta impresa'
+                };
+                
+                // Format status display with friendly name
+                const statusDisplay = shippingSubstatus ? 
+                    (substatusLabels[shippingSubstatus] || shippingSubstatus) : 
+                    (shippingStatus || 'Desconocido');
+                
+                // Get status timestamp
+                const statusDate = currentSubstatus?.date_substatus || 
+                                  shipping.date_created || 
+                                  shipment.date_created;
                 
                 // Get tracking
                 const trackingNumber = shipping.tracking_number || shipment.tracking_number;
+                
+                // Get last status update date
+                const lastUpdate = shipping.status_history?.date_shipped ||
+                                  shipping.date_created ||
+                                  order.date_created;
                 
                 return `
                     <div class="shipment-card">
@@ -1520,7 +1670,7 @@
                             <div class="detail-item">
                                 <span class="detail-icon">📍</span>
                                 <div class="detail-text">
-                                    <span class="detail-label">Dirección Completa</span>
+                                    <span class="detail-label">Dirección</span>
                                     <div class="detail-value">
                                         ${fullAddress}<br>
                                         ${cityState} ${zipCode}
@@ -1537,22 +1687,6 @@
                             </div>
                             
                             <div class="detail-item">
-                                <span class="detail-icon">📅</span>
-                                <div class="detail-text">
-                                    <span class="detail-label">Fecha Entrega Estimada</span>
-                                    <div class="detail-value">${deliveryDate ? formatDate(deliveryDate) : 'No disponible'}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="detail-item">
-                                <span class="detail-icon">📦</span>
-                                <div class="detail-text">
-                                    <span class="detail-label">Estado Detallado</span>
-                                    <div class="detail-value">${statusDetail}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="detail-item">
                                 <span class="detail-icon">🏷️</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Zona</span>
@@ -1560,43 +1694,75 @@
                                 </div>
                             </div>
                             
+                            ${deliveryDate ? `
+                            <div class="detail-item">
+                                <span class="detail-icon">📅</span>
+                                <div class="detail-text">
+                                    <span class="detail-label">Entrega Estimada</span>
+                                    <div class="detail-value">${formatDate(deliveryDate)}</div>
+                                </div>
+                            </div>
+                            ` : ''}
+                            
                             ${trackingNumber ? `
                             <div class="detail-item">
-                                <span class="detail-icon">🔢</span>
+                                <span class="detail-icon">📦</span>
                                 <div class="detail-text">
                                     <span class="detail-label">Tracking</span>
                                     <div class="detail-value">${trackingNumber}</div>
                                 </div>
                             </div>
                             ` : ''}
+                            
+                            <div class="detail-item" style="grid-column: 1 / -1; border-top: 1px solid #333; padding-top: 12px; margin-top: 8px;">
+                                <span class="detail-icon">📊</span>
+                                <div class="detail-text">
+                                    <span class="detail-label">Estado Actual</span>
+                                    <div class="detail-value" style="font-weight: 600;">${statusDisplay}</div>
+                                    <small style="opacity: 0.6;">${formatDateTime(lastUpdate)}</small>
+                                </div>
+                            </div>
                         </div>
                         
-                        ${renderTracking(shipment)}
+                        ${substatusHistory.length > 0 ? renderSubstatusHistory(substatusHistory) : ''}
                     </div>
                 `;
             }).join('');
         }
         
-        function renderTracking(shipment) {
-            if (!shipment.tracking_number && !shipment.tracking_method) {
+        function renderSubstatusHistory(substatusHistory) {
+            if (!substatusHistory || substatusHistory.length === 0) {
                 return '';
             }
             
+            // Reverse to show most recent first
+            const history = [...substatusHistory].reverse();
+            
+            const statusLabels = {
+                'ready_to_print': 'Listo para imprimir',
+                'printed': 'Impreso',
+                'picked_up': 'Recolectado',
+                'in_hub': 'En centro de distribución',
+                'in_packing_list': 'En lista de empaque',
+                'ready_to_ship': 'Listo para despachar',
+                'shipped': 'Despachado',
+                'in_transit': 'En tránsito',
+                'out_for_delivery': 'En reparto',
+                'delivered': 'Entregado'
+            };
+            
             return `
-                <div class="shipment-tracking">
-                    <div class="tracking-timeline">
-                        <div class="tracking-event">
-                            <div class="tracking-dot"></div>
-                            <div class="tracking-content">
-                                <div class="tracking-description">
-                                    ${shipment.status_history?.history?.[0]?.status || shipment.substatus || 'Estado actual'}
-                                </div>
-                                <div class="tracking-time">
-                                    ${formatDateTime(shipment.status_history?.history?.[0]?.date_created || shipment.date_created)}
-                                </div>
+                <div class="shipment-timeline" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                    <div style="font-weight: 600; margin-bottom: 12px; color: var(--ml-yellow);">📍 Historial de Seguimiento</div>
+                    ${history.map((item, index) => `
+                        <div style="display: flex; gap: 12px; margin-bottom: 8px; opacity: ${index === 0 ? '1' : '0.7'};">
+                            <div style="flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: ${index === 0 ? 'var(--ml-yellow)' : '#666'}; margin-top: 6px;"></div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: ${index === 0 ? '600' : '400'};">${statusLabels[item.substatus] || item.substatus}</div>
+                                <small style="opacity: 0.6;">${formatDateTime(item.date)}</small>
                             </div>
                         </div>
-                    </div>
+                    `).join('')}
                 </div>
             `;
         }
@@ -1607,6 +1773,7 @@
                 transit: 'En Camino',
                 delayed: 'Demorado',
                 problem: 'Problema',
+                cancelled: 'Cancelado',
                 pending: 'Pendiente'
             };
             return labels[status] || status;
