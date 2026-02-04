@@ -336,7 +336,7 @@
             try {
                 // Get orders (sin sort, ya vienen ordenadas por fecha descendente por defecto)
                 updateProgress(0, 100, 'Obteniendo órdenes de MercadoLibre...');
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=100`, {
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=50`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 
