@@ -280,6 +280,40 @@
                             </div>
                             
                             <div class="data-row">
+                                <div class="data-label">substatus_history:</div>
+                                <div class="data-value">
+                                    ${shippingInfo.substatus_history?.length || 0} eventos
+                                    ${shippingInfo.substatus_history?.length > 0 ? `<br>Último: ${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.substatus}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">status_history:</div>
+                                <div class="data-value">
+                                    shipped: ${shippingInfo.status_history?.date_shipped || '❌'}<br>
+                                    delivered: ${shippingInfo.status_history?.date_delivered || '❌'}<br>
+                                    handling: ${shippingInfo.status_history?.date_handling || '❌'}<br>
+                                    ready_to_ship: ${shippingInfo.status_history?.date_ready_to_ship || '❌'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
+                                <div class="data-value" style="font-size: 18px; font-weight: bold;">
+                                    ${shippingInfo.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
+                                      shippingInfo.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
+                                      '❓ OTRO'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-value" style="font-size: 16px;">
+                                    ${categorizeStatus(shippingInfo)}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
                                 <div class="data-label">Dirección:</div>
                                 <div class="data-value">
                                     ${shippingInfo.receiver_address?.street_name || ''} 
@@ -310,6 +344,43 @@
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
                 console.error(error);
             }
+        }
+        
+        function categorizeStatus(shipping) {
+            const status = (shipping.status || '').toLowerCase();
+            const substatus = (shipping.substatus || '').toLowerCase();
+            
+            // DELIVERED
+            if (status === 'delivered' || substatus === 'delivered') {
+                return '✅ ENTREGADO';
+            }
+            
+            // IN TRANSIT (shipped, handling, etc)
+            if (status === 'shipped' || status === 'handling' || 
+                substatus === 'in_transit' || substatus === 'out_for_delivery' ||
+                substatus === 'picked_up' || substatus === 'in_hub') {
+                return '🚚 EN CAMINO';
+            }
+            
+            // READY TO SHIP (ready_to_print, printed, ready_to_ship)
+            if (status === 'ready_to_ship' || 
+                substatus === 'ready_to_print' || substatus === 'printed') {
+                return '📋 PENDIENTE (Listo para enviar)';
+            }
+            
+            // CANCELLED
+            if (status === 'cancelled' || status === 'canceled') {
+                return '❌ CANCELADO';
+            }
+            
+            // PROBLEM
+            if (substatus === 'delayed' || substatus === 'not_delivered' ||
+                status === 'returned' || substatus === 'contact_buyer') {
+                return '⚠️ PROBLEMA';
+            }
+            
+            // UNKNOWN
+            return `❓ DESCONOCIDO (${status} - ${substatus})`;
         }
         
         document.addEventListener('DOMContentLoaded', init);
