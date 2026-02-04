@@ -753,6 +753,10 @@
                     <span class="icon">🔄</span>
                     <span>Actualizar</span>
                 </button>
+                <button class="sync-btn" id="logoutBtn" onclick="logout()" style="background: #e74c3c; margin-left: 10px;">
+                    <span class="icon">🚪</span>
+                    <span>Cerrar Sesión</span>
+                </button>
             </div>
         </div>
     </header>
@@ -892,7 +896,10 @@
         }
         
         function startAuth() {
-            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
+            // Request all necessary scopes
+            const scopes = 'read offline_access';
+            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}&scope=${scopes}`;
+            console.log('Auth URL:', authUrl);
             window.location.href = authUrl;
         }
         
@@ -950,44 +957,98 @@
                 showLoading();
                 hideError();
                 
+                console.log('🔍 Loading shipments...');
+                console.log('Access Token:', state.accessToken ? 'Present' : 'Missing');
+                console.log('Seller ID:', state.sellerId);
+                
                 // Get user info to get seller_id if not stored
                 if (!state.sellerId) {
+                    console.log('📋 Fetching user info...');
                     const userResponse = await fetch(`${CONFIG.API_BASE}/users/me`, {
                         headers: {
                             'Authorization': `Bearer ${state.accessToken}`
                         }
                     });
                     
+                    console.log('User Response Status:', userResponse.status);
+                    
                     if (userResponse.ok) {
                         const userData = await userResponse.json();
+                        console.log('User Data:', userData);
                         state.sellerId = userData.id;
                         localStorage.setItem('ml_seller_id', userData.id);
+                    } else {
+                        const errorText = await userResponse.text();
+                        console.error('User API Error:', errorText);
+                        throw new Error('No se pudo obtener información del usuario');
                     }
                 }
                 
-                // Fetch shipments
-                const response = await fetch(`${CONFIG.API_BASE}/shipments/search?seller_id=${state.sellerId}&offset=0&limit=50`, {
+                // Try different endpoints to find shipments
+                console.log('📦 Fetching shipments for seller:', state.sellerId);
+                
+                // First try: /shipments/search
+                let response = await fetch(`${CONFIG.API_BASE}/shipments/search?seller_id=${state.sellerId}&offset=0&limit=50`, {
                     headers: {
                         'Authorization': `Bearer ${state.accessToken}`
                     }
                 });
                 
+                console.log('Shipments Search Response Status:', response.status);
+                
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Shipments API Error:', errorText);
+                    
                     if (response.status === 401) {
-                        // Token expired, try to refresh
+                        console.log('🔄 Token expired, refreshing...');
                         await refreshAccessToken();
                         return loadShipments();
                     }
-                    throw new Error('Error al cargar envíos');
+                    
+                    // Try alternative endpoint: /orders/search
+                    console.log('📦 Trying orders endpoint instead...');
+                    response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${state.sellerId}&offset=0&limit=50`, {
+                        headers: {
+                            'Authorization': `Bearer ${state.accessToken}`
+                        }
+                    });
+                    
+                    console.log('Orders Search Response Status:', response.status);
+                    
+                    if (!response.ok) {
+                        const ordersError = await response.text();
+                        console.error('Orders API Error:', ordersError);
+                        throw new Error(`Error al cargar datos (Status: ${response.status})`);
+                    }
                 }
                 
                 const data = await response.json();
+                console.log('📊 API Response:', data);
                 
-                // Process shipments
-                state.shipments = data.results || [];
+                // Process shipments or orders
+                if (data.results) {
+                    state.shipments = data.results.map(item => {
+                        // If it's an order, extract shipping info
+                        if (item.shipping) {
+                            return {
+                                id: item.shipping.id || item.id,
+                                order_id: item.id,
+                                status: item.shipping.status || item.status,
+                                substatus: item.shipping.substatus,
+                                tracking_number: item.shipping.tracking_number,
+                                date_created: item.date_created,
+                                receiver_address: item.shipping.receiver_address,
+                                ...item.shipping
+                            };
+                        }
+                        return item;
+                    });
+                } else {
+                    state.shipments = [];
+                }
                 
-                // Enrich shipments with additional data
-                await enrichShipments();
+                console.log('✅ Processed Shipments:', state.shipments.length);
                 
                 // Apply filters and render
                 applyFilters();
@@ -995,12 +1056,15 @@
                 hideLoading();
                 
                 if (state.shipments.length === 0) {
+                    console.log('ℹ️ No shipments found');
                     showEmpty();
+                } else {
+                    showToast(`✅ ${state.shipments.length} envíos cargados`, 'success');
                 }
                 
             } catch (error) {
-                console.error('Load error:', error);
-                showError('Error al cargar los envíos. Por favor, intentá de nuevo.');
+                console.error('❌ Load error:', error);
+                showError(`Error: ${error.message}. Revisá la consola (F12) para más detalles.`);
                 hideLoading();
             }
         }
@@ -1325,6 +1389,29 @@
         function formatDate(dateString) {
             const date = new Date(dateString);
             return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+        
+        function logout() {
+            if (confirm('¿Seguro que querés cerrar sesión?')) {
+                console.log('🚪 Logging out...');
+                // Clear all stored data
+                localStorage.removeItem('ml_access_token');
+                localStorage.removeItem('ml_refresh_token');
+                localStorage.removeItem('ml_seller_id');
+                
+                // Clear state
+                state.accessToken = null;
+                state.refreshToken = null;
+                state.sellerId = null;
+                state.shipments = [];
+                state.filteredShipments = [];
+                
+                // Show auth modal again
+                showToast('✅ Sesión cerrada correctamente', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            }
         }
         
         function formatDateTime(dateString) {
