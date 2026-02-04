@@ -369,7 +369,7 @@
                 // For "in transit": order.shipping.status = shipped or handling
                 // For "delivered": tags include "delivered"
                 
-                let searchParams = `seller=${sellerId}&offset=0&limit=50`;
+                let searchParams = `seller=${sellerId}&offset=0&limit=100`;
                 
                 // Add tag filter based on status
                 if (orderStatus === 'delivered') {
