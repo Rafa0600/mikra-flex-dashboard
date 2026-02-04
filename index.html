@@ -199,7 +199,7 @@
             
             try {
                 // Get orders
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=10&sort=date_desc`, {
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
                 
@@ -213,7 +213,7 @@
                 
                 // Get shipping details for each order
                 const ordersWithShipping = await Promise.all(
-                    data.results.slice(0, 5).map(async (order) => {
+                    data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
                             if (!shippingId) return { order, shipping: null };
@@ -230,7 +230,7 @@
                 );
                 
                 // Display data
-                let html = '<h2 style="margin-top:20px;">📊 ÚLTIMAS 5 VENTAS:</h2>';
+                let html = '<h2 style="margin-top:20px;">📊 ÚLTIMAS 30 VENTAS:</h2>';
                 
                 ordersWithShipping.forEach(({ order, shipping }, index) => {
                     const shippingInfo = shipping || order.shipping || {};
