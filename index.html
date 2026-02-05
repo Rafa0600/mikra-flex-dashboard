@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Envíos FLEX - MercadoLibre</title>
+    <title>Envíos FLEX</title>
     <style>
         * {
             margin: 0;
@@ -15,7 +15,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #1a1a1a;
             color: #fff;
-            padding: 20px;
+            padding: 10px;
         }
 
         .container {
@@ -25,77 +25,37 @@
 
         h1 {
             color: #FFE600;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             text-align: center;
+            font-size: 22px;
         }
 
         .top-buttons {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         button {
             background: #3483FA;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             margin: 5px;
             transition: all 0.3s;
         }
 
         button:hover {
             transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(52, 131, 250, 0.4);
-        }
-
-        .search-section {
-            background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .search-box {
-            position: relative;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 15px 50px 15px 20px;
-            background: #1a1a1a;
-            border: 2px solid #444;
-            border-radius: 25px;
-            color: #fff;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #FFE600;
-            box-shadow: 0 0 20px rgba(255, 230, 0, 0.2);
-        }
-
-        .search-icon {
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #888;
-            font-size: 20px;
         }
 
         .filter-section {
             background: #2a2a2a;
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .filter-row {
@@ -103,74 +63,176 @@
             gap: 10px;
             flex-wrap: wrap;
             align-items: center;
-            margin-bottom: 15px;
         }
 
         .filter-row label {
             color: #FFE600;
             font-weight: bold;
-            margin-right: 10px;
+            font-size: 14px;
         }
 
-        select {
+        .search-select-wrapper {
+            flex: 1;
+            min-width: 250px;
+            position: relative;
+        }
+
+        .search-input-select {
+            width: 100%;
+            padding: 10px 40px 10px 15px;
             background: #1a1a1a;
-            color: #fff;
             border: 2px solid #444;
-            padding: 10px 15px;
             border-radius: 6px;
-            font-size: 16px;
+            color: #fff;
+            font-size: 14px;
             cursor: pointer;
-            min-width: 200px;
+            transition: all 0.3s;
         }
 
-        select:focus {
+        .search-input-select:focus {
             outline: none;
             border-color: #FFE600;
         }
 
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+        .dropdown-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            pointer-events: none;
         }
 
-        .stat-card {
-            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-            padding: 20px;
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            border: 2px solid #FFE600;
+            border-radius: 6px;
+            margin-top: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .dropdown-menu.active {
+            display: block;
+        }
+
+        .dropdown-search {
+            position: sticky;
+            top: 0;
+            background: #1a1a1a;
+            padding: 10px;
+            border-bottom: 1px solid #444;
+        }
+
+        .dropdown-search input {
+            width: 100%;
+            padding: 8px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .dropdown-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .dropdown-item:hover {
+            background: #2a2a2a;
+        }
+
+        .dropdown-item.selected {
+            background: #3483FA;
+        }
+
+        .stats-bar {
+            background: #2a2a2a;
             border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
             text-align: center;
             cursor: pointer;
+            padding: 10px;
+            border-radius: 8px;
             transition: all 0.3s;
-            border: 2px solid transparent;
         }
 
-        .stat-card:hover {
-            transform: translateY(-5px);
-            border-color: #FFE600;
+        .stat-item:hover {
+            background: #333;
         }
 
-        .stat-card.active {
-            border-color: #FFE600;
-            box-shadow: 0 0 20px rgba(255, 230, 0, 0.3);
+        .stat-item.active {
+            background: #3483FA;
         }
 
         .stat-number {
-            font-size: 36px;
+            font-size: 24px;
             font-weight: bold;
             margin-bottom: 5px;
         }
 
         .stat-label {
+            font-size: 11px;
             color: #aaa;
-            font-size: 14px;
         }
+
+        .progress-bar-container {
+            background: #1a1a1a;
+            border-radius: 20px;
+            height: 30px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            display: flex;
+            position: relative;
+        }
+
+        .progress-segment {
+            transition: all 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .progress-segment:hover {
+            opacity: 0.8;
+        }
+
+        .progress-segment.pendiente { background: #9C27B0; }
+        .progress-segment.en-camino { background: #00d9ff; color: #000; }
+        .progress-segment.entregado { background: #00ff88; color: #000; }
 
         .envio-card {
             background: #2a2a2a;
             border-left: 5px solid;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             margin-bottom: 15px;
             transition: all 0.3s;
         }
@@ -188,16 +250,16 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
         }
 
         .estado-badge {
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 15px;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 12px;
         }
 
         .estado-badge.pendiente { background: #9C27B0; }
@@ -206,32 +268,32 @@
 
         .envio-info {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
         }
 
         .info-item {
             background: #1a1a1a;
-            padding: 12px;
+            padding: 10px;
             border-radius: 6px;
         }
 
         .info-label {
             color: #888;
-            font-size: 12px;
-            margin-bottom: 5px;
+            font-size: 11px;
+            margin-bottom: 4px;
             text-transform: uppercase;
         }
 
         .info-value {
             color: #fff;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 500;
         }
 
         .zona-highlight {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
             color: #FFE600;
         }
@@ -239,29 +301,25 @@
         .direccion-link, .order-link {
             color: #3483FA;
             text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
             transition: all 0.3s;
         }
 
         .direccion-link:hover, .order-link:hover {
             color: #FFE600;
-            text-decoration: underline;
         }
 
         .timeline {
             background: #1a1a1a;
-            padding: 15px;
+            padding: 12px;
             border-radius: 6px;
-            margin-top: 15px;
+            margin-top: 12px;
         }
 
         .timeline-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 0;
+            gap: 8px;
+            padding: 6px 0;
             position: relative;
         }
 
@@ -269,15 +327,15 @@
             content: '';
             position: absolute;
             left: 7px;
-            top: 30px;
+            top: 25px;
             width: 2px;
-            height: calc(100% - 10px);
+            height: calc(100% - 8px);
             background: #444;
         }
 
         .timeline-dot {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             flex-shrink: 0;
             z-index: 1;
@@ -285,7 +343,7 @@
 
         .timeline-dot.done {
             background: #00ff88;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
         }
 
         .timeline-dot.pending {
@@ -299,32 +357,46 @@
 
         .timeline-label {
             color: #aaa;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .timeline-time {
             color: #00ff88;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .timeline-time.pending {
             color: #666;
         }
 
+        .gps-location {
+            background: #1a1a1a;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .gps-link {
+            color: #00d9ff;
+            text-decoration: none;
+        }
+
         .loading {
             text-align: center;
-            padding: 60px;
-            font-size: 24px;
+            padding: 40px;
+            font-size: 20px;
             color: #FFE600;
         }
 
         .error {
             background: #f44336;
             color: white;
-            padding: 20px;
+            padding: 15px;
             border-radius: 8px;
-            margin: 20px 0;
+            margin: 15px 0;
             text-align: center;
         }
 
@@ -334,14 +406,9 @@
 
         .no-results {
             text-align: center;
-            padding: 40px;
+            padding: 30px;
             color: #888;
-            font-size: 18px;
-        }
-
-        .order-id {
-            color: #888;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         .fecha-hoy {
@@ -352,46 +419,75 @@
         .items-count {
             background: #FFE600;
             color: #000;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 11px;
             font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .envio-info {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX - MercadoLibre</h1>
+        <h1>🏍️ Envíos FLEX</h1>
         
         <div class="top-buttons">
-            <button onclick="conectar()" id="connectBtn">Conectar con MercadoLibre</button>
-            <button onclick="cargarFlexHoy()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Entregas de HOY</button>
-            <button onclick="cargarFlexAyer()" id="loadFlexAyerBtn" style="display:none; background:#FF9800;">📅 Entregas de AYER</button>
-        </div>
-
-        <div id="searchSection" class="search-section hidden">
-            <div class="search-box">
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    class="search-input" 
-                    placeholder="🔍 Buscar por zona... (ej: Palermo, GBA Norte, Belgrano)"
-                    oninput="buscarZona()"
-                >
-                <span class="search-icon">🔍</span>
-            </div>
+            <button onclick="conectar()" id="connectBtn">Conectar</button>
+            <button onclick="cargarFlexHoy()" id="loadFlexBtn" style="display:none; background:#FF6B00;">HOY</button>
+            <button onclick="cargarFlexAyer()" id="loadFlexAyerBtn" style="display:none; background:#FF9800;">AYER</button>
         </div>
 
         <div id="filterSection" class="filter-section hidden">
             <div class="filter-row">
-                <label>📍 Filtrar por zona:</label>
-                <select id="zonaFilter" onchange="aplicarFiltros()">
-                    <option value="all">Todas las zonas</option>
-                </select>
+                <label>📍 Zona:</label>
+                <div class="search-select-wrapper">
+                    <div class="search-input-select" onclick="toggleDropdown()">
+                        <span id="selectedZone">Todas las zonas</span>
+                    </div>
+                    <span class="dropdown-icon">▼</span>
+                    <div id="dropdownMenu" class="dropdown-menu">
+                        <div class="dropdown-search">
+                            <input type="text" id="dropdownSearch" placeholder="🔍 Buscar zona..." oninput="filtrarDropdown()">
+                        </div>
+                        <div id="dropdownItems"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="stats" class="stats hidden"></div>
+        <div id="statsSection" class="stats-bar hidden">
+            <div class="stats-grid">
+                <div class="stat-item" onclick="filtrarPorEstado('all')" id="stat-all">
+                    <div class="stat-number" style="color:#FFE600;">0</div>
+                    <div class="stat-label">TODOS</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente">
+                    <div class="stat-number" style="color:#9C27B0;">0</div>
+                    <div class="stat-label">PENDIENTES</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino">
+                    <div class="stat-number" style="color:#00d9ff;">0</div>
+                    <div class="stat-label">EN CAMINO</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado">
+                    <div class="stat-number" style="color:#00ff88;">0</div>
+                    <div class="stat-label">ENTREGADOS</div>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
         <div id="content"></div>
     </div>
 
@@ -407,9 +503,9 @@
         let sellerId = localStorage.getItem('ml_seller_id');
         let allFlexOrders = [];
         let currentStateFilter = 'all';
-        let currentSearchQuery = '';
+        let currentZoneFilter = 'all';
+        let dropdownOpen = false;
 
-        // Lista completa de barrios de CABA (normalizados)
         const BARRIOS_CABA = [
             'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
             'Caballito', 'Chacarita', 'Coghlan', 'Colegiales', 'Constitución',
@@ -439,7 +535,6 @@
             const barrioNorm = (barrio || '').trim();
             const ciudadNorm = (ciudad || '').trim();
             
-            // Si es "CABA" genérico
             if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
                 if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
                     return `CABA - ${barrioNorm}`;
@@ -447,31 +542,26 @@
                 return 'CABA - Otros';
             }
             
-            // Si dice Capital Federal o es barrio conocido de CABA
             if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
                 const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
                 return `CABA - ${nombreBarrio}`;
             }
             
-            // GBA Zona Norte
             const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
             if (zonaNorte.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Norte - ${ciudadNorm || barrioNorm}`;
             }
             
-            // GBA Zona Oeste
             const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'Villa Luzuriaga', 'Luzuriaga', 'Ingeniero Allan', 'Castelar', 'El Palomar', 'Ciudad Jardin Del Palomar', 'Caseros', 'San Justo', 'San justo', 'Villa Sarmiento', 'villa sarmiento'];
             if (zonaOeste.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Oeste - ${ciudadNorm || barrioNorm}`;
             }
             
-            // GBA Zona Sur
             const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Sarandí', 'Tristán Suárez', 'Carlos Spegazzini', 'Bernal Oeste', 'Temperley', 'Remedios De Escalada', 'Valentin Alsina', 'Berazategui', 'Florencio Varela', 'Wilde'];
             if (zonaSur.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Sur - ${ciudadNorm || barrioNorm}`;
             }
             
-            // Interior Buenos Aires
             const interior = ['Zárate', 'Campana', 'La Plata', 'Mar del Plata', 'Bahía Blanca'];
             if (interior.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `Buenos Aires - ${ciudadNorm || barrioNorm}`;
@@ -484,6 +574,33 @@
             return zona.startsWith('CABA');
         }
 
+        function toggleDropdown() {
+            dropdownOpen = !dropdownOpen;
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdownOpen) {
+                menu.classList.add('active');
+                document.getElementById('dropdownSearch').focus();
+            } else {
+                menu.classList.remove('active');
+            }
+        }
+
+        function filtrarDropdown() {
+            const search = normalizar(document.getElementById('dropdownSearch').value);
+            const items = document.querySelectorAll('.dropdown-item');
+            items.forEach(item => {
+                const text = normalizar(item.textContent);
+                item.style.display = text.includes(search) ? 'block' : 'none';
+            });
+        }
+
+        function selectZone(zona) {
+            currentZoneFilter = zona;
+            document.getElementById('selectedZone').textContent = zona === 'all' ? 'Todas las zonas' : zona;
+            toggleDropdown();
+            aplicarFiltros();
+        }
+
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
@@ -494,6 +611,13 @@
                 document.getElementById('loadFlexBtn').style.display = 'inline-block';
                 document.getElementById('loadFlexAyerBtn').style.display = 'inline-block';
             }
+
+            // Click fuera del dropdown para cerrarlo
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
+                    toggleDropdown();
+                }
+            });
         }
 
         function conectar() {
@@ -604,18 +728,18 @@
 
         async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading">🔍 Cargando envíos de ${label}...</div>`;
+            content.innerHTML = `<div class="loading">🔍 Cargando ${label}...</div>`;
             
             let tempOrders = [];
 
             try {
-                const targetCount = 100;
                 let offset = 0;
                 const limit = 50;
                 let totalChecked = 0;
+                const maxChecks = 1000; // Límite de seguridad
 
-                while (tempOrders.length < targetCount && totalChecked < 500) {
-                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX de ${label}...<br><span style="font-size: 48px; color: #00ff88;">${tempOrders.length}</span>/${targetCount}</div>`;
+                while (totalChecked < maxChecks) {
+                    content.innerHTML = `<div class="loading">🔍 Cargando ${label}...<br><span style="font-size: 36px; color: #00ff88;">${tempOrders.length}</span> encontrados</div>`;
 
                     const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
                         headers: {
@@ -656,11 +780,6 @@
                     
                     tempOrders.push(...flexBatch);
 
-                    if (tempOrders.length >= targetCount) {
-                        tempOrders = tempOrders.slice(0, targetCount);
-                        break;
-                    }
-
                     offset += limit;
                 }
 
@@ -682,26 +801,34 @@
                     return;
                 }
 
-                // Extraer zonas únicas
-                const zonas = new Set();
+                // Calcular contadores por zona
+                const zonaCounts = new Map();
                 allFlexOrders.forEach(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
                     const zona = getZonaDetallada(barrio, ciudad);
-                    zonas.add(zona);
+                    zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
                 });
 
-                // Llenar select de zonas
-                const zonaSelect = document.getElementById('zonaFilter');
-                zonaSelect.innerHTML = '<option value="all">Todas las zonas</option>';
-                zonaSelect.innerHTML += '<option value="CABA">🏙️ CABA (todos)</option>';
+                // Crear dropdown con contadores
+                const dropdownItems = document.getElementById('dropdownItems');
+                dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${allFlexOrders.length})</div>`;
                 
-                Array.from(zonas).sort().forEach(zona => {
-                    zonaSelect.innerHTML += `<option value="${zona}">${zona}</option>`;
+                // Contador CABA total
+                let cabaTotal = 0;
+                Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
+                    if (esCABA(zona)) cabaTotal += count;
+                });
+                if (cabaTotal > 0) {
+                    dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('CABA')">🏙️ CABA - Todos (${cabaTotal})</div>`;
+                }
+                
+                Array.from(zonaCounts.entries()).sort().forEach(([zona, count]) => {
+                    dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
                 });
 
-                document.getElementById('searchSection').classList.remove('hidden');
                 document.getElementById('filterSection').classList.remove('hidden');
+                document.getElementById('statsSection').classList.remove('hidden');
                 displayOrders('all');
 
             } catch (error) {
@@ -726,17 +853,15 @@
 
         function filtrarPorEstado(estado) {
             currentStateFilter = estado;
-            aplicarFiltros();
-        }
-
-        function buscarZona() {
-            currentSearchQuery = document.getElementById('searchInput').value;
+            
+            // Update active state
+            document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`stat-${estado}`).classList.add('active');
+            
             aplicarFiltros();
         }
 
         function aplicarFiltros() {
-            const zonaFilter = document.getElementById('zonaFilter').value;
-            
             let filtered = allFlexOrders;
 
             // Filtro por estado
@@ -744,30 +869,18 @@
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
-            // Filtro por zona (select)
-            if (zonaFilter !== 'all') {
+            // Filtro por zona
+            if (currentZoneFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
                     const zona = getZonaDetallada(barrio, ciudad);
                     
-                    if (zonaFilter === 'CABA') {
+                    if (currentZoneFilter === 'CABA') {
                         return esCABA(zona);
                     }
                     
-                    return zona === zonaFilter;
-                });
-            }
-
-            // Filtro por búsqueda de texto
-            if (currentSearchQuery) {
-                const query = normalizar(currentSearchQuery);
-                filtered = filtered.filter(({ shipping }) => {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
-                    
-                    return normalizar(zona).includes(query);
+                    return zona === currentZoneFilter;
                 });
             }
 
@@ -785,26 +898,23 @@
                 entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
             };
 
-            const statsHtml = `
-                <div class="stat-card ${currentStateFilter === 'all' ? 'active' : ''}" onclick="filtrarPorEstado('all')">
-                    <div class="stat-number" style="color:#FFE600;">${stats.total}</div>
-                    <div class="stat-label">📊 TODOS</div>
-                </div>
-                <div class="stat-card ${currentStateFilter === 'pendiente' ? 'active' : ''}" onclick="filtrarPorEstado('pendiente')">
-                    <div class="stat-number" style="color:#9C27B0;">${stats.pendiente}</div>
-                    <div class="stat-label">📋 Pendientes</div>
-                </div>
-                <div class="stat-card ${currentStateFilter === 'en-camino' ? 'active' : ''}" onclick="filtrarPorEstado('en-camino')">
-                    <div class="stat-number" style="color:#00d9ff;">${stats.enCamino}</div>
-                    <div class="stat-label">🚚 En camino</div>
-                </div>
-                <div class="stat-card ${currentStateFilter === 'entregado' ? 'active' : ''}" onclick="filtrarPorEstado('entregado')">
-                    <div class="stat-number" style="color:#00ff88;">${stats.entregado}</div>
-                    <div class="stat-label">✅ Entregados</div>
-                </div>
+            // Update stat numbers
+            document.querySelector('#stat-all .stat-number').textContent = stats.total;
+            document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
+            document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
+            document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
+
+            // Update progress bar
+            const pendientePct = (stats.pendiente / stats.total) * 100;
+            const enCaminoPct = (stats.enCamino / stats.total) * 100;
+            const entregadoPct = (stats.entregado / stats.total) * 100;
+
+            const progressBar = document.getElementById('progressBar');
+            progressBar.innerHTML = `
+                ${stats.pendiente > 0 ? `<div class="progress-segment pendiente" style="width:${pendientePct}%" onclick="filtrarPorEstado('pendiente')">${stats.pendiente}</div>` : ''}
+                ${stats.enCamino > 0 ? `<div class="progress-segment en-camino" style="width:${enCaminoPct}%" onclick="filtrarPorEstado('en-camino')">${stats.enCamino}</div>` : ''}
+                ${stats.entregado > 0 ? `<div class="progress-segment entregado" style="width:${entregadoPct}%" onclick="filtrarPorEstado('entregado')">${stats.entregado}</div>` : ''}
             `;
-            document.getElementById('stats').innerHTML = statsHtml;
-            document.getElementById('stats').classList.remove('hidden');
 
             let html = '';
 
@@ -844,15 +954,19 @@
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
+                    // GPS tracking (si está disponible)
+                    const trackingEvents = shipping.tracking?.shipments?.[0]?.tracking_events || [];
+                    const lastGPS = trackingEvents.find(e => e.geolocation);
+                    
                     html += `
                         <div class="envio-card ${state}">
                             <div class="envio-header">
-                                <div style="display: flex; gap: 10px; align-items: center;">
+                                <div style="display: flex; gap: 8px; align-items: center;">
                                     <span class="estado-badge ${state}">${estadoLabel[state]}</span>
-                                    ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} artículos</span>` : ''}
+                                    ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
                                 </div>
                                 <a href="${orderUrl}" target="_blank" class="order-link">
-                                    📦 Orden #${orderId}
+                                    #${orderId}
                                 </a>
                             </div>
                             
@@ -866,7 +980,7 @@
                                     <div class="info-label">📍 Dirección</div>
                                     <div class="info-value">
                                         <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
-                                            📌 ${calle} ${numero}, ${ciudad}
+                                            ${calle} ${numero}, ${ciudad}
                                         </a>
                                     </div>
                                 </div>
@@ -877,16 +991,22 @@
                                 </div>
                                 
                                 <div class="info-item">
-                                    <div class="info-label">📅 Debe entregarse</div>
+                                    <div class="info-label">📅 Entrega</div>
                                     <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
                                 </div>
                             </div>
+                            
+                            ${lastGPS ? `
+                            <div class="gps-location">
+                                📍 Última posición: <a href="https://www.google.com/maps?q=${lastGPS.geolocation.latitude},${lastGPS.geolocation.longitude}" target="_blank" class="gps-link">Ver mapa</a> (${lastGPS.date ? formatearSoloHora(lastGPS.date) : 'hora desconocida'})
+                            </div>
+                            ` : ''}
                             
                             <div class="timeline">
                                 <div class="timeline-item">
                                     <div class="timeline-dot done"></div>
                                     <div class="timeline-content">
-                                        <div class="timeline-label">📦 Orden recibida</div>
+                                        <div class="timeline-label">📦 Recibida</div>
                                         <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
                                     </div>
                                 </div>
