@@ -219,7 +219,7 @@
         
         <div class="button-group">
             <button onclick="conectar()">Conectar con MercadoLibre</button>
-            <button onclick="cargarTodas()" id="loadAllBtn" style="display:none;">📦 Cargar Últimas 100 Ventas</button>
+            <button onclick="cargarTodas()" id="loadAllBtn" style="display:none;">📦 Cargar Últimos Envíos</button>
             <button onclick="cargarFlexEnCamino()" id="loadFlexBtn" style="display:none;" class="btn-success">🏍️ Solo FLEX en Camino</button>
             <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none;" class="btn-info">🚚 Todos en Camino</button>
             <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none;" class="btn-success">✅ Entregados</button>
@@ -329,7 +329,7 @@
             const progressDiv = document.getElementById('progress');
             const statsDiv = document.getElementById('stats');
             
-            content.innerHTML = '<div class="loading">Cargando últimas 100 ventas...</div>';
+            content.innerHTML = '<div class="loading">Cargando envíos recientes...</div>';
             progressDiv.style.display = 'none';
             statsDiv.style.display = 'none';
             
@@ -391,14 +391,31 @@
                     }
                 }
                 
-                allOrders = ordersWithShipping;
+                // Group by shipping_id to get unique shipments
+                const uniqueShipments = new Map();
+                ordersWithShipping.forEach(item => {
+                    const shippingId = item.shipping?.id || item.order.shipping?.id;
+                    if (shippingId && !uniqueShipments.has(shippingId)) {
+                        uniqueShipments.set(shippingId, item);
+                    }
+                });
+                
+                // Convert back to array and sort by date
+                allOrders = Array.from(uniqueShipments.values()).sort((a, b) => {
+                    const dateA = new Date(a.shipping?.date_created || a.order.date_created);
+                    const dateB = new Date(b.shipping?.date_created || b.order.date_created);
+                    return dateB - dateA; // Most recent first
+                });
+                
+                console.log(`📊 De ${ordersWithShipping.length} órdenes → ${allOrders.length} envíos únicos`);
+                
                 progressDiv.style.display = 'none';
                 
                 // Calculate statistics
-                showStatistics(ordersWithShipping);
+                showStatistics(allOrders);
                 
                 // Display all orders
-                displayOrders(ordersWithShipping, '📦 ÚLTIMAS 100 VENTAS');
+                displayOrders(allOrders, `📦 ÚLTIMOS ${allOrders.length} ENVÍOS ÚNICOS`);
                 
             } catch (error) {
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
