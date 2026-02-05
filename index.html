@@ -25,40 +25,9 @@
 
         h1 {
             color: #FFE600;
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 22px;
-        }
-
-        .account-indicator {
-            background: #2a2a2a;
-            padding: 10px 15px;
-            border-radius: 12px;
             margin-bottom: 20px;
             text-align: center;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .account-badge {
-            background: #3483FA;
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-size: 13px;
-            font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .account-badge.mikra {
-            background: #9C27B0;
-        }
-
-        .account-badge.chaya {
-            background: #FF6B00;
+            font-size: 22px;
         }
 
         .top-buttons {
@@ -522,16 +491,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX - Mikra + Chaya</h1>
-        
-        <div class="account-indicator">
-            <div class="account-badge mikra">🟣 MIKRA</div>
-            <div class="account-badge chaya">🟠 CHAYA</div>
-        </div>
+        <h1>🏍️ Envíos FLEX</h1>
 
         <div class="top-buttons">
-            <button onclick="cargarFlexHoy()" id="loadHoyBtn">📅 HOY</button>
-            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 AYER</button>
+            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 Ver AYER</button>
         </div>
 
         <div id="filterSection" class="filter-section hidden">
@@ -1176,6 +1139,11 @@
             if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
                 toggleDropdown();
             }
+        });
+
+        // Auto-cargar HOY al entrar
+        window.addEventListener('DOMContentLoaded', () => {
+            cargarFlexHoy();
         });
     </script>
 </body>
