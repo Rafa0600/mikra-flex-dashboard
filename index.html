@@ -708,50 +708,26 @@
         }
 
         async function obtenerTokenCuenta(cuenta) {
-            const cuentaKey = cuenta.nombre.toLowerCase();
-            
-            // Verificar si el token actual es válido
-            const accessToken = localStorage.getItem(`${cuentaKey}_access_token`);
-            const expiresAt = localStorage.getItem(`${cuentaKey}_expires_at`);
-            
-            // Si el token es válido, usarlo
-            if (accessToken && expiresAt && Date.now() < parseInt(expiresAt)) {
-                return accessToken;
-            }
-
-            // Si expiró o no existe, intentar refrescar
-            const refreshToken = localStorage.getItem(`${cuentaKey}_refresh_token`);
-            if (!refreshToken) {
-                console.error(`No hay refresh token para ${cuenta.nombre}`);
-                return null;
-            }
-
-            // Refrescar el token
             try {
-                const response = await fetch(`${cuenta.proxy}/oauth/refresh`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        refresh_token: refreshToken
-                    })
-                });
-
+                // Llamar al worker para obtener el token válido
+                const response = await fetch(`${cuenta.proxy}/get-token`);
                 const data = await response.json();
 
                 if (data.access_token) {
-                    // Guardar nuevo token
-                    localStorage.setItem(`${cuentaKey}_access_token`, data.access_token);
-                    localStorage.setItem(`${cuentaKey}_refresh_token`, data.refresh_token);
-                    localStorage.setItem(`${cuentaKey}_expires_at`, Date.now() + (data.expires_in * 1000));
-                    
+                    // Guardar user_id en una variable temporal si no lo tenemos
+                    if (data.user_id && !sessionStorage.getItem(`${cuenta.nombre.toLowerCase()}_user_id`)) {
+                        sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
+                    }
                     return data.access_token;
+                }
+
+                if (data.error === 'no_token') {
+                    console.error(`Token no configurado para ${cuenta.nombre}`);
                 }
 
                 return null;
             } catch (error) {
-                console.error(`Error refrescando token de ${cuenta.nombre}:`, error);
+                console.error(`Error obteniendo token de ${cuenta.nombre}:`, error);
                 return null;
             }
         }
@@ -839,23 +815,16 @@
             }
 
             if (allOrdersFromAllAccounts.length === 0) {
-                const mikraToken = localStorage.getItem('mikra_refresh_token');
-                const chayaToken = localStorage.getItem('chaya_refresh_token');
-                
-                if (!mikraToken || !chayaToken) {
-                    content.innerHTML = `
-                        <div class="error">
-                            ⚠️ No hay cuentas configuradas<br><br>
-                            Por favor, ejecutá primero <strong>setup-flex.html</strong> para conectar las cuentas.
-                            <br><br>
-                            <button onclick="window.location.href='setup-flex.html'" style="margin-top:15px;">
-                                ⚙️ Ir a Configuración
-                            </button>
-                        </div>
-                    `;
-                } else {
-                    content.innerHTML = `<div class="error">No hay envíos FLEX para ${label}</div>`;
-                }
+                content.innerHTML = `
+                    <div class="error">
+                        ⚠️ No hay envíos FLEX para ${label}<br><br>
+                        Si este es el primer uso, ejecutá el setup primero para configurar las cuentas.
+                        <br><br>
+                        <button onclick="window.location.href='setup-flex-seguro.html'" style="margin-top:15px;">
+                            ⚙️ Ir a Configuración
+                        </button>
+                    </div>
+                `;
                 return;
             }
 
@@ -896,9 +865,23 @@
             const allOrderPromises = [];
             const totalPages = 20;
 
-            // Obtener seller ID del localStorage
+            // Obtener seller ID del sessionStorage
             const cuentaKey = cuenta.nombre.toLowerCase();
-            const sellerId = localStorage.getItem(`${cuentaKey}_user_id`);
+            let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
+
+            if (!sellerId) {
+                // Si no está en session, hacer una llamada para obtenerlo
+                try {
+                    const tokenResponse = await fetch(`${cuenta.proxy}/get-token`);
+                    const tokenData = await tokenResponse.json();
+                    if (tokenData.user_id) {
+                        sellerId = tokenData.user_id;
+                        sessionStorage.setItem(`${cuentaKey}_user_id`, sellerId);
+                    }
+                } catch (error) {
+                    console.error(`Error obteniendo user_id para ${cuenta.nombre}:`, error);
+                }
+            }
 
             if (!sellerId) {
                 console.error(`No se encontró user_id para ${cuenta.nombre}`);
