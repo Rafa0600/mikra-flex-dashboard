@@ -51,6 +51,11 @@
             transform: scale(1.05);
         }
 
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .filter-section {
             background: #2a2a2a;
             padding: 15px;
@@ -370,25 +375,26 @@
             color: #666;
         }
 
-        .gps-location {
-            background: #1a1a1a;
-            padding: 8px;
-            border-radius: 6px;
-            margin-top: 10px;
-            font-size: 12px;
-            color: #888;
-        }
-
-        .gps-link {
-            color: #00d9ff;
-            text-decoration: none;
-        }
-
         .loading {
             text-align: center;
             padding: 40px;
-            font-size: 20px;
+            font-size: 18px;
             color: #FFE600;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #333;
+            border-top-color: #FFE600;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         .error {
@@ -441,9 +447,7 @@
         <h1>🏍️ Envíos FLEX</h1>
         
         <div class="top-buttons">
-            <button onclick="conectar()" id="connectBtn">Conectar</button>
-            <button onclick="cargarFlexHoy()" id="loadFlexBtn" style="display:none; background:#FF6B00;">HOY</button>
-            <button onclick="cargarFlexAyer()" id="loadFlexAyerBtn" style="display:none; background:#FF9800;">AYER</button>
+            <button onclick="cargarFlexAyer()" id="loadAyerBtn" style="display:none; background:#FF9800;">📅 Ver AYER</button>
         </div>
 
         <div id="filterSection" class="filter-section hidden">
@@ -596,23 +600,28 @@
 
         function selectZone(zona) {
             currentZoneFilter = zona;
-            document.getElementById('selectedZone').textContent = zona === 'all' ? 'Todas las zonas' : zona;
+            const displayText = zona === 'all' ? 'Todas las zonas' : zona.split('(')[0].trim();
+            document.getElementById('selectedZone').textContent = displayText;
             toggleDropdown();
             aplicarFiltros();
         }
 
-        function init() {
+        async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
 
             if (code) {
-                handleAuthCallback(code);
+                await handleAuthCallback(code);
+                // Después de autenticar, cargar HOY automáticamente
+                await cargarFlexHoy();
             } else if (accessToken && sellerId) {
-                document.getElementById('loadFlexBtn').style.display = 'inline-block';
-                document.getElementById('loadFlexAyerBtn').style.display = 'inline-block';
+                // Ya está autenticado, cargar HOY automáticamente
+                await cargarFlexHoy();
+            } else {
+                // No está autenticado, intentar conectar y luego cargar
+                await autoConectar();
             }
 
-            // Click fuera del dropdown para cerrarlo
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
                     toggleDropdown();
@@ -620,14 +629,18 @@
             });
         }
 
-        function conectar() {
+        async function autoConectar() {
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Conectando automáticamente...</div>';
+            
+            // Redirigir a auth
             const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
             window.location.href = authUrl;
         }
 
         async function handleAuthCallback(code) {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Autenticando...</div>';
+            content.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Autenticando...</div>';
 
             try {
                 const response = await fetch(`${CONFIG.API_BASE}/oauth/token`, {
@@ -658,14 +671,11 @@
                 sellerId = userData.id;
                 localStorage.setItem('ml_seller_id', sellerId);
 
-                content.innerHTML = '<div class="loading">✅ Conectado!</div>';
-                document.getElementById('loadFlexBtn').style.display = 'inline-block';
-                document.getElementById('loadFlexAyerBtn').style.display = 'inline-block';
-                document.getElementById('connectBtn').style.display = 'none';
-
                 window.history.replaceState({}, document.title, window.location.pathname);
             } catch (error) {
-                content.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                content.innerHTML = `<div class="error">Error de autenticación. Reintentando...<div>`;
+                // Retry
+                setTimeout(() => autoConectar(), 2000);
             }
         }
 
@@ -728,7 +738,7 @@
 
         async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading">🔍 Cargando ${label}...</div>`;
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
             
             let tempOrders = [];
 
@@ -736,52 +746,64 @@
                 let offset = 0;
                 const limit = 50;
                 let totalChecked = 0;
-                const maxChecks = 1000; // Límite de seguridad
+                const maxChecks = 1000;
 
-                while (totalChecked < maxChecks) {
-                    content.innerHTML = `<div class="loading">🔍 Cargando ${label}...<br><span style="font-size: 36px; color: #00ff88;">${tempOrders.length}</span> encontrados</div>`;
+                // Primer fetch para saber cuántos hay
+                const firstResponse = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
 
-                    const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`
-                        }
-                    });
+                if (!firstResponse.ok) throw new Error('Error de autenticación');
 
-                    const data = await response.json();
-                    
-                    if (!data.results || data.results.length === 0) break;
-
-                    totalChecked += data.results.length;
-
-                    const shippingPromises = data.results.map(async (order) => {
-                        try {
-                            const shippingId = order.shipping?.id;
-                            if (!shippingId) return null;
-
-                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                                headers: {
-                                    'Authorization': `Bearer ${accessToken}`
-                                }
-                            });
-
-                            const shipping = await shipResponse.json();
-                            
-                            if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
-                                return { order, shipping };
-                            }
-                            return null;
-                        } catch (e) {
-                            return null;
-                        }
-                    });
-
-                    const results = await Promise.all(shippingPromises);
-                    const flexBatch = results.filter(item => item !== null);
-                    
-                    tempOrders.push(...flexBatch);
-
-                    offset += limit;
+                const firstData = await firstResponse.json();
+                
+                if (!firstData.results || firstData.results.length === 0) {
+                    content.innerHTML = `<div class="error">No se encontraron ventas</div>`;
+                    return;
                 }
+
+                // Cargar en lotes en paralelo (más rápido)
+                const allOrderPromises = [];
+                const totalPages = Math.min(Math.ceil(maxChecks / limit), 20); // Max 20 páginas = 1000 órdenes
+
+                for (let page = 0; page < totalPages; page++) {
+                    allOrderPromises.push(
+                        fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${page * limit}&limit=${limit}&sort=date_desc`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        }).then(r => r.json())
+                    );
+                }
+
+                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Procesando ventas...</div>`;
+
+                const allPagesData = await Promise.all(allOrderPromises);
+                const allOrders = allPagesData.flatMap(data => data.results || []);
+
+                // Procesar shippings en paralelo (más rápido)
+                const shippingPromises = allOrders.map(async (order) => {
+                    try {
+                        const shippingId = order.shipping?.id;
+                        if (!shippingId) return null;
+
+                        const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+
+                        const shipping = await shipResponse.json();
+                        
+                        if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
+                            return { order, shipping };
+                        }
+                        return null;
+                    } catch (e) {
+                        return null;
+                    }
+                });
+
+                const results = await Promise.all(shippingPromises);
+                tempOrders = results.filter(item => item !== null);
 
                 // UNIFICAR por shipping_id
                 const uniqueShippings = new Map();
@@ -797,7 +819,8 @@
                 allFlexOrders = Array.from(uniqueShippings.values());
 
                 if (allFlexOrders.length === 0) {
-                    content.innerHTML = `<div class="error">No se encontraron envíos FLEX para ${label}</div>`;
+                    content.innerHTML = `<div class="error">No hay envíos FLEX para ${label}</div>`;
+                    document.getElementById('loadAyerBtn').style.display = 'inline-block';
                     return;
                 }
 
@@ -814,7 +837,6 @@
                 const dropdownItems = document.getElementById('dropdownItems');
                 dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${allFlexOrders.length})</div>`;
                 
-                // Contador CABA total
                 let cabaTotal = 0;
                 Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
                     if (esCABA(zona)) cabaTotal += count;
@@ -829,11 +851,17 @@
 
                 document.getElementById('filterSection').classList.remove('hidden');
                 document.getElementById('statsSection').classList.remove('hidden');
+                document.getElementById('loadAyerBtn').style.display = 'inline-block';
                 displayOrders('all');
 
             } catch (error) {
-                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                content.innerHTML = `<div class="error">Error al cargar. Reconectando...<div>`;
                 console.error(error);
+                
+                // Retry automático
+                localStorage.removeItem('ml_access_token');
+                localStorage.removeItem('ml_seller_id');
+                setTimeout(() => autoConectar(), 2000);
             }
         }
 
@@ -854,7 +882,6 @@
         function filtrarPorEstado(estado) {
             currentStateFilter = estado;
             
-            // Update active state
             document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active'));
             document.getElementById(`stat-${estado}`).classList.add('active');
             
@@ -864,12 +891,10 @@
         function aplicarFiltros() {
             let filtered = allFlexOrders;
 
-            // Filtro por estado
             if (currentStateFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
-            // Filtro por zona
             if (currentZoneFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
@@ -890,7 +915,6 @@
         function displayOrders(filterType, customFiltered = null) {
             const orders = customFiltered || allFlexOrders;
 
-            // Calcular stats
             const stats = {
                 total: allFlexOrders.length,
                 pendiente: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
@@ -898,13 +922,11 @@
                 entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
             };
 
-            // Update stat numbers
             document.querySelector('#stat-all .stat-number').textContent = stats.total;
             document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
             document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
             document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
 
-            // Update progress bar
             const pendientePct = (stats.pendiente / stats.total) * 100;
             const enCaminoPct = (stats.enCamino / stats.total) * 100;
             const entregadoPct = (stats.entregado / stats.total) * 100;
@@ -954,10 +976,6 @@
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                    // GPS tracking (si está disponible)
-                    const trackingEvents = shipping.tracking?.shipments?.[0]?.tracking_events || [];
-                    const lastGPS = trackingEvents.find(e => e.geolocation);
-                    
                     html += `
                         <div class="envio-card ${state}">
                             <div class="envio-header">
@@ -995,12 +1013,6 @@
                                     <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
                                 </div>
                             </div>
-                            
-                            ${lastGPS ? `
-                            <div class="gps-location">
-                                📍 Última posición: <a href="https://www.google.com/maps?q=${lastGPS.geolocation.latitude},${lastGPS.geolocation.longitude}" target="_blank" class="gps-link">Ver mapa</a> (${lastGPS.date ? formatearSoloHora(lastGPS.date) : 'hora desconocida'})
-                            </div>
-                            ` : ''}
                             
                             <div class="timeline">
                                 <div class="timeline-item">
