@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Envíos FLEX - Multi Cuenta</title>
+    <title>Configuración Inicial - FLEX</title>
     <style>
         * {
             margin: 0;
@@ -15,98 +15,112 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #1a1a1a;
             color: #fff;
-            padding: 10px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1400px;
-            margin: 0 auto;
+            max-width: 800px;
+            width: 100%;
         }
 
         h1 {
             color: #FFE600;
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 22px;
-        }
-
-        .account-manager {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .account-list {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
             margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
         }
 
-        .account-badge {
-            background: #3483FA;
-            padding: 8px 15px;
-            border-radius: 20px;
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .app-section {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid;
+        }
+
+        .app-section.mikra {
+            border-left-color: #9C27B0;
+        }
+
+        .app-section.chaya {
+            border-left-color: #FF6B00;
+        }
+
+        .app-header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 13px;
-        }
-
-        .account-badge.active {
-            background: #FFE600;
-            color: #000;
-            font-weight: bold;
-        }
-
-        .account-badge .remove-btn {
-            cursor: pointer;
-            font-weight: bold;
-            margin-left: 5px;
-            opacity: 0.7;
-        }
-
-        .account-badge .remove-btn:hover {
-            opacity: 1;
-        }
-
-        .account-badge .app-label {
-            font-size: 10px;
-            opacity: 0.7;
-            margin-left: 5px;
-        }
-
-        .add-account-section {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-
-        .top-buttons {
-            text-align: center;
+            gap: 15px;
             margin-bottom: 20px;
+        }
+
+        .app-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
             display: flex;
-            gap: 10px;
+            align-items: center;
             justify-content: center;
-            flex-wrap: wrap;
+            font-size: 24px;
+        }
+
+        .app-icon.mikra {
+            background: #9C27B0;
+        }
+
+        .app-icon.chaya {
+            background: #FF6B00;
+        }
+
+        .app-name {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: auto;
+        }
+
+        .status.pending {
+            background: #FF9800;
+            color: #000;
+        }
+
+        .status.connected {
+            background: #00ff88;
+            color: #000;
         }
 
         button {
             background: #3483FA;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 25px;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
             transition: all 0.3s;
+            width: 100%;
+            font-weight: bold;
         }
 
         button:hover {
-            transform: scale(1.05);
+            transform: scale(1.02);
         }
 
         button:disabled {
@@ -114,386 +128,95 @@
             cursor: not-allowed;
         }
 
-        button.btn-add {
-            background: #00ff88;
-            color: #000;
-            font-weight: bold;
-        }
-
-        button.btn-add-mikra {
+        button.mikra {
             background: #9C27B0;
-            color: white;
-            font-weight: bold;
         }
 
-        button.btn-add-chaya {
+        button.chaya {
             background: #FF6B00;
-            color: white;
-            font-weight: bold;
         }
 
-        button.btn-danger {
-            background: #f44336;
-        }
-
-        button.btn-warning {
-            background: #FF9800;
-        }
-
-        .filter-section {
-            background: #2a2a2a;
+        .info {
+            background: #1a1a1a;
             padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            line-height: 1.6;
         }
 
-        .filter-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .filter-row label {
-            color: #FFE600;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .search-select-wrapper {
-            flex: 1;
-            min-width: 250px;
-            position: relative;
-        }
-
-        .search-input-select {
-            width: 100%;
-            padding: 10px 40px 10px 15px;
+        .token-display {
             background: #1a1a1a;
-            border: 2px solid #444;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .search-input-select:focus {
-            outline: none;
-            border-color: #FFE600;
-        }
-
-        .dropdown-icon {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #888;
-            pointer-events: none;
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: #1a1a1a;
-            border: 2px solid #FFE600;
-            border-radius: 6px;
-            margin-top: 5px;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
             display: none;
         }
 
-        .dropdown-menu.active {
+        .token-display.visible {
             display: block;
         }
 
-        .dropdown-search {
-            position: sticky;
-            top: 0;
-            background: #1a1a1a;
-            padding: 10px;
-            border-bottom: 1px solid #444;
-        }
-
-        .dropdown-search input {
-            width: 100%;
-            padding: 8px;
-            background: #2a2a2a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 14px;
-        }
-
-        .dropdown-item {
-            padding: 10px 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border-bottom: 1px solid #2a2a2a;
-        }
-
-        .dropdown-item:hover {
-            background: #2a2a2a;
-        }
-
-        .dropdown-item.selected {
-            background: #3483FA;
-        }
-
-        .stats-bar {
-            background: #2a2a2a;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .stat-item {
-            text-align: center;
-            cursor: pointer;
-            padding: 10px;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        .stat-item:hover {
-            background: #333;
-        }
-
-        .stat-item.active {
-            background: #3483FA;
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: #aaa;
-        }
-
-        .progress-bar-container {
-            background: #1a1a1a;
-            border-radius: 20px;
-            height: 30px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-bar {
-            height: 100%;
-            display: flex;
-            position: relative;
-        }
-
-        .progress-segment {
-            transition: all 0.5s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .progress-segment:hover {
-            opacity: 0.8;
-        }
-
-        .progress-segment.pendiente { background: #9C27B0; }
-        .progress-segment.en-camino { background: #00d9ff; color: #000; }
-        .progress-segment.entregado { background: #00ff88; color: #000; }
-
-        .sort-controls {
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .sort-btn {
-            padding: 8px 15px;
-            font-size: 13px;
-            background: #333;
-        }
-
-        .sort-btn.active {
-            background: #FFE600;
-            color: #000;
-        }
-
-        .envio-card {
-            background: #2a2a2a;
-            border-left: 5px solid;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            transition: all 0.3s;
-        }
-
-        .envio-card:hover {
-            background: #333;
-            transform: translateX(5px);
-        }
-
-        .envio-card.pendiente { border-left-color: #9C27B0; }
-        .envio-card.en-camino { border-left-color: #00d9ff; }
-        .envio-card.entregado { border-left-color: #00ff88; }
-
-        .envio-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .estado-badge {
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .estado-badge.pendiente { background: #9C27B0; }
-        .estado-badge.en-camino { background: #00d9ff; color: #000; }
-        .estado-badge.entregado { background: #00ff88; color: #000; }
-
-        .envio-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-top: 12px;
-        }
-
-        .info-item {
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 6px;
-        }
-
-        .info-label {
-            color: #888;
-            font-size: 11px;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-
-        .info-value {
-            color: #fff;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .zona-highlight {
-            font-size: 16px;
-            font-weight: bold;
-            color: #FFE600;
-        }
-
-        .direccion-link, .order-link {
-            color: #3483FA;
-            text-decoration: none;
-            transition: all 0.3s;
-        }
-
-        .direccion-link:hover, .order-link:hover {
-            color: #FFE600;
-        }
-
-        .timeline {
-            background: #1a1a1a;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 12px;
-        }
-
-        .timeline-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 0;
-            position: relative;
-        }
-
-        .timeline-item:not(:last-child)::after {
-            content: '';
-            position: absolute;
-            left: 7px;
-            top: 25px;
-            width: 2px;
-            height: calc(100% - 8px);
-            background: #444;
-        }
-
-        .timeline-dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            z-index: 1;
-        }
-
-        .timeline-dot.done {
+        .success-message {
             background: #00ff88;
-            box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+            color: #000;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
         }
 
-        .timeline-dot.pending {
-            background: #444;
-            border: 2px solid #666;
+        .success-message.visible {
+            display: block;
         }
 
-        .timeline-content {
-            flex: 1;
+        .final-button {
+            background: #00ff88;
+            color: #000;
+            margin-top: 30px;
+            font-size: 18px;
+            padding: 18px;
         }
 
-        .timeline-label {
-            color: #aaa;
-            font-size: 12px;
+        .instruction {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #FFE600;
         }
 
-        .timeline-time {
+        .step {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .step::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
             color: #00ff88;
             font-weight: bold;
-            font-size: 13px;
-        }
-
-        .timeline-time.pending {
-            color: #666;
         }
 
         .loading {
             text-align: center;
-            padding: 40px;
-            font-size: 18px;
+            padding: 20px;
+            font-size: 16px;
             color: #FFE600;
         }
 
         .loading-spinner {
             display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #333;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #333;
             border-top-color: #FFE600;
             border-radius: 50%;
             animation: spin 1s linear infinite;
@@ -503,840 +226,193 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-
-        .error {
-            background: #f44336;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: center;
-        }
-
-        .success {
-            background: #00ff88;
-            color: #000;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .no-results {
-            text-align: center;
-            padding: 30px;
-            color: #888;
-            font-size: 16px;
-        }
-
-        .fecha-hoy {
-            color: #ff6b00;
-            font-weight: bold;
-        }
-
-        .items-count {
-            background: #FFE600;
-            color: #000;
-            padding: 4px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        .cuenta-badge {
-            background: #3483FA;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-
-        .cuenta-badge.mikra {
-            background: #9C27B0;
-        }
-
-        .cuenta-badge.chaya {
-            background: #FF6B00;
-        }
-
-        @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .envio-info {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX - Multi Cuenta</h1>
-        
-        <div id="accountManager" class="account-manager">
-            <div class="account-list" id="accountList"></div>
-            <div class="add-account-section">
-                <button class="btn-add-mikra" onclick="agregarNuevaCuenta('mikra')">➕ Agregar Cuenta MIKRA</button>
-                <button class="btn-add-chaya" onclick="agregarNuevaCuenta('chaya')">➕ Agregar Cuenta CHAYA</button>
-                <button class="btn-danger" onclick="cerrarTodasCuentas()">🚪 Cerrar Todas</button>
+        <h1>⚙️ Configuración Inicial</h1>
+        <p class="subtitle">Conectá ambas cuentas de Mercado Libre (solo una vez)</p>
+
+        <div class="instruction">
+            <div class="step">Hacé click en "Conectar" para cada cuenta</div>
+            <div class="step">Autorizá el acceso en Mercado Libre</div>
+            <div class="step">Los tokens se guardarán automáticamente</div>
+            <div class="step">Luego podés usar la app principal</div>
+        </div>
+
+        <!-- MIKRA -->
+        <div class="app-section mikra">
+            <div class="app-header">
+                <div class="app-icon mikra">🟣</div>
+                <div class="app-name">MIKRA</div>
+                <span class="status pending" id="status-mikra">⏳ Pendiente</span>
             </div>
-        </div>
-
-        <div class="top-buttons">
-            <button onclick="cargarFlexHoy()" id="loadHoyBtn">📅 HOY</button>
-            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 AYER</button>
-        </div>
-
-        <div id="filterSection" class="filter-section hidden">
-            <div class="filter-row">
-                <label>📍 Zona:</label>
-                <div class="search-select-wrapper">
-                    <div class="search-input-select" onclick="toggleDropdown()">
-                        <span id="selectedZone">Todas las zonas</span>
-                    </div>
-                    <span class="dropdown-icon">▼</span>
-                    <div id="dropdownMenu" class="dropdown-menu">
-                        <div class="dropdown-search">
-                            <input type="text" id="dropdownSearch" placeholder="🔍 Buscar zona..." oninput="filtrarDropdown()">
-                        </div>
-                        <div id="dropdownItems"></div>
-                    </div>
-                </div>
+            
+            <div class="info">
+                App ID: 6723747350775490<br>
+                Proxy: mikra-flex-proxy
             </div>
-        </div>
-
-        <div id="statsSection" class="stats-bar hidden">
-            <div class="stats-grid">
-                <div class="stat-item" onclick="filtrarPorEstado('all')" id="stat-all">
-                    <div class="stat-number" style="color:#FFE600;">0</div>
-                    <div class="stat-label">TODOS</div>
-                </div>
-                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente">
-                    <div class="stat-number" style="color:#9C27B0;">0</div>
-                    <div class="stat-label">PENDIENTES</div>
-                </div>
-                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino">
-                    <div class="stat-number" style="color:#00d9ff;">0</div>
-                    <div class="stat-label">EN CAMINO</div>
-                </div>
-                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado">
-                    <div class="stat-number" style="color:#00ff88;">0</div>
-                    <div class="stat-label">ENTREGADOS</div>
-                </div>
+            
+            <button class="mikra" onclick="conectarCuenta('mikra')" id="btn-mikra">
+                🔗 Conectar MIKRA
+            </button>
+            
+            <div class="success-message" id="success-mikra">
+                ✅ MIKRA conectada exitosamente
             </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar"></div>
+            
+            <div class="token-display" id="token-mikra"></div>
+        </div>
+
+        <!-- CHAYA -->
+        <div class="app-section chaya">
+            <div class="app-header">
+                <div class="app-icon chaya">🟠</div>
+                <div class="app-name">CHAYA</div>
+                <span class="status pending" id="status-chaya">⏳ Pendiente</span>
             </div>
+            
+            <div class="info">
+                App ID: 1942700449315778<br>
+                Proxy: chaya-flex-proxy
+            </div>
+            
+            <button class="chaya" onclick="conectarCuenta('chaya')" id="btn-chaya">
+                🔗 Conectar CHAYA
+            </button>
+            
+            <div class="success-message" id="success-chaya">
+                ✅ CHAYA conectada exitosamente
+            </div>
+            
+            <div class="token-display" id="token-chaya"></div>
         </div>
 
-        <div id="sortSection" class="sort-controls hidden">
-            <label style="color: #FFE600; font-weight: bold;">📊 Ordenar por:</label>
-            <button class="sort-btn active" onclick="ordenarPor('zona')">🌍 Zona</button>
-            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')">📅 Fecha Entrega</button>
-            <button class="sort-btn" onclick="ordenarPor('hora-entrega')">🕐 Hora Entrega</button>
-            <button class="sort-btn" onclick="ordenarPor('estado')">📋 Estado</button>
-            <button class="sort-btn" onclick="ordenarPor('recientes')">🆕 Más Recientes</button>
-        </div>
-
-        <div id="content"></div>
+        <button class="final-button" onclick="irAApp()" id="btn-final" style="display:none;">
+            🚀 Ir a la Aplicación Principal
+        </button>
     </div>
 
     <script>
         const APPS = {
             mikra: {
-                CLIENT_ID: '6723747350775490',
-                CLIENT_SECRET: 'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
-                PROXY: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api',
-                NAME: 'Mikra',
-                COLOR: 'mikra'
+                clientId: '6723747350775490',
+                clientSecret: 'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
+                proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api'
             },
             chaya: {
-                CLIENT_ID: '1942700449315778',
-                CLIENT_SECRET: 'BhqVSOXCXXXG3v38T3NMQJRIfL3NnOBy',
-                PROXY: 'https://chaya-flex-proxy.rafaelassir.workers.dev/api',
-                NAME: 'Chaya',
-                COLOR: 'chaya'
+                clientId: '1942700449315778',
+                clientSecret: 'BhqVSOXCXXXG3v38T3NMQJRIfL3NnOBy',
+                proxy: 'https://chaya-flex-proxy.rafaelassir.workers.dev/api'
             }
         };
 
         const REDIRECT_URI = window.location.origin + window.location.pathname;
 
-        let cuentasActivas = JSON.parse(localStorage.getItem('ml_cuentas') || '[]');
-        let allFlexOrders = [];
-        let currentStateFilter = 'all';
-        let currentZoneFilter = 'all';
-        let currentSort = 'zona';
-        let dropdownOpen = false;
+        // Verificar estado actual
+        function verificarEstado() {
+            const mikraToken = localStorage.getItem('mikra_refresh_token');
+            const chayaToken = localStorage.getItem('chaya_refresh_token');
 
-        const BARRIOS_CABA = [
-            'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
-            'Caballito', 'Chacarita', 'Coghlan', 'Colegiales', 'Constitución',
-            'Flores', 'Floresta', 'La Boca', 'Liniers', 'Mataderos',
-            'Monte Castro', 'Monserrat', 'Nueva Pompeya', 'Núñez', 'Palermo',
-            'Parque Avellaneda', 'Parque Chacabuco', 'Parque Patricios', 'Paternal',
-            'Recoleta', 'Retiro', 'Saavedra', 'San Cristóbal', 'San Nicolás',
-            'San Telmo', 'Velez Sarsfield', 'Versailles', 'Villa Crespo',
-            'Villa Devoto', 'Villa General Mitre', 'Villa Lugano', 'Villa Luro',
-            'Villa Ortúzar', 'Villa Pueyrredon', 'Villa Pueyrredón', 'Villa Real',
-            'Villa Santa Rita', 'Villa Urquiza'
-        ];
+            if (mikraToken) {
+                document.getElementById('status-mikra').textContent = '✅ Conectada';
+                document.getElementById('status-mikra').className = 'status connected';
+                document.getElementById('success-mikra').classList.add('visible');
+                document.getElementById('btn-mikra').disabled = true;
+            }
 
-        function normalizar(texto) {
-            return texto.toLowerCase().trim()
-                .replace(/á/g, 'a').replace(/é/g, 'e')
-                .replace(/í/g, 'i').replace(/ó/g, 'o')
-                .replace(/ú/g, 'u').replace(/ñ/g, 'n');
-        }
+            if (chayaToken) {
+                document.getElementById('status-chaya').textContent = '✅ Conectada';
+                document.getElementById('status-chaya').className = 'status connected';
+                document.getElementById('success-chaya').classList.add('visible');
+                document.getElementById('btn-chaya').disabled = true;
+            }
 
-        function esBarrioCABA(nombre) {
-            const nombreNorm = normalizar(nombre);
-            return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
-        }
-
-        function getZonaDetallada(barrio, ciudad) {
-            const barrioNorm = (barrio || '').trim();
-            const ciudadNorm = (ciudad || '').trim();
-            
-            if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
-                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
-                    return `CABA - ${barrioNorm}`;
-                }
-                return 'CABA - Otros';
-            }
-            
-            if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
-                const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
-                return `CABA - ${nombreBarrio}`;
-            }
-            
-            const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
-            if (zonaNorte.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
-                return `GBA Norte - ${ciudadNorm || barrioNorm}`;
-            }
-            
-            const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'Villa Luzuriaga', 'Luzuriaga', 'Ingeniero Allan', 'Castelar', 'El Palomar', 'Ciudad Jardin Del Palomar', 'Caseros', 'San Justo', 'San justo', 'Villa Sarmiento', 'villa sarmiento'];
-            if (zonaOeste.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
-                return `GBA Oeste - ${ciudadNorm || barrioNorm}`;
-            }
-            
-            const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Sarandí', 'Tristán Suárez', 'Carlos Spegazzini', 'Bernal Oeste', 'Temperley', 'Remedios De Escalada', 'Valentin Alsina', 'Berazategui', 'Florencio Varela', 'Wilde'];
-            if (zonaSur.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
-                return `GBA Sur - ${ciudadNorm || barrioNorm}`;
-            }
-            
-            const interior = ['Zárate', 'Campana', 'La Plata', 'Mar del Plata', 'Bahía Blanca'];
-            if (interior.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
-                return `Buenos Aires - ${ciudadNorm || barrioNorm}`;
-            }
-            
-            return ciudadNorm || barrioNorm || 'Otras zonas';
-        }
-
-        function esCABA(zona) {
-            return zona.startsWith('CABA');
-        }
-
-        function toggleDropdown() {
-            dropdownOpen = !dropdownOpen;
-            const menu = document.getElementById('dropdownMenu');
-            if (dropdownOpen) {
-                menu.classList.add('active');
-                document.getElementById('dropdownSearch').focus();
-            } else {
-                menu.classList.remove('active');
+            if (mikraToken && chayaToken) {
+                document.getElementById('btn-final').style.display = 'block';
             }
         }
 
-        function filtrarDropdown() {
-            const search = normalizar(document.getElementById('dropdownSearch').value);
-            const items = document.querySelectorAll('.dropdown-item');
-            items.forEach(item => {
-                const text = normalizar(item.textContent);
-                item.style.display = text.includes(search) ? 'block' : 'none';
-            });
-        }
-
-        function selectZone(zona) {
-            currentZoneFilter = zona;
-            const displayText = zona === 'all' ? 'Todas las zonas' : zona.split('(')[0].trim();
-            document.getElementById('selectedZone').textContent = displayText;
-            toggleDropdown();
-            aplicarFiltros();
-        }
-
-        function actualizarListaCuentas() {
-            const accountList = document.getElementById('accountList');
-            if (cuentasActivas.length === 0) {
-                accountList.innerHTML = '<div style="text-align:center; color:#888;">No hay cuentas conectadas</div>';
-            } else {
-                accountList.innerHTML = cuentasActivas.map(cuenta => `
-                    <div class="account-badge ${cuenta.activa ? 'active' : ''}">
-                        <span onclick="toggleCuenta('${cuenta.id}')" style="cursor:pointer;">
-                            ${cuenta.activa ? '✅' : '⭕'} ${cuenta.nickname}
-                        </span>
-                        <span class="app-label">[${cuenta.appName}]</span>
-                        <span class="remove-btn" onclick="eliminarCuenta('${cuenta.id}')">❌</span>
-                    </div>
-                `).join('');
-            }
-        }
-
-        function toggleCuenta(cuentaId) {
-            const cuenta = cuentasActivas.find(c => c.id === cuentaId);
-            if (cuenta) {
-                cuenta.activa = !cuenta.activa;
-                localStorage.setItem('ml_cuentas', JSON.stringify(cuentasActivas));
-                actualizarListaCuentas();
-            }
-        }
-
-        function eliminarCuenta(cuentaId) {
-            if (confirm('¿Seguro que quieres eliminar esta cuenta?')) {
-                cuentasActivas = cuentasActivas.filter(c => c.id !== cuentaId);
-                localStorage.setItem('ml_cuentas', JSON.stringify(cuentasActivas));
-                actualizarListaCuentas();
-                allFlexOrders = [];
-                document.getElementById('content').innerHTML = '';
-                document.getElementById('filterSection').classList.add('hidden');
-                document.getElementById('statsSection').classList.add('hidden');
-                document.getElementById('sortSection').classList.add('hidden');
-            }
-        }
-
-        function cerrarTodasCuentas() {
-            if (confirm('¿Seguro que quieres cerrar todas las cuentas?')) {
-                cuentasActivas = [];
-                localStorage.setItem('ml_cuentas', JSON.stringify(cuentasActivas));
-                actualizarListaCuentas();
-                allFlexOrders = [];
-                document.getElementById('content').innerHTML = '';
-                document.getElementById('filterSection').classList.add('hidden');
-                document.getElementById('statsSection').classList.add('hidden');
-                document.getElementById('sortSection').classList.add('hidden');
-            }
-        }
-
-        async function agregarNuevaCuenta(appType) {
+        function conectarCuenta(appType) {
             const app = APPS[appType];
-            localStorage.setItem('ml_pending_app', appType);
+            localStorage.setItem('pending_auth_app', appType);
             
-            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${app.CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${app.clientId}&redirect_uri=${REDIRECT_URI}`;
             window.location.href = authUrl;
         }
 
-        async function init() {
-            actualizarListaCuentas();
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
+        async function handleCallback(code) {
+            const appType = localStorage.getItem('pending_auth_app');
+            if (!appType) return;
 
-            if (code) {
-                await handleAuthCallback(code);
-            }
-
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
-                    toggleDropdown();
-                }
-            });
-        }
-
-        async function handleAuthCallback(code) {
-            const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Autenticando nueva cuenta...</div>';
-
-            const appType = localStorage.getItem('ml_pending_app') || 'mikra';
             const app = APPS[appType];
+            const contentDiv = document.querySelector('.app-section.' + appType);
+            contentDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Autenticando...</div>';
 
             try {
-                const response = await fetch(`${app.PROXY}/oauth/token`, {
+                const response = await fetch(`${app.proxy}/oauth/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     },
                     body: new URLSearchParams({
                         grant_type: 'authorization_code',
-                        client_id: app.CLIENT_ID,
-                        client_secret: app.CLIENT_SECRET,
+                        client_id: app.clientId,
+                        client_secret: app.clientSecret,
                         code: code,
                         redirect_uri: REDIRECT_URI
                     })
                 });
 
                 const data = await response.json();
-                const accessToken = data.access_token;
 
-                const userResponse = await fetch(`${app.PROXY}/users/me`, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                });
+                if (data.access_token) {
+                    // Guardar tokens
+                    localStorage.setItem(`${appType}_access_token`, data.access_token);
+                    localStorage.setItem(`${appType}_refresh_token`, data.refresh_token);
+                    localStorage.setItem(`${appType}_expires_at`, Date.now() + (data.expires_in * 1000));
 
-                const userData = await userResponse.json();
-                
-                // Verificar si ya existe
-                const yaExiste = cuentasActivas.some(c => c.id === userData.id.toString());
-                if (yaExiste) {
-                    content.innerHTML = '<div class="error">Esta cuenta ya está agregada</div>';
-                    setTimeout(() => {
-                        content.innerHTML = '';
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                        localStorage.removeItem('ml_pending_app');
-                    }, 2000);
-                    return;
-                }
-
-                cuentasActivas.push({
-                    id: userData.id.toString(),
-                    nickname: userData.nickname,
-                    accessToken: accessToken,
-                    activa: true,
-                    appType: appType,
-                    appName: app.NAME,
-                    appColor: app.COLOR,
-                    proxy: app.PROXY
-                });
-
-                localStorage.setItem('ml_cuentas', JSON.stringify(cuentasActivas));
-                localStorage.removeItem('ml_pending_app');
-                
-                content.innerHTML = `<div class="success">✅ Cuenta agregada exitosamente: ${userData.nickname} [${app.NAME}]</div>`;
-                
-                setTimeout(() => {
-                    actualizarListaCuentas();
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    content.innerHTML = '';
-                }, 2000);
-
-            } catch (error) {
-                content.innerHTML = `<div class="error">Error de autenticación</div>`;
-                console.error(error);
-                localStorage.removeItem('ml_pending_app');
-            }
-        }
-
-        function formatearFecha(fechaISO) {
-            if (!fechaISO) return '❌';
-            
-            const fecha = new Date(fechaISO);
-            const hoy = new Date();
-            
-            hoy.setHours(0, 0, 0, 0);
-            fecha.setHours(0, 0, 0, 0);
-            
-            const diffDias = Math.floor((fecha - hoy) / (1000 * 60 * 60 * 24));
-            
-            if (diffDias === 0) return 'Hoy';
-            if (diffDias === -1) return 'Ayer';
-            if (diffDias === 1) return 'Mañana';
-            
-            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            const dia = dias[fecha.getDay()];
-            const fechaFormato = fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-            
-            return `${dia} ${fechaFormato}`;
-        }
-
-        function formatearSoloHora(fechaISO) {
-            if (!fechaISO) return null;
-            const fecha = new Date(fechaISO);
-            return fecha.toLocaleString('es-AR', { 
-                timeZone: 'America/Argentina/Buenos_Aires',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        function esEntregaParaFecha(shipping, targetDate) {
-            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
-                                shipping.shipping_option?.estimated_delivery_final?.date;
-            
-            if (!fechaEntrega) return false;
-            
-            const entrega = new Date(fechaEntrega);
-            entrega.setHours(0, 0, 0, 0);
-            
-            return entrega.getTime() === targetDate.getTime();
-        }
-
-        async function cargarFlexHoy() {
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-            await cargarFlexPorFecha(hoy, 'HOY');
-        }
-
-        async function cargarFlexAyer() {
-            const ayer = new Date();
-            ayer.setDate(ayer.getDate() - 1);
-            ayer.setHours(0, 0, 0, 0);
-            await cargarFlexPorFecha(ayer, 'AYER');
-        }
-
-        async function cargarFlexPorFecha(targetDate, label) {
-            const cuentasParaCargar = cuentasActivas.filter(c => c.activa);
-            
-            if (cuentasParaCargar.length === 0) {
-                document.getElementById('content').innerHTML = '<div class="error">No hay cuentas activas. Agrega o activa al menos una cuenta.</div>';
-                return;
-            }
-
-            const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label} desde ${cuentasParaCargar.length} cuenta(s)...</div>`;
-            
-            let allOrdersFromAllAccounts = [];
-
-            for (const cuenta of cuentasParaCargar) {
-                try {
-                    const ordersFromAccount = await cargarOrdenesDeCuenta(cuenta, targetDate);
-                    allOrdersFromAllAccounts = allOrdersFromAllAccounts.concat(ordersFromAccount.map(item => ({
-                        ...item,
-                        cuentaNickname: cuenta.nickname,
-                        cuentaId: cuenta.id,
-                        cuentaColor: cuenta.appColor
-                    })));
-                } catch (error) {
-                    console.error(`Error cargando cuenta ${cuenta.nickname}:`, error);
-                }
-            }
-
-            if (allOrdersFromAllAccounts.length === 0) {
-                content.innerHTML = `<div class="error">No hay envíos FLEX para ${label}</div>`;
-                return;
-            }
-
-            allFlexOrders = allOrdersFromAllAccounts;
-
-            // Calcular contadores por zona
-            const zonaCounts = new Map();
-            allFlexOrders.forEach(({ shipping }) => {
-                const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const ciudad = shipping.receiver_address?.city?.name || '';
-                const zona = getZonaDetallada(barrio, ciudad);
-                zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
-            });
-
-            // Crear dropdown con contadores
-            const dropdownItems = document.getElementById('dropdownItems');
-            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${allFlexOrders.length})</div>`;
-            
-            let cabaTotal = 0;
-            Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
-                if (esCABA(zona)) cabaTotal += count;
-            });
-            if (cabaTotal > 0) {
-                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('CABA')">🏙️ CABA - Todos (${cabaTotal})</div>`;
-            }
-            
-            Array.from(zonaCounts.entries()).sort().forEach(([zona, count]) => {
-                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
-            });
-
-            document.getElementById('filterSection').classList.remove('hidden');
-            document.getElementById('statsSection').classList.remove('hidden');
-            document.getElementById('sortSection').classList.remove('hidden');
-            displayOrders('all');
-        }
-
-        async function cargarOrdenesDeCuenta(cuenta, targetDate) {
-            let tempOrders = [];
-            
-            const allOrderPromises = [];
-            const totalPages = 20;
-
-            for (let page = 0; page < totalPages; page++) {
-                allOrderPromises.push(
-                    fetch(`${cuenta.proxy}/orders/search?seller=${cuenta.id}&offset=${page * 50}&limit=50&sort=date_desc`, {
-                        headers: { 'Authorization': `Bearer ${cuenta.accessToken}` }
-                    }).then(r => r.json())
-                );
-            }
-
-            const allPagesData = await Promise.all(allOrderPromises);
-            const allOrders = allPagesData.flatMap(data => data.results || []);
-
-            const shippingPromises = allOrders.map(async (order) => {
-                try {
-                    const shippingId = order.shipping?.id;
-                    if (!shippingId) return null;
-
-                    const shipResponse = await fetch(`${cuenta.proxy}/shipments/${shippingId}`, {
-                        headers: { 'Authorization': `Bearer ${cuenta.accessToken}` }
+                    // Obtener info del usuario
+                    const userResponse = await fetch(`${app.proxy}/users/me`, {
+                        headers: {
+                            'Authorization': `Bearer ${data.access_token}`
+                        }
                     });
 
-                    const shipping = await shipResponse.json();
-                    
-                    if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
-                        return { order, shipping };
-                    }
-                    return null;
-                } catch (e) {
-                    return null;
-                }
-            });
+                    const userData = await userResponse.json();
+                    localStorage.setItem(`${appType}_user_id`, userData.id);
+                    localStorage.setItem(`${appType}_nickname`, userData.nickname);
 
-            const results = await Promise.all(shippingPromises);
-            tempOrders = results.filter(item => item !== null);
-
-            const uniqueShippings = new Map();
-            tempOrders.forEach(({ order, shipping }) => {
-                const shippingId = shipping.id;
-                if (!uniqueShippings.has(shippingId)) {
-                    uniqueShippings.set(shippingId, { orders: [order], shipping });
+                    localStorage.removeItem('pending_auth_app');
+                    window.location.href = window.location.pathname;
                 } else {
-                    uniqueShippings.get(shippingId).orders.push(order);
+                    throw new Error('No se recibió access token');
                 }
-            });
 
-            return Array.from(uniqueShippings.values());
+            } catch (error) {
+                console.error('Error en autenticación:', error);
+                alert('Error al autenticar. Por favor, intentá de nuevo.');
+                localStorage.removeItem('pending_auth_app');
+                window.location.href = window.location.pathname;
+            }
         }
 
-        function getOrderState(shipping) {
-            const history = shipping.status_history || {};
-            
-            if (history.date_delivered) {
-                return 'entregado';
-            }
-            
-            if (history.date_shipped) {
-                return 'en-camino';
-            }
-            
-            return 'pendiente';
+        function irAApp() {
+            // Cambiar a la página principal (ajustá el nombre según corresponda)
+            window.location.href = 'envios-flex-final.html';
         }
 
-        function filtrarPorEstado(estado) {
-            currentStateFilter = estado;
-            
-            document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active'));
-            document.getElementById(`stat-${estado}`).classList.add('active');
-            
-            aplicarFiltros();
-        }
+        // Inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
 
-        function ordenarPor(tipo) {
-            currentSort = tipo;
-            
-            document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            aplicarFiltros();
-        }
-
-        function aplicarFiltros() {
-            let filtered = allFlexOrders;
-
-            if (currentStateFilter !== 'all') {
-                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
-            }
-
-            if (currentZoneFilter !== 'all') {
-                filtered = filtered.filter(({ shipping }) => {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
-                    
-                    if (currentZoneFilter === 'CABA') {
-                        return esCABA(zona);
-                    }
-                    
-                    return zona === currentZoneFilter;
-                });
-            }
-
-            // Aplicar ordenamiento
-            if (currentSort === 'zona') {
-                filtered.sort((a, b) => {
-                    const zonaA = getZonaDetallada(
-                        a.shipping.receiver_address?.neighborhood?.name || '',
-                        a.shipping.receiver_address?.city?.name || ''
-                    );
-                    const zonaB = getZonaDetallada(
-                        b.shipping.receiver_address?.neighborhood?.name || '',
-                        b.shipping.receiver_address?.city?.name || ''
-                    );
-                    return zonaA.localeCompare(zonaB);
-                });
-            } else if (currentSort === 'fecha-entrega') {
-                filtered.sort((a, b) => {
-                    const fechaA = a.shipping.shipping_option?.estimated_delivery_time?.date || 
-                                  a.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                    const fechaB = b.shipping.shipping_option?.estimated_delivery_time?.date || 
-                                  b.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                    return fechaA.localeCompare(fechaB);
-                });
-            } else if (currentSort === 'hora-entrega') {
-                filtered.sort((a, b) => {
-                    const horaA = a.shipping.status_history?.date_delivered || 
-                                 a.shipping.status_history?.date_shipped || 
-                                 a.shipping.date_created || '';
-                    const horaB = b.shipping.status_history?.date_delivered || 
-                                 b.shipping.status_history?.date_shipped || 
-                                 b.shipping.date_created || '';
-                    return horaB.localeCompare(horaA);
-                });
-            } else if (currentSort === 'estado') {
-                const ordenEstados = { 'pendiente': 1, 'en-camino': 2, 'entregado': 3 };
-                filtered.sort((a, b) => {
-                    const estadoA = ordenEstados[getOrderState(a.shipping)];
-                    const estadoB = ordenEstados[getOrderState(b.shipping)];
-                    return estadoA - estadoB;
-                });
-            } else if (currentSort === 'recientes') {
-                filtered.sort((a, b) => {
-                    const fechaA = a.shipping.date_created || '';
-                    const fechaB = b.shipping.date_created || '';
-                    return fechaB.localeCompare(fechaA);
-                });
-            }
-
-            displayOrders(currentStateFilter, filtered);
-        }
-
-        function displayOrders(filterType, customFiltered = null) {
-            const orders = customFiltered || allFlexOrders;
-
-            const stats = {
-                total: allFlexOrders.length,
-                pendiente: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
-                enCamino: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'en-camino').length,
-                entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
-            };
-
-            document.querySelector('#stat-all .stat-number').textContent = stats.total;
-            document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
-            document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
-            document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
-
-            const pendientePct = (stats.pendiente / stats.total) * 100;
-            const enCaminoPct = (stats.enCamino / stats.total) * 100;
-            const entregadoPct = (stats.entregado / stats.total) * 100;
-
-            const progressBar = document.getElementById('progressBar');
-            progressBar.innerHTML = `
-                ${stats.pendiente > 0 ? `<div class="progress-segment pendiente" style="width:${pendientePct}%" onclick="filtrarPorEstado('pendiente')">${stats.pendiente}</div>` : ''}
-                ${stats.enCamino > 0 ? `<div class="progress-segment en-camino" style="width:${enCaminoPct}%" onclick="filtrarPorEstado('en-camino')">${stats.enCamino}</div>` : ''}
-                ${stats.entregado > 0 ? `<div class="progress-segment entregado" style="width:${entregadoPct}%" onclick="filtrarPorEstado('entregado')">${stats.entregado}</div>` : ''}
-            `;
-
-            let html = '';
-
-            if (orders.length === 0) {
-                html = '<div class="no-results">No hay envíos con estos filtros</div>';
+            if (code) {
+                handleCallback(code);
             } else {
-                orders.forEach(({ orders: orderList, shipping, cuentaNickname, cuentaColor }) => {
-                    const state = getOrderState(shipping);
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
-                    
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
-                    const provincia = shipping.receiver_address?.state?.name || '';
-                    
-                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
-                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
-                    
-                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
-                                        shipping.shipping_option?.estimated_delivery_final?.date;
-                    
-                    const fechaFormateada = formatearFecha(fechaEntrega);
-                    const esHoy = fechaFormateada === 'Hoy';
-                    
-                    const history = shipping.status_history || {};
-                    const fechaCreacion = shipping.date_created;
-                    
-                    const estadoLabel = {
-                        'pendiente': '📋 Pendiente',
-                        'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado'
-                    };
-
-                    const cantidadItems = orderList.length;
-                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
-                    const orderId = orderList[0]?.id || '';
-                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-
-                    html += `
-                        <div class="envio-card ${state}">
-                            <div class="envio-header">
-                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                    <span class="estado-badge ${state}">${estadoLabel[state]}</span>
-                                    ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
-                                    <span class="cuenta-badge ${cuentaColor}">${cuentaNickname}</span>
-                                </div>
-                                <a href="${orderUrl}" target="_blank" class="order-link">
-                                    #${orderId}
-                                </a>
-                            </div>
-                            
-                            <div class="envio-info">
-                                <div class="info-item">
-                                    <div class="info-label">🌍 Zona</div>
-                                    <div class="info-value zona-highlight">${zona}</div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📍 Dirección</div>
-                                    <div class="info-value">
-                                        <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
-                                            ${calle} ${numero}, ${ciudad}
-                                        </a>
-                                    </div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">👤 Comprador</div>
-                                    <div class="info-value">${comprador}</div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📅 Entrega</div>
-                                    <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="timeline">
-                                <div class="timeline-item">
-                                    <div class="timeline-dot done"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">📦 Recibida</div>
-                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">🚚 Enviado</div>
-                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">✅ Entregado</div>
-                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
+                verificarEstado();
             }
-
-            document.getElementById('content').innerHTML = html;
-        }
-
-        document.addEventListener('DOMContentLoaded', init);
+        });
     </script>
 </body>
 </html>
