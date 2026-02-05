@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -49,6 +49,46 @@
         button:hover {
             transform: scale(1.05);
             box-shadow: 0 4px 12px rgba(52, 131, 250, 0.4);
+        }
+
+        .search-section {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-box {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 50px 15px 20px;
+            background: #1a1a1a;
+            border: 2px solid #444;
+            border-radius: 25px;
+            color: #fff;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #FFE600;
+            box-shadow: 0 0 20px rgba(255, 230, 0, 0.2);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            font-size: 20px;
         }
 
         .filter-section {
@@ -196,7 +236,7 @@
             color: #FFE600;
         }
 
-        .direccion-link {
+        .direccion-link, .order-link {
             color: #3483FA;
             text-decoration: none;
             display: inline-flex;
@@ -205,7 +245,7 @@
             transition: all 0.3s;
         }
 
-        .direccion-link:hover {
+        .direccion-link:hover, .order-link:hover {
             color: #FFE600;
             text-decoration: underline;
         }
@@ -329,9 +369,22 @@
             <button onclick="cargarFlexAyer()" id="loadFlexAyerBtn" style="display:none; background:#FF9800;">📅 Entregas de AYER</button>
         </div>
 
+        <div id="searchSection" class="search-section hidden">
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="🔍 Buscar por zona... (ej: Palermo, GBA Norte, Belgrano)"
+                    oninput="buscarZona()"
+                >
+                <span class="search-icon">🔍</span>
+            </div>
+        </div>
+
         <div id="filterSection" class="filter-section hidden">
             <div class="filter-row">
-                <label>🔍 Filtrar por zona:</label>
+                <label>📍 Filtrar por zona:</label>
                 <select id="zonaFilter" onchange="aplicarFiltros()">
                     <option value="all">Todas las zonas</option>
                 </select>
@@ -354,57 +407,73 @@
         let sellerId = localStorage.getItem('ml_seller_id');
         let allFlexOrders = [];
         let currentStateFilter = 'all';
+        let currentSearchQuery = '';
 
-        // Barrios de CABA (todos llevan "CABA - ")
+        // Lista completa de barrios de CABA (normalizados)
         const BARRIOS_CABA = [
-            'San Nicolás', 'Monserrat', 'San Telmo', 'Retiro', 'Recoleta',
-            'Palermo', 'Belgrano', 'Núñez', 'Colegiales', 'Villa Urquiza',
-            'Saavedra', 'Villa Pueyrredón', 'Coghlan', 'Constitución',
-            'Barracas', 'La Boca', 'Pompeya', 'Nueva Pompeya', 'Parque Patricios',
-            'Boedo', 'Almagro', 'Caballito', 'Flores', 'Floresta', 'Villa Luro',
-            'Vélez Sarsfield', 'Villa Santa Rita', 'Versalles', 'Liniers',
-            'Mataderos', 'Parque Avellaneda'
+            'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
+            'Caballito', 'Chacarita', 'Coghlan', 'Colegiales', 'Constitución',
+            'Flores', 'Floresta', 'La Boca', 'Liniers', 'Mataderos',
+            'Monte Castro', 'Monserrat', 'Nueva Pompeya', 'Núñez', 'Palermo',
+            'Parque Avellaneda', 'Parque Chacabuco', 'Parque Patricios', 'Paternal',
+            'Recoleta', 'Retiro', 'Saavedra', 'San Cristóbal', 'San Nicolás',
+            'San Telmo', 'Velez Sarsfield', 'Versailles', 'Villa Crespo',
+            'Villa Devoto', 'Villa General Mitre', 'Villa Lugano', 'Villa Luro',
+            'Villa Ortúzar', 'Villa Pueyrredon', 'Villa Pueyrredón', 'Villa Real',
+            'Villa Santa Rita', 'Villa Urquiza'
         ];
 
+        function normalizar(texto) {
+            return texto.toLowerCase().trim()
+                .replace(/á/g, 'a').replace(/é/g, 'e')
+                .replace(/í/g, 'i').replace(/ó/g, 'o')
+                .replace(/ú/g, 'u').replace(/ñ/g, 'n');
+        }
+
+        function esBarrioCABA(nombre) {
+            const nombreNorm = normalizar(nombre);
+            return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
+        }
+
         function getZonaDetallada(barrio, ciudad) {
-            // Normalizar nombres
             const barrioNorm = (barrio || '').trim();
             const ciudadNorm = (ciudad || '').trim();
             
-            // Si es un barrio conocido de CABA
-            if (BARRIOS_CABA.includes(barrioNorm)) {
-                return `CABA - ${barrioNorm}`;
-            }
-            
-            // Si dice Capital Federal, asumimos CABA
-            if (ciudadNorm === 'Capital Federal') {
-                if (barrioNorm && barrioNorm !== 'Capital Federal') {
+            // Si es "CABA" genérico
+            if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
+                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
                     return `CABA - ${barrioNorm}`;
                 }
                 return 'CABA - Otros';
             }
             
+            // Si dice Capital Federal o es barrio conocido de CABA
+            if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
+                const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
+                return `CABA - ${nombreBarrio}`;
+            }
+            
             // GBA Zona Norte
-            const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso'];
-            if (zonaNorte.includes(ciudadNorm) || zonaNorte.includes(barrioNorm)) {
+            const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
+            if (zonaNorte.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Norte - ${ciudadNorm || barrioNorm}`;
             }
             
             // GBA Zona Oeste
-            const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'villa luzuriaga', 'Ingeniero Allan'];
-            if (zonaOeste.includes(ciudadNorm) || zonaOeste.includes(barrioNorm)) {
+            const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'Villa Luzuriaga', 'Luzuriaga', 'Ingeniero Allan', 'Castelar', 'El Palomar', 'Ciudad Jardin Del Palomar', 'Caseros', 'San Justo', 'San justo', 'Villa Sarmiento', 'villa sarmiento'];
+            if (zonaOeste.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Oeste - ${ciudadNorm || barrioNorm}`;
             }
             
             // GBA Zona Sur
-            const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Tristán Suárez', 'Carlos Spegazzini'];
-            if (zonaSur.includes(ciudadNorm) || zonaSur.includes(barrioNorm)) {
+            const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Sarandí', 'Tristán Suárez', 'Carlos Spegazzini', 'Bernal Oeste', 'Temperley', 'Remedios De Escalada', 'Valentin Alsina', 'Berazategui', 'Florencio Varela', 'Wilde'];
+            if (zonaSur.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `GBA Sur - ${ciudadNorm || barrioNorm}`;
             }
             
             // Interior Buenos Aires
-            const interior = ['Zárate', 'Campana'];
-            if (interior.includes(ciudadNorm) || interior.includes(barrioNorm)) {
+            const interior = ['Zárate', 'Campana', 'La Plata', 'Mar del Plata', 'Bahía Blanca'];
+            if (interior.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
                 return `Buenos Aires - ${ciudadNorm || barrioNorm}`;
             }
             
@@ -537,7 +606,7 @@
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading">🔍 Cargando envíos de ${label}...</div>`;
             
-            let tempOrders = []; // CAMBIO: de const a let
+            let tempOrders = [];
 
             try {
                 const targetCount = 100;
@@ -631,6 +700,7 @@
                     zonaSelect.innerHTML += `<option value="${zona}">${zona}</option>`;
                 });
 
+                document.getElementById('searchSection').classList.remove('hidden');
                 document.getElementById('filterSection').classList.remove('hidden');
                 displayOrders('all');
 
@@ -659,6 +729,11 @@
             aplicarFiltros();
         }
 
+        function buscarZona() {
+            currentSearchQuery = document.getElementById('searchInput').value;
+            aplicarFiltros();
+        }
+
         function aplicarFiltros() {
             const zonaFilter = document.getElementById('zonaFilter').value;
             
@@ -669,19 +744,30 @@
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
-            // Filtro por zona
+            // Filtro por zona (select)
             if (zonaFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
                     const zona = getZonaDetallada(barrio, ciudad);
                     
-                    // Si seleccionó "CABA", mostrar todos los que empiezan con CABA
                     if (zonaFilter === 'CABA') {
                         return esCABA(zona);
                     }
                     
                     return zona === zonaFilter;
+                });
+            }
+
+            // Filtro por búsqueda de texto
+            if (currentSearchQuery) {
+                const query = normalizar(currentSearchQuery);
+                filtered = filtered.filter(({ shipping }) => {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaDetallada(barrio, ciudad);
+                    
+                    return normalizar(zona).includes(query);
                 });
             }
 
@@ -755,6 +841,8 @@
 
                     const cantidadItems = orderList.length;
                     const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                    const orderId = orderList[0]?.id || '';
+                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
                     html += `
                         <div class="envio-card ${state}">
@@ -763,7 +851,9 @@
                                     <span class="estado-badge ${state}">${estadoLabel[state]}</span>
                                     ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} artículos</span>` : ''}
                                 </div>
-                                <span class="order-id">Envío #${shipping.id}</span>
+                                <a href="${orderUrl}" target="_blank" class="order-link">
+                                    📦 Orden #${orderId}
+                                </a>
                             </div>
                             
                             <div class="envio-info">
