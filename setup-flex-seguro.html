@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración Inicial - FLEX</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #FFE600;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .app-section {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid;
+        }
+
+        .app-section.mikra {
+            border-left-color: #9C27B0;
+        }
+
+        .app-section.chaya {
+            border-left-color: #FF6B00;
+        }
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .app-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .app-icon.mikra {
+            background: #9C27B0;
+        }
+
+        .app-icon.chaya {
+            background: #FF6B00;
+        }
+
+        .app-name {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: auto;
+        }
+
+        .status.pending {
+            background: #FF9800;
+            color: #000;
+        }
+
+        .status.connected {
+            background: #00ff88;
+            color: #000;
+        }
+
+        button {
+            background: #3483FA;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.3s;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.mikra {
+            background: #9C27B0;
+        }
+
+        button.chaya {
+            background: #FF6B00;
+        }
+
+        .info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .success-message {
+            background: #00ff88;
+            color: #000;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+        }
+
+        .success-message.visible {
+            display: block;
+        }
+
+        .final-button {
+            background: #00ff88;
+            color: #000;
+            margin-top: 30px;
+            font-size: 18px;
+            padding: 18px;
+        }
+
+        .instruction {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #FFE600;
+        }
+
+        .step {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .step::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 16px;
+            color: #FFE600;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #333;
+            border-top-color: #FFE600;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Configuración Inicial</h1>
+        <p class="subtitle">Conectá ambas cuentas de Mercado Libre (solo una vez)</p>
+
+        <div class="instruction">
+            <div class="step">Hacé click en "Conectar" para cada cuenta</div>
+            <div class="step">Autorizá el acceso en Mercado Libre</div>
+            <div class="step">Los tokens se guardarán automáticamente</div>
+            <div class="step">Luego podés usar la app principal</div>
+        </div>
+
+        <!-- MIKRA -->
+        <div class="app-section mikra">
+            <div class="app-header">
+                <div class="app-icon mikra">🟣</div>
+                <div class="app-name">MIKRA</div>
+                <span class="status pending" id="status-mikra">⏳ Pendiente</span>
+            </div>
+            
+            <div class="info">
+                App ID: 6723747350775490<br>
+                Proxy: mikra-flex-proxy
+            </div>
+            
+            <button class="mikra" onclick="conectarCuenta('mikra')" id="btn-mikra">
+                🔗 Conectar MIKRA
+            </button>
+            
+            <div class="success-message" id="success-mikra">
+                ✅ MIKRA conectada exitosamente
+            </div>
+        </div>
+
+        <!-- CHAYA -->
+        <div class="app-section chaya">
+            <div class="app-header">
+                <div class="app-icon chaya">🟠</div>
+                <div class="app-name">CHAYA</div>
+                <span class="status pending" id="status-chaya">⏳ Pendiente</span>
+            </div>
+            
+            <div class="info">
+                App ID: 1942700449315778<br>
+                Proxy: chaya-flex-proxy
+            </div>
+            
+            <button class="chaya" onclick="conectarCuenta('chaya')" id="btn-chaya">
+                🔗 Conectar CHAYA
+            </button>
+            
+            <div class="success-message" id="success-chaya">
+                ✅ CHAYA conectada exitosamente
+            </div>
+        </div>
+
+        <button class="final-button" onclick="irAApp()" id="btn-final" style="display:none;">
+            🚀 Ir a la Aplicación Principal
+        </button>
+    </div>
+
+    <script>
+        const APPS = {
+            mikra: {
+                clientId: '6723747350775490',
+                proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev'
+            },
+            chaya: {
+                clientId: '1942700449315778',
+                proxy: 'https://chaya-flex-proxy.rafaelassir.workers.dev'
+            }
+        };
+
+        // Usar la URL actual automáticamente
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+        // Verificar estado actual
+        function verificarEstado() {
+            const mikraToken = localStorage.getItem('mikra_refresh_token');
+            const chayaToken = localStorage.getItem('chaya_refresh_token');
+
+            if (mikraToken) {
+                document.getElementById('status-mikra').textContent = '✅ Conectada';
+                document.getElementById('status-mikra').className = 'status connected';
+                document.getElementById('success-mikra').classList.add('visible');
+                document.getElementById('btn-mikra').disabled = true;
+            }
+
+            if (chayaToken) {
+                document.getElementById('status-chaya').textContent = '✅ Conectada';
+                document.getElementById('status-chaya').className = 'status connected';
+                document.getElementById('success-chaya').classList.add('visible');
+                document.getElementById('btn-chaya').disabled = true;
+            }
+
+            if (mikraToken && chayaToken) {
+                document.getElementById('btn-final').style.display = 'block';
+            }
+        }
+
+        function conectarCuenta(appType) {
+            const app = APPS[appType];
+            localStorage.setItem('pending_auth_app', appType);
+            
+            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${app.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+            window.location.href = authUrl;
+        }
+
+        async function handleCallback(code) {
+            const appType = localStorage.getItem('pending_auth_app');
+            if (!appType) return;
+
+            const app = APPS[appType];
+            const sectionSelector = '.app-section.' + appType;
+            const section = document.querySelector(sectionSelector);
+            const originalContent = section.innerHTML;
+            
+            section.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Autenticando...</div>';
+
+            try {
+                // Llamar al proxy para obtener el token
+                const response = await fetch(`${app.proxy}/oauth/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        redirect_uri: REDIRECT_URI
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.access_token) {
+                    // Guardar tokens
+                    localStorage.setItem(`${appType}_access_token`, data.access_token);
+                    localStorage.setItem(`${appType}_refresh_token`, data.refresh_token);
+                    localStorage.setItem(`${appType}_expires_at`, Date.now() + (data.expires_in * 1000));
+
+                    // Obtener info del usuario
+                    const userResponse = await fetch(`${app.proxy}/api/users/me`, {
+                        headers: {
+                            'Authorization': `Bearer ${data.access_token}`
+                        }
+                    });
+
+                    const userData = await userResponse.json();
+                    localStorage.setItem(`${appType}_user_id`, userData.id);
+                    localStorage.setItem(`${appType}_nickname`, userData.nickname);
+
+                    localStorage.removeItem('pending_auth_app');
+                    window.location.href = window.location.pathname;
+                } else {
+                    throw new Error(data.error || 'No se recibió access token');
+                }
+
+            } catch (error) {
+                console.error('Error en autenticación:', error);
+                section.innerHTML = originalContent + `<div class="error">❌ Error: ${error.message}<br><br>Verificá que el Redirect URI esté configurado en Mercado Libre:<br><code>${REDIRECT_URI}</code></div>`;
+                localStorage.removeItem('pending_auth_app');
+            }
+        }
+
+        function irAApp() {
+            window.location.href = 'index.html';
+        }
+
+        // Inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                handleCallback(code);
+            } else {
+                verificarEstado();
+            }
+        });
+    </script>
+</body>
+</html>
