@@ -355,7 +355,7 @@
         let allFlexOrders = [];
         let currentStateFilter = 'all';
 
-        // Barrios de CABA
+        // Barrios de CABA (todos llevan "CABA - ")
         const BARRIOS_CABA = [
             'San Nicolás', 'Monserrat', 'San Telmo', 'Retiro', 'Recoleta',
             'Palermo', 'Belgrano', 'Núñez', 'Colegiales', 'Villa Urquiza',
@@ -367,41 +367,48 @@
         ];
 
         function getZonaDetallada(barrio, ciudad) {
-            // Si es un barrio de CABA
-            if (BARRIOS_CABA.includes(barrio)) {
-                return `CABA - ${barrio}`;
+            // Normalizar nombres
+            const barrioNorm = (barrio || '').trim();
+            const ciudadNorm = (ciudad || '').trim();
+            
+            // Si es un barrio conocido de CABA
+            if (BARRIOS_CABA.includes(barrioNorm)) {
+                return `CABA - ${barrioNorm}`;
             }
             
-            // Si dice Capital Federal pero no tenemos el barrio específico
-            if (ciudad === 'Capital Federal' || barrio === 'Capital Federal') {
+            // Si dice Capital Federal, asumimos CABA
+            if (ciudadNorm === 'Capital Federal') {
+                if (barrioNorm && barrioNorm !== 'Capital Federal') {
+                    return `CABA - ${barrioNorm}`;
+                }
                 return 'CABA - Otros';
             }
             
             // GBA Zona Norte
             const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso'];
-            if (zonaNorte.includes(ciudad) || zonaNorte.includes(barrio)) {
-                return `GBA Norte - ${ciudad || barrio}`;
+            if (zonaNorte.includes(ciudadNorm) || zonaNorte.includes(barrioNorm)) {
+                return `GBA Norte - ${ciudadNorm || barrioNorm}`;
             }
             
             // GBA Zona Oeste
             const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'villa luzuriaga', 'Ingeniero Allan'];
-            if (zonaOeste.includes(ciudad) || zonaOeste.includes(barrio)) {
-                return `GBA Oeste - ${ciudad || barrio}`;
+            if (zonaOeste.includes(ciudadNorm) || zonaOeste.includes(barrioNorm)) {
+                return `GBA Oeste - ${ciudadNorm || barrioNorm}`;
             }
             
             // GBA Zona Sur
             const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Tristán Suárez', 'Carlos Spegazzini'];
-            if (zonaSur.includes(ciudad) || zonaSur.includes(barrio)) {
-                return `GBA Sur - ${ciudad || barrio}`;
+            if (zonaSur.includes(ciudadNorm) || zonaSur.includes(barrioNorm)) {
+                return `GBA Sur - ${ciudadNorm || barrioNorm}`;
             }
             
             // Interior Buenos Aires
             const interior = ['Zárate', 'Campana'];
-            if (interior.includes(ciudad) || interior.includes(barrio)) {
-                return `Buenos Aires - ${ciudad || barrio}`;
+            if (interior.includes(ciudadNorm) || interior.includes(barrioNorm)) {
+                return `Buenos Aires - ${ciudadNorm || barrioNorm}`;
             }
             
-            return ciudad || barrio || 'Otras zonas';
+            return ciudadNorm || barrioNorm || 'Otras zonas';
         }
 
         function esCABA(zona) {
@@ -530,16 +537,16 @@
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading">🔍 Cargando envíos de ${label}...</div>`;
             
-            const allOrders = [];
+            let tempOrders = []; // CAMBIO: de const a let
 
             try {
-                const targetCount = 100; // 100 envíos
+                const targetCount = 100;
                 let offset = 0;
                 const limit = 50;
                 let totalChecked = 0;
 
-                while (allOrders.length < targetCount && totalChecked < 500) {
-                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX de ${label}...<br><span style="font-size: 48px; color: #00ff88;">${allOrders.length}</span>/${targetCount}</div>`;
+                while (tempOrders.length < targetCount && totalChecked < 500) {
+                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX de ${label}...<br><span style="font-size: 48px; color: #00ff88;">${tempOrders.length}</span>/${targetCount}</div>`;
 
                     const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
                         headers: {
@@ -578,19 +585,19 @@
                     const results = await Promise.all(shippingPromises);
                     const flexBatch = results.filter(item => item !== null);
                     
-                    allOrders.push(...flexBatch);
+                    tempOrders.push(...flexBatch);
 
-                    if (allOrders.length >= targetCount) {
-                        allOrders = allOrders.slice(0, targetCount);
+                    if (tempOrders.length >= targetCount) {
+                        tempOrders = tempOrders.slice(0, targetCount);
                         break;
                     }
 
                     offset += limit;
                 }
 
-                // UNIFICAR por shipping_id (eliminar duplicados)
+                // UNIFICAR por shipping_id
                 const uniqueShippings = new Map();
-                allOrders.forEach(({ order, shipping }) => {
+                tempOrders.forEach(({ order, shipping }) => {
                     const shippingId = shipping.id;
                     if (!uniqueShippings.has(shippingId)) {
                         uniqueShippings.set(shippingId, { orders: [order], shipping });
@@ -615,7 +622,7 @@
                     zonas.add(zona);
                 });
 
-                // Llenar select de zonas con CABA agrupado
+                // Llenar select de zonas
                 const zonaSelect = document.getElementById('zonaFilter');
                 zonaSelect.innerHTML = '<option value="all">Todas las zonas</option>';
                 zonaSelect.innerHTML += '<option value="CABA">🏙️ CABA (todos)</option>';
@@ -738,7 +745,7 @@
                     const esHoy = fechaFormateada === 'Hoy';
                     
                     const history = shipping.status_history || {};
-                    const firstPrinted = shipping.date_first_printed;
+                    const fechaCreacion = shipping.date_created;
                     
                     const estadoLabel = {
                         'pendiente': '📋 Pendiente',
@@ -787,25 +794,17 @@
                             
                             <div class="timeline">
                                 <div class="timeline-item">
-                                    <div class="timeline-dot ${firstPrinted ? 'done' : 'pending'}"></div>
+                                    <div class="timeline-dot done"></div>
                                     <div class="timeline-content">
-                                        <div class="timeline-label">🖨️ Etiqueta impresa</div>
-                                        <div class="timeline-time ${firstPrinted ? '' : 'pending'}">${formatearSoloHora(firstPrinted) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_ready_to_ship ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">📦 Listo para enviar</div>
-                                        <div class="timeline-time ${history.date_ready_to_ship ? '' : 'pending'}">${formatearSoloHora(history.date_ready_to_ship) || 'Pendiente'}</div>
+                                        <div class="timeline-label">📦 Orden recibida</div>
+                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
                                     </div>
                                 </div>
                                 
                                 <div class="timeline-item">
                                     <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
                                     <div class="timeline-content">
-                                        <div class="timeline-label">🚚 Enviado (salió)</div>
+                                        <div class="timeline-label">🚚 Enviado</div>
                                         <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
                                     </div>
                                 </div>
