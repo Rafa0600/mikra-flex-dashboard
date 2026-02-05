@@ -241,6 +241,11 @@
             color: #888;
             font-size: 14px;
         }
+
+        .fecha-hoy {
+            color: #ff6b00;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -249,14 +254,15 @@
         
         <div class="top-buttons">
             <button onclick="conectar()" id="connectBtn">Conectar con MercadoLibre</button>
-            <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Cargar 50 FLEX</button>
+            <button onclick="cargarFlexHoy()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Entregas de HOY</button>
+            <button onclick="cargarFlexAyer()" id="loadFlexAyerBtn" style="display:none; background:#FF9800;">📅 Entregas de AYER</button>
         </div>
 
         <div id="filterSection" class="filter-section hidden">
             <div class="filter-row">
-                <label>🔍 Filtrar por barrio:</label>
-                <select id="barrioFilter" onchange="aplicarFiltros()">
-                    <option value="all">Todos los barrios</option>
+                <label>🔍 Filtrar por zona:</label>
+                <select id="zonaFilter" onchange="aplicarFiltros()">
+                    <option value="all">Todas las zonas</option>
                 </select>
             </div>
         </div>
@@ -278,6 +284,108 @@
         let allFlexOrders = [];
         let currentStateFilter = 'all';
 
+        // Mapeo de barrios a zonas grandes
+        const ZONAS_CABA = {
+            // Centro
+            'San Nicolás': 'CABA - Centro',
+            'Monserrat': 'CABA - Centro',
+            'San Telmo': 'CABA - Centro',
+            'Retiro': 'CABA - Centro',
+            'Recoleta': 'CABA - Centro',
+            
+            // Norte
+            'Palermo': 'CABA - Norte',
+            'Belgrano': 'CABA - Norte',
+            'Núñez': 'CABA - Norte',
+            'Colegiales': 'CABA - Norte',
+            'Villa Urquiza': 'CABA - Norte',
+            'Saavedra': 'CABA - Norte',
+            'Villa Pueyrredón': 'CABA - Norte',
+            'Coghlan': 'CABA - Norte',
+            
+            // Sur
+            'Constitución': 'CABA - Sur',
+            'Barracas': 'CABA - Sur',
+            'La Boca': 'CABA - Sur',
+            'Pompeya': 'CABA - Sur',
+            'Nueva Pompeya': 'CABA - Sur',
+            'Parque Patricios': 'CABA - Sur',
+            'Boedo': 'CABA - Sur',
+            
+            // Oeste
+            'Almagro': 'CABA - Oeste',
+            'Caballito': 'CABA - Oeste',
+            'Flores': 'CABA - Oeste',
+            'Floresta': 'CABA - Oeste',
+            'Villa Luro': 'CABA - Oeste',
+            'Vélez Sarsfield': 'CABA - Oeste',
+            'Villa Santa Rita': 'CABA - Oeste',
+            'Versalles': 'CABA - Oeste',
+            'Liniers': 'CABA - Oeste',
+            'Mataderos': 'CABA - Oeste',
+            'Parque Avellaneda': 'CABA - Oeste'
+        };
+
+        const ZONAS_GBA = {
+            // Zona Norte GBA
+            'San Isidro': 'GBA - Zona Norte',
+            'Vicente López': 'GBA - Zona Norte',
+            'San Fernando': 'GBA - Zona Norte',
+            'Tigre': 'GBA - Zona Norte',
+            'Olivos': 'GBA - Zona Norte',
+            'Martínez': 'GBA - Zona Norte',
+            'Acassuso': 'GBA - Zona Norte',
+            
+            // Zona Oeste GBA
+            'La Reja': 'GBA - Zona Oeste',
+            'Morón': 'GBA - Zona Oeste',
+            'Hurlingham': 'GBA - Zona Oeste',
+            'Ituzaingó': 'GBA - Zona Oeste',
+            'Ramos Mejía': 'GBA - Zona Oeste',
+            'Ciudadela': 'GBA - Zona Oeste',
+            'Santos Lugares': 'GBA - Zona Oeste',
+            'villa luzuriaga': 'GBA - Zona Oeste',
+            'Ingeniero Allan': 'GBA - Zona Oeste',
+            
+            // Zona Sur GBA
+            'Lomas de Zamora': 'GBA - Zona Sur',
+            'Banfield': 'GBA - Zona Sur',
+            'Lanús': 'GBA - Zona Sur',
+            'Avellaneda': 'GBA - Zona Sur',
+            'Quilmes': 'GBA - Zona Sur',
+            'Sarandi': 'GBA - Zona Sur',
+            'Tristán Suárez': 'GBA - Zona Sur',
+            'Carlos Spegazzini': 'GBA - Zona Sur',
+            
+            // Otras zonas
+            'Zárate': 'Buenos Aires - Interior',
+            'Campana': 'Buenos Aires - Interior'
+        };
+
+        function getZonaGrande(barrio, ciudad) {
+            // Primero buscar en CABA
+            if (ZONAS_CABA[barrio]) {
+                return ZONAS_CABA[barrio];
+            }
+            
+            // Luego en GBA
+            if (ZONAS_GBA[ciudad] || ZONAS_GBA[barrio]) {
+                return ZONAS_GBA[ciudad] || ZONAS_GBA[barrio];
+            }
+            
+            // Si es Capital Federal pero no encontramos el barrio
+            if (ciudad === 'Capital Federal' || barrio === 'Capital Federal') {
+                return 'CABA - Otros';
+            }
+            
+            // Si es Buenos Aires pero no GBA
+            if (ciudad && ciudad.includes('Buenos Aires')) {
+                return 'Buenos Aires - Otros';
+            }
+            
+            return ciudad || barrio || 'Otras zonas';
+        }
+
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
@@ -286,6 +394,7 @@
                 handleAuthCallback(code);
             } else if (accessToken && sellerId) {
                 document.getElementById('loadFlexBtn').style.display = 'inline-block';
+                document.getElementById('loadFlexAyerBtn').style.display = 'inline-block';
             }
         }
 
@@ -329,6 +438,7 @@
 
                 content.innerHTML = '<div class="loading">✅ Conectado!</div>';
                 document.getElementById('loadFlexBtn').style.display = 'inline-block';
+                document.getElementById('loadFlexAyerBtn').style.display = 'inline-block';
                 document.getElementById('connectBtn').style.display = 'none';
 
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -337,17 +447,28 @@
             }
         }
 
-        function formatearFechaArg(fechaISO) {
+        function formatearFecha(fechaISO) {
             if (!fechaISO) return '❌';
+            
             const fecha = new Date(fechaISO);
-            return fecha.toLocaleString('es-AR', { 
-                timeZone: 'America/Argentina/Buenos_Aires',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            const hoy = new Date();
+            
+            // Normalizar a medianoche para comparar solo fechas
+            hoy.setHours(0, 0, 0, 0);
+            fecha.setHours(0, 0, 0, 0);
+            
+            const diffDias = Math.floor((fecha - hoy) / (1000 * 60 * 60 * 24));
+            
+            if (diffDias === 0) return 'Hoy';
+            if (diffDias === -1) return 'Ayer';
+            if (diffDias === 1) return 'Mañana';
+            
+            // Día de la semana + fecha
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const dia = dias[fecha.getDay()];
+            const fechaFormato = fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+            
+            return `${dia} ${fechaFormato}`;
         }
 
         function formatearSoloHora(fechaISO) {
@@ -360,9 +481,34 @@
             });
         }
 
-        async function cargarSoloFlex() {
+        function esEntregaParaFecha(shipping, targetDate) {
+            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                                shipping.shipping_option?.estimated_delivery_final?.date;
+            
+            if (!fechaEntrega) return false;
+            
+            const entrega = new Date(fechaEntrega);
+            entrega.setHours(0, 0, 0, 0);
+            
+            return entrega.getTime() === targetDate.getTime();
+        }
+
+        async function cargarFlexHoy() {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            await cargarFlexPorFecha(hoy, 'HOY');
+        }
+
+        async function cargarFlexAyer() {
+            const ayer = new Date();
+            ayer.setDate(ayer.getDate() - 1);
+            ayer.setHours(0, 0, 0, 0);
+            await cargarFlexPorFecha(ayer, 'AYER');
+        }
+
+        async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">🔍 Cargando envíos FLEX...</div>';
+            content.innerHTML = `<div class="loading">🔍 Cargando envíos de ${label}...</div>`;
             
             allFlexOrders = [];
 
@@ -373,7 +519,7 @@
                 let totalChecked = 0;
 
                 while (allFlexOrders.length < targetCount && totalChecked < 500) {
-                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX...<br><span style="font-size: 48px; color: #00ff88;">${allFlexOrders.length}</span>/${targetCount}</div>`;
+                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX de ${label}...<br><span style="font-size: 48px; color: #00ff88;">${allFlexOrders.length}</span>/${targetCount}</div>`;
 
                     const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
                         headers: {
@@ -400,7 +546,8 @@
 
                             const shipping = await shipResponse.json();
                             
-                            if (shipping.logistic_type === 'self_service') {
+                            // Filtrar: FLEX + fecha de entrega = targetDate
+                            if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
                                 return { order, shipping };
                             }
                             return null;
@@ -423,24 +570,24 @@
                 }
 
                 if (allFlexOrders.length === 0) {
-                    content.innerHTML = '<div class="error">No se encontraron ventas FLEX</div>';
+                    content.innerHTML = `<div class="error">No se encontraron envíos FLEX para ${label}</div>`;
                     return;
                 }
 
-                // Extraer barrios únicos
-                const barrios = new Set();
+                // Extraer zonas únicas
+                const zonas = new Set();
                 allFlexOrders.forEach(({ shipping }) => {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || 
-                                   shipping.receiver_address?.city?.name || 
-                                   'Sin barrio';
-                    barrios.add(barrio);
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaGrande(barrio, ciudad);
+                    zonas.add(zona);
                 });
 
-                // Llenar select de barrios
-                const barrioSelect = document.getElementById('barrioFilter');
-                barrioSelect.innerHTML = '<option value="all">Todos los barrios</option>';
-                Array.from(barrios).sort().forEach(barrio => {
-                    barrioSelect.innerHTML += `<option value="${barrio}">${barrio}</option>`;
+                // Llenar select de zonas
+                const zonaSelect = document.getElementById('zonaFilter');
+                zonaSelect.innerHTML = '<option value="all">Todas las zonas</option>';
+                Array.from(zonas).sort().forEach(zona => {
+                    zonaSelect.innerHTML += `<option value="${zona}">${zona}</option>`;
                 });
 
                 document.getElementById('filterSection').classList.remove('hidden');
@@ -472,7 +619,7 @@
         }
 
         function aplicarFiltros() {
-            const barrioFilter = document.getElementById('barrioFilter').value;
+            const zonaFilter = document.getElementById('zonaFilter').value;
             
             let filtered = allFlexOrders;
 
@@ -481,13 +628,13 @@
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
-            // Filtro por barrio
-            if (barrioFilter !== 'all') {
+            // Filtro por zona
+            if (zonaFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || 
-                                   shipping.receiver_address?.city?.name || 
-                                   'Sin barrio';
-                    return barrio === barrioFilter;
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaGrande(barrio, ciudad);
+                    return zona === zonaFilter;
                 });
             }
 
@@ -535,13 +682,12 @@
             } else {
                 orders.forEach(({ order, shipping }) => {
                     const state = getOrderState(shipping);
-                    const barrio = shipping.receiver_address?.neighborhood?.name || 
-                                   shipping.receiver_address?.city?.name || 
-                                   'Sin barrio';
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaGrande(barrio, ciudad);
                     
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
                     const provincia = shipping.receiver_address?.state?.name || '';
                     
                     const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
@@ -549,6 +695,9 @@
                     
                     const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
                                         shipping.shipping_option?.estimated_delivery_final?.date;
+                    
+                    const fechaFormateada = formatearFecha(fechaEntrega);
+                    const esHoy = fechaFormateada === 'Hoy';
                     
                     const horaEntregaReal = shipping.status_history?.date_delivered;
                     
@@ -567,8 +716,8 @@
                             
                             <div class="envio-info">
                                 <div class="info-item">
-                                    <div class="info-label">🌍 Zona / Barrio</div>
-                                    <div class="info-value zona-highlight">${barrio}</div>
+                                    <div class="info-label">🌍 Zona</div>
+                                    <div class="info-value zona-highlight">${zona}</div>
                                 </div>
                                 
                                 <div class="info-item">
@@ -586,8 +735,8 @@
                                 </div>
                                 
                                 <div class="info-item">
-                                    <div class="info-label">📅 Entrega estimada</div>
-                                    <div class="info-value">${formatearFechaArg(fechaEntrega)}</div>
+                                    <div class="info-label">📅 Debe entregarse</div>
+                                    <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
                                 </div>
                                 
                                 ${horaEntregaReal ? `
