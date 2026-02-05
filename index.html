@@ -71,6 +71,20 @@
             opacity: 1;
         }
 
+        .account-badge .app-label {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-left: 5px;
+        }
+
+        .add-account-section {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
         .top-buttons {
             text-align: center;
             margin-bottom: 20px;
@@ -103,6 +117,18 @@
         button.btn-add {
             background: #00ff88;
             color: #000;
+            font-weight: bold;
+        }
+
+        button.btn-add-mikra {
+            background: #9C27B0;
+            color: white;
+            font-weight: bold;
+        }
+
+        button.btn-add-chaya {
+            background: #FF6B00;
+            color: white;
             font-weight: bold;
         }
 
@@ -532,6 +558,14 @@
             margin-left: 8px;
         }
 
+        .cuenta-badge.mikra {
+            background: #9C27B0;
+        }
+
+        .cuenta-badge.chaya {
+            background: #FF6B00;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -549,8 +583,9 @@
         
         <div id="accountManager" class="account-manager">
             <div class="account-list" id="accountList"></div>
-            <div style="text-align: center; margin-top: 10px;">
-                <button class="btn-add" onclick="agregarNuevaCuenta()">➕ Agregar Nueva Cuenta</button>
+            <div class="add-account-section">
+                <button class="btn-add-mikra" onclick="agregarNuevaCuenta('mikra')">➕ Agregar Cuenta MIKRA</button>
+                <button class="btn-add-chaya" onclick="agregarNuevaCuenta('chaya')">➕ Agregar Cuenta CHAYA</button>
                 <button class="btn-danger" onclick="cerrarTodasCuentas()">🚪 Cerrar Todas</button>
             </div>
         </div>
@@ -615,12 +650,24 @@
     </div>
 
     <script>
-        const CONFIG = {
-            CLIENT_ID: '6723747350775490',
-            CLIENT_SECRET: 'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
-            REDIRECT_URI: window.location.origin + window.location.pathname,
-            API_BASE: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api'
+        const APPS = {
+            mikra: {
+                CLIENT_ID: '6723747350775490',
+                CLIENT_SECRET: 'IpbZNxEJHqaOqou9rVJWs6F2tlswCfX5',
+                PROXY: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api',
+                NAME: 'Mikra',
+                COLOR: 'mikra'
+            },
+            chaya: {
+                CLIENT_ID: '1942700449315778',
+                CLIENT_SECRET: 'BhqVSOXCXXXG3v38T3NMQJRIfL3NnOBy',
+                PROXY: 'https://chaya-flex-proxy.rafaelassir.workers.dev/api',
+                NAME: 'Chaya',
+                COLOR: 'chaya'
+            }
         };
+
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
 
         let cuentasActivas = JSON.parse(localStorage.getItem('ml_cuentas') || '[]');
         let allFlexOrders = [];
@@ -735,6 +782,7 @@
                         <span onclick="toggleCuenta('${cuenta.id}')" style="cursor:pointer;">
                             ${cuenta.activa ? '✅' : '⭕'} ${cuenta.nickname}
                         </span>
+                        <span class="app-label">[${cuenta.appName}]</span>
                         <span class="remove-btn" onclick="eliminarCuenta('${cuenta.id}')">❌</span>
                     </div>
                 `).join('');
@@ -776,8 +824,11 @@
             }
         }
 
-        async function agregarNuevaCuenta() {
-            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
+        async function agregarNuevaCuenta(appType) {
+            const app = APPS[appType];
+            localStorage.setItem('ml_pending_app', appType);
+            
+            const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${app.CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
             window.location.href = authUrl;
         }
 
@@ -802,25 +853,28 @@
             const content = document.getElementById('content');
             content.innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>Autenticando nueva cuenta...</div>';
 
+            const appType = localStorage.getItem('ml_pending_app') || 'mikra';
+            const app = APPS[appType];
+
             try {
-                const response = await fetch(`${CONFIG.API_BASE}/oauth/token`, {
+                const response = await fetch(`${app.PROXY}/oauth/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     },
                     body: new URLSearchParams({
                         grant_type: 'authorization_code',
-                        client_id: CONFIG.CLIENT_ID,
-                        client_secret: CONFIG.CLIENT_SECRET,
+                        client_id: app.CLIENT_ID,
+                        client_secret: app.CLIENT_SECRET,
                         code: code,
-                        redirect_uri: CONFIG.REDIRECT_URI
+                        redirect_uri: REDIRECT_URI
                     })
                 });
 
                 const data = await response.json();
                 const accessToken = data.access_token;
 
-                const userResponse = await fetch(`${CONFIG.API_BASE}/users/me`, {
+                const userResponse = await fetch(`${app.PROXY}/users/me`, {
                     headers: {
                         'Authorization': `Bearer ${accessToken}`
                     }
@@ -835,6 +889,7 @@
                     setTimeout(() => {
                         content.innerHTML = '';
                         window.history.replaceState({}, document.title, window.location.pathname);
+                        localStorage.removeItem('ml_pending_app');
                     }, 2000);
                     return;
                 }
@@ -843,12 +898,17 @@
                     id: userData.id.toString(),
                     nickname: userData.nickname,
                     accessToken: accessToken,
-                    activa: true
+                    activa: true,
+                    appType: appType,
+                    appName: app.NAME,
+                    appColor: app.COLOR,
+                    proxy: app.PROXY
                 });
 
                 localStorage.setItem('ml_cuentas', JSON.stringify(cuentasActivas));
+                localStorage.removeItem('ml_pending_app');
                 
-                content.innerHTML = '<div class="success">✅ Cuenta agregada exitosamente: ' + userData.nickname + '</div>';
+                content.innerHTML = `<div class="success">✅ Cuenta agregada exitosamente: ${userData.nickname} [${app.NAME}]</div>`;
                 
                 setTimeout(() => {
                     actualizarListaCuentas();
@@ -859,6 +919,7 @@
             } catch (error) {
                 content.innerHTML = `<div class="error">Error de autenticación</div>`;
                 console.error(error);
+                localStorage.removeItem('ml_pending_app');
             }
         }
 
@@ -938,7 +999,8 @@
                     allOrdersFromAllAccounts = allOrdersFromAllAccounts.concat(ordersFromAccount.map(item => ({
                         ...item,
                         cuentaNickname: cuenta.nickname,
-                        cuentaId: cuenta.id
+                        cuentaId: cuenta.id,
+                        cuentaColor: cuenta.appColor
                     })));
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nickname}:`, error);
@@ -991,7 +1053,7 @@
 
             for (let page = 0; page < totalPages; page++) {
                 allOrderPromises.push(
-                    fetch(`${CONFIG.API_BASE}/orders/search?seller=${cuenta.id}&offset=${page * 50}&limit=50&sort=date_desc`, {
+                    fetch(`${cuenta.proxy}/orders/search?seller=${cuenta.id}&offset=${page * 50}&limit=50&sort=date_desc`, {
                         headers: { 'Authorization': `Bearer ${cuenta.accessToken}` }
                     }).then(r => r.json())
                 );
@@ -1005,7 +1067,7 @@
                     const shippingId = order.shipping?.id;
                     if (!shippingId) return null;
 
-                    const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                    const shipResponse = await fetch(`${cuenta.proxy}/shipments/${shippingId}`, {
                         headers: { 'Authorization': `Bearer ${cuenta.accessToken}` }
                     });
 
@@ -1118,7 +1180,7 @@
                     const horaB = b.shipping.status_history?.date_delivered || 
                                  b.shipping.status_history?.date_shipped || 
                                  b.shipping.date_created || '';
-                    return horaB.localeCompare(horaA); // Más reciente primero
+                    return horaB.localeCompare(horaA);
                 });
             } else if (currentSort === 'estado') {
                 const ordenEstados = { 'pendiente': 1, 'en-camino': 2, 'entregado': 3 };
@@ -1131,7 +1193,7 @@
                 filtered.sort((a, b) => {
                     const fechaA = a.shipping.date_created || '';
                     const fechaB = b.shipping.date_created || '';
-                    return fechaB.localeCompare(fechaA); // Más reciente primero
+                    return fechaB.localeCompare(fechaA);
                 });
             }
 
@@ -1169,7 +1231,7 @@
             if (orders.length === 0) {
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
             } else {
-                orders.forEach(({ orders: orderList, shipping, cuentaNickname }) => {
+                orders.forEach(({ orders: orderList, shipping, cuentaNickname, cuentaColor }) => {
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
@@ -1208,7 +1270,7 @@
                                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                                     <span class="estado-badge ${state}">${estadoLabel[state]}</span>
                                     ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
-                                    <span class="cuenta-badge">${cuentaNickname}</span>
+                                    <span class="cuenta-badge ${cuentaColor}">${cuentaNickname}</span>
                                 </div>
                                 <a href="${orderUrl}" target="_blank" class="order-link">
                                     #${orderId}
