@@ -10,24 +10,24 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: Arial, sans-serif;
             background: #1a1a1a;
             color: #fff;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-        
+
         h1 {
             color: #FFE600;
             margin-bottom: 20px;
         }
-        
+
         button {
             background: #3483FA;
             color: white;
@@ -37,12 +37,13 @@
             cursor: pointer;
             font-size: 16px;
             margin-bottom: 20px;
+            margin-right: 10px;
         }
-        
+
         button:hover {
             background: #2968c8;
         }
-        
+
         .order-card {
             background: #2a2a2a;
             border: 1px solid #444;
@@ -50,19 +51,19 @@
             padding: 20px;
             margin-bottom: 20px;
         }
-        
+
         .order-header {
             border-bottom: 2px solid #FFE600;
             padding-bottom: 10px;
             margin-bottom: 15px;
         }
-        
+
         .order-id {
             font-size: 18px;
             font-weight: bold;
             color: #FFE600;
         }
-        
+
         .data-row {
             display: grid;
             grid-template-columns: 200px 1fr;
@@ -70,16 +71,16 @@
             padding: 8px 0;
             border-bottom: 1px solid #333;
         }
-        
+
         .data-label {
             font-weight: bold;
             color: #aaa;
         }
-        
+
         .data-value {
             color: #fff;
         }
-        
+
         .json-data {
             background: #1a1a1a;
             border: 1px solid #444;
@@ -88,20 +89,20 @@
             margin-top: 15px;
             overflow-x: auto;
         }
-        
+
         pre {
             color: #0f0;
             font-size: 12px;
             white-space: pre-wrap;
             word-wrap: break-word;
         }
-        
+
         .loading {
             text-align: center;
             padding: 40px;
             font-size: 20px;
         }
-        
+
         .error {
             background: #f44336;
             color: white;
@@ -114,8 +115,10 @@
 <body>
     <div class="container">
         <h1>🔍 DEBUG - Datos RAW de MercadoLibre</h1>
+        
         <button onclick="conectar()">Conectar con MercadoLibre</button>
         <button onclick="cargarDatos()" id="loadBtn" style="display:none;">Cargar Últimas Ventas</button>
+        <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Últimas 30 SOLO MOTO</button>
         <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none; background:#00d9ff;">🚚 Cargar EN CAMINO</button>
         <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none; background:#00ff88;">✅ Cargar ENTREGADOS</button>
         
@@ -129,36 +132,39 @@
             REDIRECT_URI: window.location.origin + window.location.pathname,
             API_BASE: 'https://mikra-flex-proxy.rafaelassir.workers.dev/api'
         };
-        
+
         let accessToken = localStorage.getItem('ml_access_token');
         let sellerId = localStorage.getItem('ml_seller_id');
-        
+
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            
+
             if (code) {
                 handleAuthCallback(code);
             } else if (accessToken && sellerId) {
                 document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadFlexBtn').style.display = 'inline-block';
                 document.getElementById('loadTransitBtn').style.display = 'inline-block';
                 document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
             }
         }
-        
+
         function conectar() {
             const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${CONFIG.CLIENT_ID}&redirect_uri=${CONFIG.REDIRECT_URI}`;
             window.location.href = authUrl;
         }
-        
+
         async function handleAuthCallback(code) {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="loading">Autenticando...</div>';
-            
+
             try {
                 const response = await fetch(`${CONFIG.API_BASE}/oauth/token`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
                     body: new URLSearchParams({
                         grant_type: 'authorization_code',
                         client_id: CONFIG.CLIENT_ID,
@@ -167,60 +173,239 @@
                         redirect_uri: CONFIG.REDIRECT_URI
                     })
                 });
-                
+
                 const data = await response.json();
                 accessToken = data.access_token;
                 localStorage.setItem('ml_access_token', accessToken);
-                
+
                 // Get user ID
                 const userResponse = await fetch(`${CONFIG.API_BASE}/users/me`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 });
+
                 const userData = await userResponse.json();
                 sellerId = userData.id;
                 localStorage.setItem('ml_seller_id', sellerId);
-                
+
                 content.innerHTML = '<div class="loading">✅ Conectado! Ahora cargá las ventas</div>';
                 document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadFlexBtn').style.display = 'inline-block';
                 document.getElementById('loadTransitBtn').style.display = 'inline-block';
                 document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
-                
+
                 // Remove code from URL
                 window.history.replaceState({}, document.title, window.location.pathname);
-                
             } catch (error) {
                 content.innerHTML = `<div class="error">Error: ${error.message}</div>`;
             }
         }
-        
-        async function cargarDatos() {
+
+        async function cargarSoloFlex() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Cargando últimas ventas...</div>';
-            
+            content.innerHTML = '<div class="loading">Cargando últimas 30 ventas de MOTO...</div>';
+
             try {
                 // Get orders
                 const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 });
-                
+
                 const data = await response.json();
                 console.log('📦 DATOS COMPLETOS:', data);
-                
+
                 if (!data.results || data.results.length === 0) {
                     content.innerHTML = '<div class="error">No se encontraron ventas</div>';
                     return;
                 }
-                
+
+                // Get shipping details for each order and filter FLEX only
+                const ordersWithShipping = await Promise.all(
+                    data.results.map(async (order) => {
+                        try {
+                            const shippingId = order.shipping?.id;
+                            if (!shippingId) return null;
+
+                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`
+                                }
+                            });
+
+                            const shipping = await shipResponse.json();
+                            
+                            // Filter only FLEX (self_service)
+                            if (shipping.logistic_type === 'self_service') {
+                                return { order, shipping };
+                            }
+                            return null;
+                        } catch (e) {
+                            return null;
+                        }
+                    })
+                );
+
+                // Remove nulls
+                const flexOnly = ordersWithShipping.filter(item => item !== null);
+
+                console.log(`🏍️ Encontradas ${flexOnly.length} ventas FLEX de ${data.results.length} totales`);
+
+                if (flexOnly.length === 0) {
+                    content.innerHTML = '<div class="error">No se encontraron ventas con envío FLEX en las últimas 30</div>';
+                    return;
+                }
+
+                // Display data
+                let html = `<h2 style="margin-top:20px;">🏍️ ÚLTIMAS ${flexOnly.length} VENTAS FLEX (DE 30 TOTALES):</h2>`;
+
+                flexOnly.forEach(({ order, shipping }, index) => {
+                    html += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div class="order-id">🏍️ VENTA FLEX #${index + 1} - Order ID: ${order.id}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Fecha Creación:</div>
+                                <div class="data-value">${order.date_created}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Orden:</div>
+                                <div class="data-value">${order.status}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Comprador:</div>
+                                <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Shipping ID:</div>
+                                <div class="data-value">${shipping.id || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">shipping_method_id:</div>
+                                <div class="data-value" style="color: #0f0;">
+                                    ${shipping.shipping_method_id || 'N/A'} ← 🏍️ FLEX!
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">logistic_type:</div>
+                                <div class="data-value" style="color: #0f0;">${shipping.logistic_type || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Transportista:</div>
+                                <div class="data-value">${shipping.shipping_option?.name || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Envío:</div>
+                                <div class="data-value">${shipping.status || 'N/A'} - ${shipping.substatus || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">substatus_history:</div>
+                                <div class="data-value">
+                                    ${shipping.substatus_history?.length || 0} eventos
+                                    ${shipping.substatus_history?.length > 0 ? `<br>Último: ${shipping.substatus_history[shipping.substatus_history.length - 1]?.substatus}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">status_history:</div>
+                                <div class="data-value">
+                                    shipped: ${shipping.status_history?.date_shipped || '❌'}<br>
+                                    delivered: ${shipping.status_history?.date_delivered || '❌'}<br>
+                                    handling: ${shipping.status_history?.date_handling || '❌'}<br>
+                                    ready_to_ship: ${shipping.status_history?.date_ready_to_ship || '❌'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
+                                <div class="data-value" style="font-size: 18px; font-weight: bold; color: #0f0;">
+                                    🏍️ FLEX (MOTO)
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-value" style="font-size: 16px;">
+                                    ${categorizeStatus(shipping)}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Dirección:</div>
+                                <div class="data-value">
+                                    ${shipping.receiver_address?.street_name || ''} 
+                                    ${shipping.receiver_address?.street_number || ''}, 
+                                    ${shipping.receiver_address?.city?.name || ''}, 
+                                    ${shipping.receiver_address?.state?.name || ''}
+                                </div>
+                            </div>
+                            
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON Completo (Orden)</summary>
+                                <pre>${JSON.stringify(order, null, 2)}</pre>
+                            </details>
+                            
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
+                                <pre>${JSON.stringify(shipping, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                });
+
+                content.innerHTML = html;
+
+            } catch (error) {
+                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                console.error(error);
+            }
+        }
+
+        async function cargarDatos() {
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="loading">Cargando últimas ventas...</div>';
+
+            try {
+                // Get orders
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const data = await response.json();
+                console.log('📦 DATOS COMPLETOS:', data);
+
+                if (!data.results || data.results.length === 0) {
+                    content.innerHTML = '<div class="error">No se encontraron ventas</div>';
+                    return;
+                }
+
                 // Get shipping details for each order
                 const ordersWithShipping = await Promise.all(
                     data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
                             if (!shippingId) return { order, shipping: null };
-                            
+
                             const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`
+                                }
                             });
+
                             const shipping = await shipResponse.json();
                             return { order, shipping };
                         } catch (e) {
@@ -228,10 +413,10 @@
                         }
                     })
                 );
-                
+
                 // Display data
                 let html = '<h2 style="margin-top:20px;">📊 ÚLTIMAS 30 VENTAS:</h2>';
-                
+
                 ordersWithShipping.forEach(({ order, shipping }, index) => {
                     const shippingInfo = shipping || order.shipping || {};
                     
@@ -335,76 +520,77 @@
                             </details>
                             
                             ${shipping ? `
-                            <details class="json-data">
-                                <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
-                                <pre>${JSON.stringify(shipping, null, 2)}</pre>
-                            </details>
+                                <details class="json-data">
+                                    <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
+                                    <pre>${JSON.stringify(shipping, null, 2)}</pre>
+                                </details>
                             ` : ''}
                         </div>
                     `;
                 });
-                
+
                 content.innerHTML = html;
-                
+
             } catch (error) {
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
                 console.error(error);
             }
         }
-        
+
         async function cargarEnCamino() {
             await cargarPorEstado('shipped,handling', '🚚 EN CAMINO');
         }
-        
+
         async function cargarEntregados() {
             await cargarPorEstado('delivered', '✅ ENTREGADOS');
         }
-        
+
         async function cargarPorEstado(orderStatus, titulo) {
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading">Cargando ${titulo}...</div>`;
-            
+
             try {
                 // Get orders with shipping status filter
-                // For "in transit": order.shipping.status = shipped or handling
-                // For "delivered": tags include "delivered"
-                
                 let searchParams = `seller=${sellerId}&offset=0&limit=100`;
-                
+
                 // Add tag filter based on status
                 if (orderStatus === 'delivered') {
                     searchParams += '&tags=delivered';
                 } else if (orderStatus === 'shipped,handling') {
-                    // For in transit, we need to get recent orders and filter
                     searchParams += '&sort=date_desc';
                 }
-                
+
                 const response = await fetch(`${CONFIG.API_BASE}/orders/search?${searchParams}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`Error ${response.status}`);
                 }
-                
+
                 const data = await response.json();
                 console.log('📦 DATOS COMPLETOS:', data);
-                
+
                 if (!data.results || data.results.length === 0) {
-                    content.innerHTML = `<div class="error">No se encontraron órdenes</div>`;
+                    content.innerHTML = '<div class="error">No se encontraron órdenes</div>';
                     return;
                 }
-                
+
                 // Get shipping details for each order
                 const ordersWithShipping = await Promise.all(
                     data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
                             if (!shippingId) return null;
-                            
+
                             const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`
+                                }
                             });
+
                             const shipping = await shipResponse.json();
                             return { order, shipping };
                         } catch (e) {
@@ -412,27 +598,27 @@
                         }
                     })
                 );
-                
+
                 // Filter by status if looking for in transit
                 let filtered = ordersWithShipping.filter(item => item !== null);
-                
+
                 if (orderStatus === 'shipped,handling') {
                     filtered = filtered.filter(item => {
                         const status = item.shipping?.status?.toLowerCase() || '';
                         return status === 'shipped' || status === 'handling';
                     });
                 }
-                
+
                 console.log(`Filtered ${filtered.length} shipments with status matching criteria`);
-                
+
                 if (filtered.length === 0) {
                     content.innerHTML = `<div class="error">No se encontraron envíos con estado: ${orderStatus}</div>`;
                     return;
                 }
-                
+
                 // Display shipments
                 let html = `<h2 style="margin-top:20px;">${titulo}: ${filtered.length} ENVÍOS</h2>`;
-                
+
                 filtered.forEach(({ order, shipping }, index) => {
                     html += `
                         <div class="order-card">
@@ -493,7 +679,7 @@
                                 <div class="data-value" style="font-size: 18px; font-weight: bold;">
                                     ${shipping.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
                                       shipping.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
-                                      shipping.logistic_type === 'fulfillment' ? '🏢 FULL' :
+                                      shipping.logistic_type === 'fulfillment' ? '🏢 FULL' : 
                                       '❓ OTRO: ' + shipping.logistic_type}
                                 </div>
                             </div>
@@ -522,52 +708,52 @@
                         </div>
                     `;
                 });
-                
+
                 content.innerHTML = html;
-                
+
             } catch (error) {
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
                 console.error(error);
             }
         }
-        
+
         function categorizeStatus(shipping) {
             const status = (shipping.status || '').toLowerCase();
             const substatus = (shipping.substatus || '').toLowerCase();
-            
+
             // DELIVERED
             if (status === 'delivered' || substatus === 'delivered') {
                 return '✅ ENTREGADO';
             }
-            
+
             // IN TRANSIT (shipped, handling, etc)
             if (status === 'shipped' || status === 'handling' || 
-                substatus === 'in_transit' || substatus === 'out_for_delivery' ||
+                substatus === 'in_transit' || substatus === 'out_for_delivery' || 
                 substatus === 'picked_up' || substatus === 'in_hub') {
                 return '🚚 EN CAMINO';
             }
-            
+
             // READY TO SHIP (ready_to_print, printed, ready_to_ship)
-            if (status === 'ready_to_ship' || 
-                substatus === 'ready_to_print' || substatus === 'printed') {
+            if (status === 'ready_to_ship' || substatus === 'ready_to_print' || 
+                substatus === 'printed') {
                 return '📋 PENDIENTE (Listo para enviar)';
             }
-            
+
             // CANCELLED
             if (status === 'cancelled' || status === 'canceled') {
                 return '❌ CANCELADO';
             }
-            
+
             // PROBLEM
-            if (substatus === 'delayed' || substatus === 'not_delivered' ||
+            if (substatus === 'delayed' || substatus === 'not_delivered' || 
                 status === 'returned' || substatus === 'contact_buyer') {
                 return '⚠️ PROBLEMA';
             }
-            
+
             // UNKNOWN
             return `❓ DESCONOCIDO (${status} - ${substatus})`;
         }
-        
+
         document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
