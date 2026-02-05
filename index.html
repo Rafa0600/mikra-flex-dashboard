@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug - Datos de MercadoLibre (Mejorado)</title>
+    <title>Debug - Datos de MercadoLibre</title>
     <style>
         * {
             margin: 0;
@@ -28,13 +28,6 @@
             margin-bottom: 20px;
         }
         
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        
         button {
             background: #3483FA;
             color: white;
@@ -43,57 +36,11 @@
             border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
+            margin-bottom: 20px;
         }
         
         button:hover {
             background: #2968c8;
-        }
-        
-        button:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
-        
-        .btn-success { background: #00ff88; }
-        .btn-success:hover { background: #00cc6a; }
-        
-        .btn-warning { background: #ff9800; }
-        .btn-warning:hover { background: #e68900; }
-        
-        .btn-info { background: #00d9ff; }
-        .btn-info:hover { background: #00b8d4; }
-        
-        .btn-purple { background: #9c27b0; }
-        .btn-purple:hover { background: #7b1fa2; }
-        
-        .stats-panel {
-            background: #2a2a2a;
-            border: 2px solid #FFE600;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: #1a1a1a;
-            border-radius: 6px;
-        }
-        
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #FFE600;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 14px;
-            color: #aaa;
         }
         
         .order-card {
@@ -104,18 +51,10 @@
             margin-bottom: 20px;
         }
         
-        .order-card.flex-in-transit {
-            border: 3px solid #00ff88;
-            background: #1a2a1a;
-        }
-        
         .order-header {
             border-bottom: 2px solid #FFE600;
             padding-bottom: 10px;
             margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
         .order-id {
@@ -123,20 +62,6 @@
             font-weight: bold;
             color: #FFE600;
         }
-        
-        .badge {
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .badge-flex { background: #00ff88; color: #000; }
-        .badge-colecta { background: #ff9800; color: #000; }
-        .badge-full { background: #9c27b0; color: #fff; }
-        .badge-transit { background: #00d9ff; color: #000; }
-        .badge-delivered { background: #4caf50; color: #fff; }
-        .badge-pending { background: #ffeb3b; color: #000; }
         
         .data-row {
             display: grid;
@@ -184,50 +109,16 @@
             border-radius: 6px;
             margin-bottom: 20px;
         }
-        
-        .progress {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .progress-bar {
-            background: #333;
-            height: 30px;
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .progress-fill {
-            background: linear-gradient(90deg, #3483FA, #00d9ff);
-            height: 100%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 DEBUG - Datos RAW de MercadoLibre (Mejorado)</h1>
+        <h1>🔍 DEBUG - Datos RAW de MercadoLibre</h1>
+        <button onclick="conectar()">Conectar con MercadoLibre</button>
+        <button onclick="cargarDatos()" id="loadBtn" style="display:none;">Cargar Últimas Ventas</button>
+        <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none; background:#00d9ff;">🚚 Cargar EN CAMINO</button>
+        <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none; background:#00ff88;">✅ Cargar ENTREGADOS</button>
         
-        <div class="button-group">
-            <button onclick="conectar()">Conectar con MercadoLibre</button>
-            <button onclick="cargarTodas()" id="loadAllBtn" style="display:none;">📦 Cargar Últimos Envíos</button>
-            <button onclick="cargarFlexEnCamino()" id="loadFlexBtn" style="display:none;" class="btn-success">🏍️ Solo FLEX en Camino</button>
-            <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none;" class="btn-info">🚚 Todos en Camino</button>
-            <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none;" class="btn-success">✅ Entregados</button>
-            <button onclick="cargarPendientes()" id="loadPendingBtn" style="display:none;" class="btn-warning">📋 Pendientes</button>
-        </div>
-        
-        <div id="stats" style="display:none;"></div>
-        <div id="progress" style="display:none;"></div>
         <div id="content"></div>
     </div>
 
@@ -241,7 +132,6 @@
         
         let accessToken = localStorage.getItem('ml_access_token');
         let sellerId = localStorage.getItem('ml_seller_id');
-        let allOrders = []; // Cache de todas las órdenes
         
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -250,16 +140,10 @@
             if (code) {
                 handleAuthCallback(code);
             } else if (accessToken && sellerId) {
-                showButtons();
+                document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadTransitBtn').style.display = 'inline-block';
+                document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
             }
-        }
-        
-        function showButtons() {
-            document.getElementById('loadAllBtn').style.display = 'inline-block';
-            document.getElementById('loadFlexBtn').style.display = 'inline-block';
-            document.getElementById('loadTransitBtn').style.display = 'inline-block';
-            document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
-            document.getElementById('loadPendingBtn').style.display = 'inline-block';
         }
         
         function conectar() {
@@ -296,8 +180,10 @@
                 sellerId = userData.id;
                 localStorage.setItem('ml_seller_id', sellerId);
                 
-                content.innerHTML = '<div class="loading">✅ Conectado! Ahora podés cargar las ventas</div>';
-                showButtons();
+                content.innerHTML = '<div class="loading">✅ Conectado! Ahora cargá las ventas</div>';
+                document.getElementById('loadBtn').style.display = 'inline-block';
+                document.getElementById('loadTransitBtn').style.display = 'inline-block';
+                document.getElementById('loadDeliveredBtn').style.display = 'inline-block';
                 
                 // Remove code from URL
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -307,378 +193,379 @@
             }
         }
         
-        function updateProgress(current, total, message) {
-            const progressDiv = document.getElementById('progress');
-            progressDiv.style.display = 'block';
-            const percent = Math.round((current / total) * 100);
-            
-            progressDiv.innerHTML = `
-                <div class="progress">
-                    <div style="margin-bottom: 10px;">${message}</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${percent}%">
-                            ${current} / ${total} (${percent}%)
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        async function cargarTodas() {
+        async function cargarDatos() {
             const content = document.getElementById('content');
-            const progressDiv = document.getElementById('progress');
-            const statsDiv = document.getElementById('stats');
-            
-            content.innerHTML = '<div class="loading">Cargando envíos recientes...</div>';
-            progressDiv.style.display = 'none';
-            statsDiv.style.display = 'none';
+            content.innerHTML = '<div class="loading">Cargando últimas ventas...</div>';
             
             try {
-                // Get orders (la API tiene límite de 50 por request, hacemos 2 requests)
-                updateProgress(0, 100, 'Obteniendo primeras 50 órdenes...');
-                const response1 = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=50`, {
+                // Get orders
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                const data1 = await response1.json();
                 
-                updateProgress(50, 100, 'Obteniendo siguientes 50 órdenes...');
-                const response2 = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=50&limit=50`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                const data2 = await response2.json();
+                const data = await response.json();
+                console.log('📦 DATOS COMPLETOS:', data);
                 
-                // Combinar resultados
-                const allResults = [...(data1.results || []), ...(data2.results || [])];
-                
-                console.log('📦 DATOS COMPLETOS:', {
-                    batch1: data1.results?.length || 0,
-                    batch2: data2.results?.length || 0,
-                    total: allResults.length
-                });
-                
-                if (allResults.length === 0) {
+                if (!data.results || data.results.length === 0) {
                     content.innerHTML = '<div class="error">No se encontraron ventas</div>';
-                    progressDiv.style.display = 'none';
                     return;
                 }
                 
-                const totalOrders = allResults.length;
-                
                 // Get shipping details for each order
-                const ordersWithShipping = [];
-                for (let i = 0; i < allResults.length; i++) {
-                    const order = allResults[i];
-                    updateProgress(i + 1, totalOrders, `Obteniendo detalles de envío... (${i + 1}/${totalOrders})`);
-                    
-                    try {
-                        const shippingId = order.shipping?.id;
-                        if (!shippingId) {
-                            ordersWithShipping.push({ order, shipping: null });
-                            continue;
+                const ordersWithShipping = await Promise.all(
+                    data.results.map(async (order) => {
+                        try {
+                            const shippingId = order.shipping?.id;
+                            if (!shippingId) return { order, shipping: null };
+                            
+                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            });
+                            const shipping = await shipResponse.json();
+                            return { order, shipping };
+                        } catch (e) {
+                            return { order, shipping: null };
                         }
-                        
-                        const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                            headers: { 'Authorization': `Bearer ${accessToken}` }
-                        });
-                        const shipping = await shipResponse.json();
-                        ordersWithShipping.push({ order, shipping });
-                        
-                        // Small delay to avoid rate limiting
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    } catch (e) {
-                        console.error('Error loading shipping:', e);
-                        ordersWithShipping.push({ order, shipping: null });
-                    }
-                }
+                    })
+                );
                 
-                // Group by shipping_id to get unique shipments
-                const uniqueShipments = new Map();
-                ordersWithShipping.forEach(item => {
-                    const shippingId = item.shipping?.id || item.order.shipping?.id;
-                    if (shippingId && !uniqueShipments.has(shippingId)) {
-                        uniqueShipments.set(shippingId, item);
-                    }
+                // Display data
+                let html = '<h2 style="margin-top:20px;">📊 ÚLTIMAS 30 VENTAS:</h2>';
+                
+                ordersWithShipping.forEach(({ order, shipping }, index) => {
+                    const shippingInfo = shipping || order.shipping || {};
+                    
+                    html += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div class="order-id">VENTA #${index + 1} - Order ID: ${order.id}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Fecha Creación:</div>
+                                <div class="data-value">${order.date_created}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Orden:</div>
+                                <div class="data-value">${order.status}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Comprador:</div>
+                                <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Shipping ID:</div>
+                                <div class="data-value">${shippingInfo.id || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">shipping_method_id:</div>
+                                <div class="data-value" style="color: ${shippingInfo.shipping_method_id === 100009 ? '#0f0' : '#f00'};">
+                                    ${shippingInfo.shipping_method_id || 'N/A'}
+                                    ${shippingInfo.shipping_method_id === 100009 ? ' ← 🏍️ FLEX!' : ''}
+                                    ${shippingInfo.shipping_method_id === 100008 ? ' ← 📮 COLECTA' : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">logistic_type:</div>
+                                <div class="data-value">${shippingInfo.logistic_type || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Transportista:</div>
+                                <div class="data-value">${shippingInfo.shipping_option?.name || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Envío:</div>
+                                <div class="data-value">${shippingInfo.status || 'N/A'} - ${shippingInfo.substatus || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">substatus_history:</div>
+                                <div class="data-value">
+                                    ${shippingInfo.substatus_history?.length || 0} eventos
+                                    ${shippingInfo.substatus_history?.length > 0 ? `<br>Último: ${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.substatus}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">status_history:</div>
+                                <div class="data-value">
+                                    shipped: ${shippingInfo.status_history?.date_shipped || '❌'}<br>
+                                    delivered: ${shippingInfo.status_history?.date_delivered || '❌'}<br>
+                                    handling: ${shippingInfo.status_history?.date_handling || '❌'}<br>
+                                    ready_to_ship: ${shippingInfo.status_history?.date_ready_to_ship || '❌'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
+                                <div class="data-value" style="font-size: 18px; font-weight: bold;">
+                                    ${shippingInfo.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
+                                      shippingInfo.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
+                                      '❓ OTRO'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-value" style="font-size: 16px;">
+                                    ${categorizeStatus(shippingInfo)}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Dirección:</div>
+                                <div class="data-value">
+                                    ${shippingInfo.receiver_address?.street_name || ''} 
+                                    ${shippingInfo.receiver_address?.street_number || ''}, 
+                                    ${shippingInfo.receiver_address?.city?.name || ''}, 
+                                    ${shippingInfo.receiver_address?.state?.name || ''}
+                                </div>
+                            </div>
+                            
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON Completo (Orden)</summary>
+                                <pre>${JSON.stringify(order, null, 2)}</pre>
+                            </details>
+                            
+                            ${shipping ? `
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
+                                <pre>${JSON.stringify(shipping, null, 2)}</pre>
+                            </details>
+                            ` : ''}
+                        </div>
+                    `;
                 });
                 
-                // Convert back to array and sort by date
-                allOrders = Array.from(uniqueShipments.values()).sort((a, b) => {
-                    const dateA = new Date(a.shipping?.date_created || a.order.date_created);
-                    const dateB = new Date(b.shipping?.date_created || b.order.date_created);
-                    return dateB - dateA; // Most recent first
-                });
-                
-                console.log(`📊 De ${ordersWithShipping.length} órdenes → ${allOrders.length} envíos únicos`);
-                
-                progressDiv.style.display = 'none';
-                
-                // Calculate statistics
-                showStatistics(allOrders);
-                
-                // Display all orders
-                displayOrders(allOrders, `📦 ÚLTIMOS ${allOrders.length} ENVÍOS ÚNICOS`);
+                content.innerHTML = html;
                 
             } catch (error) {
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-                progressDiv.style.display = 'none';
                 console.error(error);
             }
         }
         
-        function showStatistics(orders) {
-            const statsDiv = document.getElementById('stats');
-            statsDiv.style.display = 'block';
-            
-            const stats = {
-                total: orders.length,
-                flex: 0,
-                colecta: 0,
-                full: 0,
-                enCamino: 0,
-                flexEnCamino: 0,
-                entregados: 0,
-                pendientes: 0,
-                otros: 0
-            };
-            
-            orders.forEach(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const logisticType = shippingInfo.logistic_type;
-                const status = (shippingInfo.status || '').toLowerCase();
-                
-                // Count by logistic type
-                if (logisticType === 'self_service') stats.flex++;
-                else if (logisticType === 'cross_docking') stats.colecta++;
-                else if (logisticType === 'fulfillment') stats.full++;
-                else if (logisticType) stats.otros++;
-                
-                // Count by status
-                if (status === 'shipped' || status === 'handling') {
-                    stats.enCamino++;
-                    if (logisticType === 'self_service') stats.flexEnCamino++;
-                } else if (status === 'delivered') {
-                    stats.entregados++;
-                } else if (status === 'ready_to_ship') {
-                    stats.pendientes++;
-                }
-            });
-            
-            statsDiv.innerHTML = `
-                <div class="stats-panel">
-                    <div class="stat-item">
-                        <div class="stat-value">${stats.total}</div>
-                        <div class="stat-label">Total Ventas</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00ff88;">${stats.flexEnCamino}</div>
-                        <div class="stat-label">🏍️ FLEX en Camino</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00d9ff;">${stats.enCamino}</div>
-                        <div class="stat-label">🚚 Total en Camino</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #4caf50;">${stats.entregados}</div>
-                        <div class="stat-label">✅ Entregados</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #ffeb3b;">${stats.pendientes}</div>
-                        <div class="stat-label">📋 Pendientes</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #00ff88;">${stats.flex}</div>
-                        <div class="stat-label">🏍️ Total FLEX</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #ff9800;">${stats.colecta}</div>
-                        <div class="stat-label">📮 Total Colecta</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #9c27b0;">${stats.full}</div>
-                        <div class="stat-label">🏢 Total Full</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        async function cargarFlexEnCamino() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const flexInTransit = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                const logisticType = shippingInfo.logistic_type;
-                
-                return (status === 'shipped' || status === 'handling') && 
-                       logisticType === 'self_service';
-            });
-            
-            displayOrders(flexInTransit, '🏍️ FLEX EN CAMINO', true);
-        }
-        
         async function cargarEnCamino() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const inTransit = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'shipped' || status === 'handling';
-            });
-            
-            displayOrders(inTransit, '🚚 TODOS EN CAMINO');
+            await cargarPorEstado('shipped,handling', '🚚 EN CAMINO');
         }
         
         async function cargarEntregados() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const delivered = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'delivered';
-            });
-            
-            displayOrders(delivered, '✅ ENTREGADOS');
+            await cargarPorEstado('delivered', '✅ ENTREGADOS');
         }
         
-        async function cargarPendientes() {
-            if (allOrders.length === 0) {
-                alert('Primero cargá las últimas 100 ventas');
-                return;
-            }
-            
-            const pending = allOrders.filter(({ order, shipping }) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const status = (shippingInfo.status || '').toLowerCase();
-                return status === 'ready_to_ship';
-            });
-            
-            displayOrders(pending, '📋 PENDIENTES (Listos para Enviar)');
-        }
-        
-        function displayOrders(orders, titulo, highlightFlex = false) {
+        async function cargarPorEstado(orderStatus, titulo) {
             const content = document.getElementById('content');
+            content.innerHTML = `<div class="loading">Cargando ${titulo}...</div>`;
             
-            if (orders.length === 0) {
-                content.innerHTML = `<div class="error">No se encontraron órdenes para: ${titulo}</div>`;
-                return;
+            try {
+                // Get orders with shipping status filter
+                // For "in transit": order.shipping.status = shipped or handling
+                // For "delivered": tags include "delivered"
+                
+                let searchParams = `seller=${sellerId}&offset=0&limit=100`;
+                
+                // Add tag filter based on status
+                if (orderStatus === 'delivered') {
+                    searchParams += '&tags=delivered';
+                } else if (orderStatus === 'shipped,handling') {
+                    // For in transit, we need to get recent orders and filter
+                    searchParams += '&sort=date_desc';
+                }
+                
+                const response = await fetch(`${CONFIG.API_BASE}/orders/search?${searchParams}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('📦 DATOS COMPLETOS:', data);
+                
+                if (!data.results || data.results.length === 0) {
+                    content.innerHTML = `<div class="error">No se encontraron órdenes</div>`;
+                    return;
+                }
+                
+                // Get shipping details for each order
+                const ordersWithShipping = await Promise.all(
+                    data.results.map(async (order) => {
+                        try {
+                            const shippingId = order.shipping?.id;
+                            if (!shippingId) return null;
+                            
+                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
+                                headers: { 'Authorization': `Bearer ${accessToken}` }
+                            });
+                            const shipping = await shipResponse.json();
+                            return { order, shipping };
+                        } catch (e) {
+                            return null;
+                        }
+                    })
+                );
+                
+                // Filter by status if looking for in transit
+                let filtered = ordersWithShipping.filter(item => item !== null);
+                
+                if (orderStatus === 'shipped,handling') {
+                    filtered = filtered.filter(item => {
+                        const status = item.shipping?.status?.toLowerCase() || '';
+                        return status === 'shipped' || status === 'handling';
+                    });
+                }
+                
+                console.log(`Filtered ${filtered.length} shipments with status matching criteria`);
+                
+                if (filtered.length === 0) {
+                    content.innerHTML = `<div class="error">No se encontraron envíos con estado: ${orderStatus}</div>`;
+                    return;
+                }
+                
+                // Display shipments
+                let html = `<h2 style="margin-top:20px;">${titulo}: ${filtered.length} ENVÍOS</h2>`;
+                
+                filtered.forEach(({ order, shipping }, index) => {
+                    html += `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div class="order-id">ENVÍO #${index + 1} - Shipping ID: ${shipping.id}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Order ID:</div>
+                                <div class="data-value">${order.id || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Comprador:</div>
+                                <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Fecha Creación:</div>
+                                <div class="data-value">${shipping.date_created}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">logistic_type:</div>
+                                <div class="data-value">${shipping.logistic_type || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Transportista:</div>
+                                <div class="data-value">${shipping.shipping_option?.name || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Estado Envío:</div>
+                                <div class="data-value">${shipping.status || 'N/A'} - ${shipping.substatus || 'N/A'}</div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">substatus_history:</div>
+                                <div class="data-value">
+                                    ${shipping.substatus_history?.length || 0} eventos
+                                    ${shipping.substatus_history?.length > 0 ? `<br>Último: ${shipping.substatus_history[shipping.substatus_history.length - 1]?.substatus}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">status_history:</div>
+                                <div class="data-value">
+                                    shipped: ${shipping.status_history?.date_shipped || '❌'}<br>
+                                    delivered: ${shipping.status_history?.date_delivered || '❌'}<br>
+                                    handling: ${shipping.status_history?.date_handling || '❌'}<br>
+                                    ready_to_ship: ${shipping.status_history?.date_ready_to_ship || '❌'}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
+                                <div class="data-value" style="font-size: 18px; font-weight: bold;">
+                                    ${shipping.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
+                                      shipping.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
+                                      shipping.logistic_type === 'fulfillment' ? '🏢 FULL' :
+                                      '❓ OTRO: ' + shipping.logistic_type}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-value" style="font-size: 16px;">
+                                    ${categorizeStatus(shipping)}
+                                </div>
+                            </div>
+                            
+                            <div class="data-row">
+                                <div class="data-label">Dirección:</div>
+                                <div class="data-value">
+                                    ${shipping.receiver_address?.street_name || ''} 
+                                    ${shipping.receiver_address?.street_number || ''}, 
+                                    ${shipping.receiver_address?.city?.name || ''}, 
+                                    ${shipping.receiver_address?.state?.name || ''}
+                                </div>
+                            </div>
+                            
+                            <details class="json-data">
+                                <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
+                                <pre>${JSON.stringify(shipping, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                });
+                
+                content.innerHTML = html;
+                
+            } catch (error) {
+                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                console.error(error);
+            }
+        }
+        
+        function categorizeStatus(shipping) {
+            const status = (shipping.status || '').toLowerCase();
+            const substatus = (shipping.substatus || '').toLowerCase();
+            
+            // DELIVERED
+            if (status === 'delivered' || substatus === 'delivered') {
+                return '✅ ENTREGADO';
             }
             
-            let html = `<h2 style="margin-top:20px;">${titulo}: ${orders.length} ENVÍOS</h2>`;
+            // IN TRANSIT (shipped, handling, etc)
+            if (status === 'shipped' || status === 'handling' || 
+                substatus === 'in_transit' || substatus === 'out_for_delivery' ||
+                substatus === 'picked_up' || substatus === 'in_hub') {
+                return '🚚 EN CAMINO';
+            }
             
-            orders.forEach(({ order, shipping }, index) => {
-                const shippingInfo = shipping || order.shipping || {};
-                const logisticType = shippingInfo.logistic_type;
-                const isFlex = logisticType === 'self_service';
-                const cardClass = highlightFlex && isFlex ? 'order-card flex-in-transit' : 'order-card';
-                
-                // Determine badges
-                let badges = [];
-                if (isFlex) badges.push('<span class="badge badge-flex">🏍️ FLEX</span>');
-                else if (logisticType === 'cross_docking') badges.push('<span class="badge badge-colecta">📮 COLECTA</span>');
-                else if (logisticType === 'fulfillment') badges.push('<span class="badge badge-full">🏢 FULL</span>');
-                
-                const status = (shippingInfo.status || '').toLowerCase();
-                if (status === 'shipped' || status === 'handling') badges.push('<span class="badge badge-transit">🚚 EN CAMINO</span>');
-                else if (status === 'delivered') badges.push('<span class="badge badge-delivered">✅ ENTREGADO</span>');
-                else if (status === 'ready_to_ship') badges.push('<span class="badge badge-pending">📋 PENDIENTE</span>');
-                
-                html += `
-                    <div class="${cardClass}">
-                        <div class="order-header">
-                            <div class="order-id">ENVÍO #${index + 1} - Order: ${order.id}</div>
-                            <div>${badges.join(' ')}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Shipping ID:</div>
-                            <div class="data-value">${shippingInfo.id || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Comprador:</div>
-                            <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Fecha Creación:</div>
-                            <div class="data-value">${shippingInfo.date_created || order.date_created}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">logistic_type:</div>
-                            <div class="data-value">${shippingInfo.logistic_type || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">shipping_method_id:</div>
-                            <div class="data-value" style="color: ${shippingInfo.shipping_method_id === 100009 ? '#0f0' : '#fff'};">
-                                ${shippingInfo.shipping_method_id || 'N/A'}
-                                ${shippingInfo.shipping_method_id === 100009 ? ' ← 🏍️ FLEX!' : ''}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Transportista:</div>
-                            <div class="data-value">${shippingInfo.shipping_option?.name || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Estado Envío:</div>
-                            <div class="data-value">${shippingInfo.status || 'N/A'} - ${shippingInfo.substatus || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">status_history:</div>
-                            <div class="data-value">
-                                shipped: ${shippingInfo.status_history?.date_shipped || '❌'}<br>
-                                delivered: ${shippingInfo.status_history?.date_delivered || '❌'}<br>
-                                handling: ${shippingInfo.status_history?.date_handling || '❌'}<br>
-                                ready_to_ship: ${shippingInfo.status_history?.date_ready_to_ship || '❌'}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">substatus_history:</div>
-                            <div class="data-value">
-                                ${shippingInfo.substatus_history?.length || 0} eventos
-                                ${shippingInfo.substatus_history?.length > 0 ? `<br>Último: ${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.substatus} (${shippingInfo.substatus_history[shippingInfo.substatus_history.length - 1]?.date_created})` : ''}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Dirección:</div>
-                            <div class="data-value">
-                                ${shippingInfo.receiver_address?.street_name || ''} 
-                                ${shippingInfo.receiver_address?.street_number || ''}, 
-                                ${shippingInfo.receiver_address?.city?.name || ''}, 
-                                ${shippingInfo.receiver_address?.state?.name || ''}
-                            </div>
-                        </div>
-                        
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON Completo (Orden)</summary>
-                            <pre>${JSON.stringify(order, null, 2)}</pre>
-                        </details>
-                        
-                        ${shipping ? `
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
-                            <pre>${JSON.stringify(shipping, null, 2)}</pre>
-                        </details>
-                        ` : ''}
-                    </div>
-                `;
-            });
+            // READY TO SHIP (ready_to_print, printed, ready_to_ship)
+            if (status === 'ready_to_ship' || 
+                substatus === 'ready_to_print' || substatus === 'printed') {
+                return '📋 PENDIENTE (Listo para enviar)';
+            }
             
-            content.innerHTML = html;
+            // CANCELLED
+            if (status === 'cancelled' || status === 'canceled') {
+                return '❌ CANCELADO';
+            }
+            
+            // PROBLEM
+            if (substatus === 'delayed' || substatus === 'not_delivered' ||
+                status === 'returned' || substatus === 'contact_buyer') {
+                return '⚠️ PROBLEMA';
+            }
+            
+            // UNKNOWN
+            return `❓ DESCONOCIDO (${status} - ${substatus})`;
         }
         
         document.addEventListener('DOMContentLoaded', init);
