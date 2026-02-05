@@ -334,27 +334,40 @@
             statsDiv.style.display = 'none';
             
             try {
-                // Get orders (sin sort, ya vienen ordenadas por fecha descendente por defecto)
-                updateProgress(0, 100, 'Obteniendo órdenes de MercadoLibre...');
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=50`, {
+                // Get orders (la API tiene límite de 50 por request, hacemos 2 requests)
+                updateProgress(0, 100, 'Obteniendo primeras 50 órdenes...');
+                const response1 = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=50`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+                const data1 = await response1.json();
                 
-                const data = await response.json();
-                console.log('📦 DATOS COMPLETOS:', data);
+                updateProgress(50, 100, 'Obteniendo siguientes 50 órdenes...');
+                const response2 = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=50&limit=50`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data2 = await response2.json();
                 
-                if (!data.results || data.results.length === 0) {
+                // Combinar resultados
+                const allResults = [...(data1.results || []), ...(data2.results || [])];
+                
+                console.log('📦 DATOS COMPLETOS:', {
+                    batch1: data1.results?.length || 0,
+                    batch2: data2.results?.length || 0,
+                    total: allResults.length
+                });
+                
+                if (allResults.length === 0) {
                     content.innerHTML = '<div class="error">No se encontraron ventas</div>';
                     progressDiv.style.display = 'none';
                     return;
                 }
                 
-                const totalOrders = data.results.length;
+                const totalOrders = allResults.length;
                 
                 // Get shipping details for each order
                 const ordersWithShipping = [];
-                for (let i = 0; i < data.results.length; i++) {
-                    const order = data.results[i];
+                for (let i = 0; i < allResults.length; i++) {
+                    const order = allResults[i];
                     updateProgress(i + 1, totalOrders, `Obteniendo detalles de envío... (${i + 1}/${totalOrders})`);
                     
                     try {
