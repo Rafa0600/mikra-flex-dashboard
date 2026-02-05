@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug - Datos de MercadoLibre</title>
+    <title>Envíos FLEX - MercadoLibre</title>
     <style>
         * {
             margin: 0;
@@ -12,20 +12,26 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #1a1a1a;
             color: #fff;
             padding: 20px;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
         h1 {
             color: #FFE600;
             margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .top-buttons {
+            text-align: center;
+            margin-bottom: 30px;
         }
 
         button {
@@ -36,140 +42,223 @@
             border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
-            margin-bottom: 20px;
-            margin-right: 10px;
+            margin: 5px;
+            transition: all 0.3s;
         }
 
         button:hover {
-            background: #2968c8;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(52, 131, 250, 0.4);
         }
 
-        .filter-buttons {
-            margin: 20px 0;
-            padding: 15px;
+        .filter-section {
             background: #2a2a2a;
-            border-radius: 8px;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
         }
 
-        .filter-buttons button {
-            margin: 5px;
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .filter-row label {
+            color: #FFE600;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        select {
+            background: #1a1a1a;
+            color: #fff;
+            border: 2px solid #444;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #FFE600;
         }
 
         .stats {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
+            margin-bottom: 30px;
         }
 
-        .stat-box {
-            background: #1a1a1a;
-            padding: 15px;
-            border-radius: 6px;
+        .stat-card {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+            padding: 20px;
+            border-radius: 12px;
             text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: #FFE600;
+        }
+
+        .stat-card.active {
+            border-color: #FFE600;
+            box-shadow: 0 0 20px rgba(255, 230, 0, 0.3);
         }
 
         .stat-number {
-            font-size: 32px;
+            font-size: 36px;
             font-weight: bold;
-            color: #FFE600;
+            margin-bottom: 5px;
         }
 
         .stat-label {
             color: #aaa;
-            margin-top: 5px;
+            font-size: 14px;
         }
 
-        .order-card {
+        .envio-card {
             background: #2a2a2a;
-            border: 1px solid #444;
+            border-left: 5px solid;
             border-radius: 8px;
             padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .order-header {
-            border-bottom: 2px solid #FFE600;
-            padding-bottom: 10px;
             margin-bottom: 15px;
+            transition: all 0.3s;
         }
 
-        .order-id {
-            font-size: 18px;
+        .envio-card:hover {
+            background: #333;
+            transform: translateX(5px);
+        }
+
+        .envio-card.pendiente { border-left-color: #9C27B0; }
+        .envio-card.en-camino { border-left-color: #00d9ff; }
+        .envio-card.entregado { border-left-color: #00ff88; }
+
+        .envio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .estado-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .estado-badge.pendiente { background: #9C27B0; }
+        .estado-badge.en-camino { background: #00d9ff; color: #000; }
+        .estado-badge.entregado { background: #00ff88; color: #000; }
+
+        .envio-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .info-label {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .zona-highlight {
+            font-size: 20px;
             font-weight: bold;
             color: #FFE600;
         }
 
-        .data-row {
-            display: grid;
-            grid-template-columns: 200px 1fr;
-            gap: 10px;
-            padding: 8px 0;
-            border-bottom: 1px solid #333;
+        .direccion-link {
+            color: #3483FA;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s;
         }
 
-        .data-label {
-            font-weight: bold;
-            color: #aaa;
-        }
-
-        .data-value {
-            color: #fff;
-        }
-
-        .json-data {
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 15px;
-            overflow-x: auto;
-        }
-
-        pre {
-            color: #0f0;
-            font-size: 12px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+        .direccion-link:hover {
+            color: #FFE600;
+            text-decoration: underline;
         }
 
         .loading {
             text-align: center;
-            padding: 40px;
-            font-size: 20px;
+            padding: 60px;
+            font-size: 24px;
+            color: #FFE600;
         }
 
         .error {
             background: #f44336;
             color: white;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
         }
 
         .hidden {
             display: none;
         }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            font-size: 18px;
+        }
+
+        .order-id {
+            color: #888;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 DEBUG - Datos RAW de MercadoLibre</h1>
+        <h1>🏍️ Envíos FLEX - MercadoLibre</h1>
         
-        <button onclick="conectar()">Conectar con MercadoLibre</button>
-        <button onclick="cargarDatos()" id="loadBtn" style="display:none;">Cargar Últimas 30 Ventas</button>
-        <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Cargar 50 FLEX</button>
-        
-        <div id="filterSection" class="filter-buttons hidden">
-            <h3 style="color: #FFE600; margin-bottom: 10px;">🔍 Filtrar por estado:</h3>
-            <button onclick="filtrarPor('all')" style="background:#3483FA;">📊 TODOS</button>
-            <button onclick="filtrarPor('ready')" style="background:#9C27B0;">📋 Listo para enviar</button>
-            <button onclick="filtrarPor('printed')" style="background:#FFA500;">🏷️ Etiqueta impresa</button>
-            <button onclick="filtrarPor('in_transit')" style="background:#00d9ff;">🚚 En camino</button>
-            <button onclick="filtrarPor('delivered')" style="background:#00ff88;">✅ Entregados</button>
+        <div class="top-buttons">
+            <button onclick="conectar()" id="connectBtn">Conectar con MercadoLibre</button>
+            <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Cargar 50 FLEX</button>
+        </div>
+
+        <div id="filterSection" class="filter-section hidden">
+            <div class="filter-row">
+                <label>🔍 Filtrar por barrio:</label>
+                <select id="barrioFilter" onchange="aplicarFiltros()">
+                    <option value="all">Todos los barrios</option>
+                </select>
+            </div>
         </div>
 
         <div id="stats" class="stats hidden"></div>
@@ -187,6 +276,7 @@
         let accessToken = localStorage.getItem('ml_access_token');
         let sellerId = localStorage.getItem('ml_seller_id');
         let allFlexOrders = [];
+        let currentStateFilter = 'all';
 
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -195,7 +285,6 @@
             if (code) {
                 handleAuthCallback(code);
             } else if (accessToken && sellerId) {
-                document.getElementById('loadBtn').style.display = 'inline-block';
                 document.getElementById('loadFlexBtn').style.display = 'inline-block';
             }
         }
@@ -238,9 +327,9 @@
                 sellerId = userData.id;
                 localStorage.setItem('ml_seller_id', sellerId);
 
-                content.innerHTML = '<div class="loading">✅ Conectado! Ahora cargá las ventas</div>';
-                document.getElementById('loadBtn').style.display = 'inline-block';
+                content.innerHTML = '<div class="loading">✅ Conectado!</div>';
                 document.getElementById('loadFlexBtn').style.display = 'inline-block';
+                document.getElementById('connectBtn').style.display = 'none';
 
                 window.history.replaceState({}, document.title, window.location.pathname);
             } catch (error) {
@@ -248,24 +337,32 @@
             }
         }
 
-        // Convertir fecha UTC a Argentina (UTC-3)
         function formatearFechaArg(fechaISO) {
             if (!fechaISO) return '❌';
             const fecha = new Date(fechaISO);
             return fecha.toLocaleString('es-AR', { 
                 timeZone: 'America/Argentina/Buenos_Aires',
-                year: 'numeric',
-                month: '2-digit',
                 day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
                 hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                minute: '2-digit'
+            });
+        }
+
+        function formatearSoloHora(fechaISO) {
+            if (!fechaISO) return '❌';
+            const fecha = new Date(fechaISO);
+            return fecha.toLocaleString('es-AR', { 
+                timeZone: 'America/Argentina/Buenos_Aires',
+                hour: '2-digit',
+                minute: '2-digit'
             });
         }
 
         async function cargarSoloFlex() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">🔍 Cargando ventas FLEX (OPTIMIZADO - mucho más rápido)...</div>';
+            content.innerHTML = '<div class="loading">🔍 Cargando envíos FLEX...</div>';
             
             allFlexOrders = [];
 
@@ -276,7 +373,7 @@
                 let totalChecked = 0;
 
                 while (allFlexOrders.length < targetCount && totalChecked < 500) {
-                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX...<br>Encontradas: <strong style="color:#0f0;">${allFlexOrders.length}/${targetCount}</strong><br>Revisadas: ${totalChecked}</div>`;
+                    content.innerHTML = `<div class="loading">🔍 Cargando FLEX...<br><span style="font-size: 48px; color: #00ff88;">${allFlexOrders.length}</span>/${targetCount}</div>`;
 
                     const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
                         headers: {
@@ -290,7 +387,6 @@
 
                     totalChecked += data.results.length;
 
-                    // Fetch ALL shippings in parallel
                     const shippingPromises = data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
@@ -326,15 +422,29 @@
                     offset += limit;
                 }
 
-                console.log(`🏍️ ${allFlexOrders.length} ventas FLEX de ${totalChecked} revisadas`);
-
                 if (allFlexOrders.length === 0) {
                     content.innerHTML = '<div class="error">No se encontraron ventas FLEX</div>';
                     return;
                 }
 
+                // Extraer barrios únicos
+                const barrios = new Set();
+                allFlexOrders.forEach(({ shipping }) => {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || 
+                                   shipping.receiver_address?.city?.name || 
+                                   'Sin barrio';
+                    barrios.add(barrio);
+                });
+
+                // Llenar select de barrios
+                const barrioSelect = document.getElementById('barrioFilter');
+                barrioSelect.innerHTML = '<option value="all">Todos los barrios</option>';
+                Array.from(barrios).sort().forEach(barrio => {
+                    barrioSelect.innerHTML += `<option value="${barrio}">${barrio}</option>`;
+                });
+
                 document.getElementById('filterSection').classList.remove('hidden');
-                displayOrders(allFlexOrders, 'all');
+                displayOrders('all');
 
             } catch (error) {
                 content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
@@ -345,289 +455,154 @@
         function getOrderState(shipping) {
             const history = shipping.status_history || {};
             
-            // Si tiene delivered = ENTREGADO
             if (history.date_delivered) {
-                return 'delivered';
+                return 'entregado';
             }
             
-            // Si tiene shipped = EN CAMINO (salió)
             if (history.date_shipped) {
-                return 'in_transit';
+                return 'en-camino';
             }
             
-            // Si tiene handling = ETIQUETA IMPRESA
-            if (history.date_handling) {
-                return 'printed';
-            }
-            
-            // Si tiene ready_to_ship = LISTO PARA ENVIAR
-            if (history.date_ready_to_ship) {
-                return 'ready';
-            }
-            
-            return 'unknown';
+            return 'pendiente';
         }
 
-        function filtrarPor(filter) {
+        function filtrarPorEstado(estado) {
+            currentStateFilter = estado;
+            aplicarFiltros();
+        }
+
+        function aplicarFiltros() {
+            const barrioFilter = document.getElementById('barrioFilter').value;
+            
             let filtered = allFlexOrders;
 
-            if (filter === 'ready') {
-                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'ready');
-            } else if (filter === 'printed') {
-                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'printed');
-            } else if (filter === 'in_transit') {
-                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'in_transit');
-            } else if (filter === 'delivered') {
-                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'delivered');
+            // Filtro por estado
+            if (currentStateFilter !== 'all') {
+                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
-            displayOrders(filtered, filter);
+            // Filtro por barrio
+            if (barrioFilter !== 'all') {
+                filtered = filtered.filter(({ shipping }) => {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || 
+                                   shipping.receiver_address?.city?.name || 
+                                   'Sin barrio';
+                    return barrio === barrioFilter;
+                });
+            }
+
+            displayOrders(currentStateFilter, filtered);
         }
 
-        function displayOrders(orders, filterType) {
-            // Calculate stats
+        function displayOrders(filterType, customFiltered = null) {
+            const orders = customFiltered || allFlexOrders;
+
+            // Calcular stats
             const stats = {
                 total: allFlexOrders.length,
-                ready: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'ready').length,
-                printed: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'printed').length,
-                in_transit: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'in_transit').length,
-                delivered: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'delivered').length
+                pendiente: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
+                enCamino: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'en-camino').length,
+                entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
             };
 
-            // Show stats
+            // Mostrar stats como botones
             const statsHtml = `
-                <div class="stat-box">
-                    <div class="stat-number">${stats.total}</div>
-                    <div class="stat-label">Total FLEX</div>
+                <div class="stat-card ${currentStateFilter === 'all' ? 'active' : ''}" onclick="filtrarPorEstado('all')">
+                    <div class="stat-number" style="color:#FFE600;">${stats.total}</div>
+                    <div class="stat-label">📊 TODOS</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" style="color:#9C27B0;">${stats.ready}</div>
-                    <div class="stat-label">📋 Listo para enviar</div>
+                <div class="stat-card ${currentStateFilter === 'pendiente' ? 'active' : ''}" onclick="filtrarPorEstado('pendiente')">
+                    <div class="stat-number" style="color:#9C27B0;">${stats.pendiente}</div>
+                    <div class="stat-label">📋 Pendientes</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" style="color:#FFA500;">${stats.printed}</div>
-                    <div class="stat-label">🏷️ Etiqueta impresa</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-number" style="color:#00d9ff;">${stats.in_transit}</div>
+                <div class="stat-card ${currentStateFilter === 'en-camino' ? 'active' : ''}" onclick="filtrarPorEstado('en-camino')">
+                    <div class="stat-number" style="color:#00d9ff;">${stats.enCamino}</div>
                     <div class="stat-label">🚚 En camino</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" style="color:#00ff88;">${stats.delivered}</div>
+                <div class="stat-card ${currentStateFilter === 'entregado' ? 'active' : ''}" onclick="filtrarPorEstado('entregado')">
+                    <div class="stat-number" style="color:#00ff88;">${stats.entregado}</div>
                     <div class="stat-label">✅ Entregados</div>
                 </div>
             `;
             document.getElementById('stats').innerHTML = statsHtml;
             document.getElementById('stats').classList.remove('hidden');
 
-            // Display orders
-            const filterLabel = {
-                'all': 'TODAS',
-                'ready': '📋 LISTO PARA ENVIAR',
-                'printed': '🏷️ ETIQUETA IMPRESA',
-                'in_transit': '🚚 EN CAMINO',
-                'delivered': '✅ ENTREGADAS'
-            };
-
-            let html = `<h2 style="margin-top:20px;">🏍️ ${orders.length} VENTAS FLEX - ${filterLabel[filterType]}</h2>`;
+            // Mostrar envíos
+            let html = '';
 
             if (orders.length === 0) {
-                html += '<div class="error">No hay ventas con este filtro</div>';
-            }
-
-            orders.forEach(({ order, shipping }, index) => {
-                const state = getOrderState(shipping);
-                const stateEmoji = {
-                    'ready': '📋',
-                    'printed': '🏷️',
-                    'in_transit': '🚚',
-                    'delivered': '✅'
-                };
-                
-                html += `
-                    <div class="order-card">
-                        <div class="order-header">
-                            <div class="order-id">${stateEmoji[state] || '🏍️'} VENTA FLEX #${index + 1} - Order ID: ${order.id}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Fecha Creación:</div>
-                            <div class="data-value">${formatearFechaArg(order.date_created)}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Estado Orden:</div>
-                            <div class="data-value">${order.status}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Comprador:</div>
-                            <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Shipping ID:</div>
-                            <div class="data-value">${shipping.id || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">📊 ESTADO ACTUAL:</div>
-                            <div class="data-value" style="font-size: 18px; font-weight: bold;">
-                                ${categorizeStatus(shipping)}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">🕐 Historial de estados:</div>
-                            <div class="data-value">
-                                📋 Listo para enviar: ${formatearFechaArg(shipping.status_history?.date_ready_to_ship)}<br>
-                                🏷️ Etiqueta impresa: ${formatearFechaArg(shipping.status_history?.date_handling)}<br>
-                                🚚 En camino (salió): ${formatearFechaArg(shipping.status_history?.date_shipped)}<br>
-                                ✅ Entregado: ${formatearFechaArg(shipping.status_history?.date_delivered)}
-                            </div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">Dirección:</div>
-                            <div class="data-value">
-                                ${shipping.receiver_address?.street_name || ''} 
-                                ${shipping.receiver_address?.street_number || ''}, 
-                                ${shipping.receiver_address?.city?.name || ''}, 
-                                ${shipping.receiver_address?.state?.name || ''}
-                            </div>
-                        </div>
-                        
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON Completo (Orden)</summary>
-                            <pre>${JSON.stringify(order, null, 2)}</pre>
-                        </details>
-                        
-                        <details class="json-data">
-                            <summary style="cursor:pointer; color:#0f0;">📦 Ver JSON Completo (Shipping)</summary>
-                            <pre>${JSON.stringify(shipping, null, 2)}</pre>
-                        </details>
-                    </div>
-                `;
-            });
-
-            document.getElementById('content').innerHTML = html;
-        }
-
-        async function cargarDatos() {
-            const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Cargando últimas ventas...</div>';
-
-            try {
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                });
-
-                const data = await response.json();
-
-                if (!data.results || data.results.length === 0) {
-                    content.innerHTML = '<div class="error">No se encontraron ventas</div>';
-                    return;
-                }
-
-                const ordersWithShipping = await Promise.all(
-                    data.results.map(async (order) => {
-                        try {
-                            const shippingId = order.shipping?.id;
-                            if (!shippingId) return { order, shipping: null };
-
-                            const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
-                                headers: {
-                                    'Authorization': `Bearer ${accessToken}`
-                                }
-                            });
-
-                            const shipping = await shipResponse.json();
-                            return { order, shipping };
-                        } catch (e) {
-                            return { order, shipping: null };
-                        }
-                    })
-                );
-
-                let html = '<h2 style="margin-top:20px;">📊 ÚLTIMAS 30 VENTAS:</h2>';
-
-                ordersWithShipping.forEach(({ order, shipping }, index) => {
-                    const shippingInfo = shipping || order.shipping || {};
+                html = '<div class="no-results">No hay envíos con estos filtros</div>';
+            } else {
+                orders.forEach(({ order, shipping }) => {
+                    const state = getOrderState(shipping);
+                    const barrio = shipping.receiver_address?.neighborhood?.name || 
+                                   shipping.receiver_address?.city?.name || 
+                                   'Sin barrio';
                     
+                    const calle = shipping.receiver_address?.street_name || '';
+                    const numero = shipping.receiver_address?.street_number || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const provincia = shipping.receiver_address?.state?.name || '';
+                    
+                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+                    
+                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                                        shipping.shipping_option?.estimated_delivery_final?.date;
+                    
+                    const horaEntregaReal = shipping.status_history?.date_delivered;
+                    
+                    const estadoLabel = {
+                        'pendiente': '📋 Pendiente',
+                        'en-camino': '🚚 En camino',
+                        'entregado': '✅ Entregado'
+                    };
+
                     html += `
-                        <div class="order-card">
-                            <div class="order-header">
-                                <div class="order-id">VENTA #${index + 1} - Order ID: ${order.id}</div>
+                        <div class="envio-card ${state}">
+                            <div class="envio-header">
+                                <span class="estado-badge ${state}">${estadoLabel[state]}</span>
+                                <span class="order-id">Orden #${order.id}</span>
                             </div>
                             
-                            <div class="data-row">
-                                <div class="data-label">Fecha Creación:</div>
-                                <div class="data-value">${formatearFechaArg(order.date_created)}</div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">Comprador:</div>
-                                <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">🎯 TIPO DE ENVÍO:</div>
-                                <div class="data-value" style="font-size: 18px; font-weight: bold;">
-                                    ${shippingInfo.logistic_type === 'self_service' ? '🏍️ FLEX (MOTO)' : 
-                                      shippingInfo.logistic_type === 'cross_docking' ? '📮 COLECTA (CORREO)' : 
-                                      '❓ OTRO'}
+                            <div class="envio-info">
+                                <div class="info-item">
+                                    <div class="info-label">🌍 Zona / Barrio</div>
+                                    <div class="info-value zona-highlight">${barrio}</div>
                                 </div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">📊 ESTADO:</div>
-                                <div class="data-value" style="font-size: 16px;">
-                                    ${categorizeStatus(shippingInfo)}
+                                
+                                <div class="info-item">
+                                    <div class="info-label">📍 Dirección</div>
+                                    <div class="info-value">
+                                        <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
+                                            📌 ${calle} ${numero}, ${ciudad}
+                                        </a>
+                                    </div>
                                 </div>
+                                
+                                <div class="info-item">
+                                    <div class="info-label">👤 Comprador</div>
+                                    <div class="info-value">${order.buyer?.nickname || 'N/A'}</div>
+                                </div>
+                                
+                                <div class="info-item">
+                                    <div class="info-label">📅 Entrega estimada</div>
+                                    <div class="info-value">${formatearFechaArg(fechaEntrega)}</div>
+                                </div>
+                                
+                                ${horaEntregaReal ? `
+                                <div class="info-item">
+                                    <div class="info-label">✅ Entregado a las</div>
+                                    <div class="info-value" style="color:#00ff88; font-weight:bold;">${formatearSoloHora(horaEntregaReal)}</div>
+                                </div>
+                                ` : ''}
                             </div>
-                            
-                            <details class="json-data">
-                                <summary style="cursor:pointer; color:#FFE600;">📄 Ver JSON</summary>
-                                <pre>${JSON.stringify({order, shipping}, null, 2)}</pre>
-                            </details>
                         </div>
                     `;
                 });
+            }
 
-                content.innerHTML = html;
-
-            } catch (error) {
-                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
-                console.error(error);
-            }
-        }
-
-        function categorizeStatus(shipping) {
-            const history = shipping.status_history || {};
-            
-            // ENTREGADO
-            if (history.date_delivered) {
-                return '✅ ENTREGADO';
-            }
-            
-            // EN CAMINO (salió del depósito)
-            if (history.date_shipped) {
-                return '🚚 EN CAMINO';
-            }
-            
-            // ETIQUETA IMPRESA (preparando)
-            if (history.date_handling) {
-                return '🏷️ ETIQUETA IMPRESA';
-            }
-            
-            // LISTO PARA ENVIAR
-            if (history.date_ready_to_ship) {
-                return '📋 LISTO PARA ENVIAR';
-            }
-            
-            return '❓ DESCONOCIDO';
+            document.getElementById('content').innerHTML = html;
         }
 
         document.addEventListener('DOMContentLoaded', init);
