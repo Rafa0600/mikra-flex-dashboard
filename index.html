@@ -166,9 +166,10 @@
         <div id="filterSection" class="filter-buttons hidden">
             <h3 style="color: #FFE600; margin-bottom: 10px;">🔍 Filtrar por estado:</h3>
             <button onclick="filtrarPor('all')" style="background:#3483FA;">📊 TODOS</button>
-            <button onclick="filtrarPor('pending')" style="background:#FFA500;">📋 PENDIENTES</button>
-            <button onclick="filtrarPor('in_transit')" style="background:#00d9ff;">🚚 EN CAMINO</button>
-            <button onclick="filtrarPor('delivered')" style="background:#00ff88;">✅ ENTREGADOS</button>
+            <button onclick="filtrarPor('ready')" style="background:#9C27B0;">📋 Listo para enviar</button>
+            <button onclick="filtrarPor('printed')" style="background:#FFA500;">🏷️ Etiqueta impresa</button>
+            <button onclick="filtrarPor('in_transit')" style="background:#00d9ff;">🚚 En camino</button>
+            <button onclick="filtrarPor('delivered')" style="background:#00ff88;">✅ Entregados</button>
         </div>
 
         <div id="stats" class="stats hidden"></div>
@@ -185,7 +186,7 @@
 
         let accessToken = localStorage.getItem('ml_access_token');
         let sellerId = localStorage.getItem('ml_seller_id');
-        let allFlexOrders = []; // Store all loaded orders
+        let allFlexOrders = [];
 
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -247,11 +248,26 @@
             }
         }
 
+        // Convertir fecha UTC a Argentina (UTC-3)
+        function formatearFechaArg(fechaISO) {
+            if (!fechaISO) return '❌';
+            const fecha = new Date(fechaISO);
+            return fecha.toLocaleString('es-AR', { 
+                timeZone: 'America/Argentina/Buenos_Aires',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
         async function cargarSoloFlex() {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="loading">🔍 Cargando ventas FLEX (OPTIMIZADO - mucho más rápido)...</div>';
             
-            allFlexOrders = []; // Reset
+            allFlexOrders = [];
 
             try {
                 const targetCount = 50;
@@ -259,7 +275,6 @@
                 const limit = 50;
                 let totalChecked = 0;
 
-                // OPTIMIZACIÓN: Fetch en paralelo por batches
                 while (allFlexOrders.length < targetCount && totalChecked < 500) {
                     content.innerHTML = `<div class="loading">🔍 Cargando FLEX...<br>Encontradas: <strong style="color:#0f0;">${allFlexOrders.length}/${targetCount}</strong><br>Revisadas: ${totalChecked}</div>`;
 
@@ -275,7 +290,7 @@
 
                     totalChecked += data.results.length;
 
-                    // OPTIMIZACIÓN: Fetch ALL shippings in parallel
+                    // Fetch ALL shippings in parallel
                     const shippingPromises = data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
@@ -318,10 +333,7 @@
                     return;
                 }
 
-                // Show filters
                 document.getElementById('filterSection').classList.remove('hidden');
-                
-                // Display all by default
                 displayOrders(allFlexOrders, 'all');
 
             } catch (error) {
@@ -330,24 +342,43 @@
             }
         }
 
+        function getOrderState(shipping) {
+            const history = shipping.status_history || {};
+            
+            // Si tiene delivered = ENTREGADO
+            if (history.date_delivered) {
+                return 'delivered';
+            }
+            
+            // Si tiene shipped = EN CAMINO (salió)
+            if (history.date_shipped) {
+                return 'in_transit';
+            }
+            
+            // Si tiene handling = ETIQUETA IMPRESA
+            if (history.date_handling) {
+                return 'printed';
+            }
+            
+            // Si tiene ready_to_ship = LISTO PARA ENVIAR
+            if (history.date_ready_to_ship) {
+                return 'ready';
+            }
+            
+            return 'unknown';
+        }
+
         function filtrarPor(filter) {
             let filtered = allFlexOrders;
 
-            if (filter === 'pending') {
-                filtered = allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'ready_to_ship' || status === 'pending';
-                });
+            if (filter === 'ready') {
+                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'ready');
+            } else if (filter === 'printed') {
+                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'printed');
             } else if (filter === 'in_transit') {
-                filtered = allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'shipped' || status === 'handling';
-                });
+                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'in_transit');
             } else if (filter === 'delivered') {
-                filtered = allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'delivered';
-                });
+                filtered = allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'delivered');
             }
 
             displayOrders(filtered, filter);
@@ -357,18 +388,10 @@
             // Calculate stats
             const stats = {
                 total: allFlexOrders.length,
-                pending: allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'ready_to_ship' || status === 'pending';
-                }).length,
-                in_transit: allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'shipped' || status === 'handling';
-                }).length,
-                delivered: allFlexOrders.filter(({ shipping }) => {
-                    const status = (shipping.status || '').toLowerCase();
-                    return status === 'delivered';
-                }).length
+                ready: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'ready').length,
+                printed: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'printed').length,
+                in_transit: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'in_transit').length,
+                delivered: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'delivered').length
             };
 
             // Show stats
@@ -378,12 +401,16 @@
                     <div class="stat-label">Total FLEX</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-number" style="color:#FFA500;">${stats.pending}</div>
-                    <div class="stat-label">📋 Pendientes</div>
+                    <div class="stat-number" style="color:#9C27B0;">${stats.ready}</div>
+                    <div class="stat-label">📋 Listo para enviar</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" style="color:#FFA500;">${stats.printed}</div>
+                    <div class="stat-label">🏷️ Etiqueta impresa</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-number" style="color:#00d9ff;">${stats.in_transit}</div>
-                    <div class="stat-label">🚚 En Camino</div>
+                    <div class="stat-label">🚚 En camino</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-number" style="color:#00ff88;">${stats.delivered}</div>
@@ -396,7 +423,8 @@
             // Display orders
             const filterLabel = {
                 'all': 'TODAS',
-                'pending': '📋 PENDIENTES',
+                'ready': '📋 LISTO PARA ENVIAR',
+                'printed': '🏷️ ETIQUETA IMPRESA',
                 'in_transit': '🚚 EN CAMINO',
                 'delivered': '✅ ENTREGADAS'
             };
@@ -408,15 +436,23 @@
             }
 
             orders.forEach(({ order, shipping }, index) => {
+                const state = getOrderState(shipping);
+                const stateEmoji = {
+                    'ready': '📋',
+                    'printed': '🏷️',
+                    'in_transit': '🚚',
+                    'delivered': '✅'
+                };
+                
                 html += `
                     <div class="order-card">
                         <div class="order-header">
-                            <div class="order-id">🏍️ VENTA FLEX #${index + 1} - Order ID: ${order.id}</div>
+                            <div class="order-id">${stateEmoji[state] || '🏍️'} VENTA FLEX #${index + 1} - Order ID: ${order.id}</div>
                         </div>
                         
                         <div class="data-row">
                             <div class="data-label">Fecha Creación:</div>
-                            <div class="data-value">${order.date_created}</div>
+                            <div class="data-value">${formatearFechaArg(order.date_created)}</div>
                         </div>
                         
                         <div class="data-row">
@@ -435,24 +471,19 @@
                         </div>
                         
                         <div class="data-row">
-                            <div class="data-label">Estado Envío:</div>
-                            <div class="data-value">${shipping.status || 'N/A'} - ${shipping.substatus || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="data-row">
-                            <div class="data-label">status_history:</div>
-                            <div class="data-value">
-                                shipped: ${shipping.status_history?.date_shipped || '❌'}<br>
-                                delivered: ${shipping.status_history?.date_delivered || '❌'}<br>
-                                handling: ${shipping.status_history?.date_handling || '❌'}<br>
-                                ready_to_ship: ${shipping.status_history?.date_ready_to_ship || '❌'}
+                            <div class="data-label">📊 ESTADO ACTUAL:</div>
+                            <div class="data-value" style="font-size: 18px; font-weight: bold;">
+                                ${categorizeStatus(shipping)}
                             </div>
                         </div>
                         
                         <div class="data-row">
-                            <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
-                            <div class="data-value" style="font-size: 16px; font-weight: bold;">
-                                ${categorizeStatus(shipping)}
+                            <div class="data-label">🕐 Historial de estados:</div>
+                            <div class="data-value">
+                                📋 Listo para enviar: ${formatearFechaArg(shipping.status_history?.date_ready_to_ship)}<br>
+                                🏷️ Etiqueta impresa: ${formatearFechaArg(shipping.status_history?.date_handling)}<br>
+                                🚚 En camino (salió): ${formatearFechaArg(shipping.status_history?.date_shipped)}<br>
+                                ✅ Entregado: ${formatearFechaArg(shipping.status_history?.date_delivered)}
                             </div>
                         </div>
                         
@@ -533,27 +564,12 @@
                             
                             <div class="data-row">
                                 <div class="data-label">Fecha Creación:</div>
-                                <div class="data-value">${order.date_created}</div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">Estado Orden:</div>
-                                <div class="data-value">${order.status}</div>
+                                <div class="data-value">${formatearFechaArg(order.date_created)}</div>
                             </div>
                             
                             <div class="data-row">
                                 <div class="data-label">Comprador:</div>
                                 <div class="data-value">${order.buyer?.nickname || 'N/A'}</div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">logistic_type:</div>
-                                <div class="data-value">${shippingInfo.logistic_type || 'N/A'}</div>
-                            </div>
-                            
-                            <div class="data-row">
-                                <div class="data-label">Estado Envío:</div>
-                                <div class="data-value">${shippingInfo.status || 'N/A'} - ${shippingInfo.substatus || 'N/A'}</div>
                             </div>
                             
                             <div class="data-row">
@@ -566,7 +582,7 @@
                             </div>
                             
                             <div class="data-row">
-                                <div class="data-label">📊 ESTADO CATEGORIZADO:</div>
+                                <div class="data-label">📊 ESTADO:</div>
                                 <div class="data-value" style="font-size: 16px;">
                                     ${categorizeStatus(shippingInfo)}
                                 </div>
@@ -589,34 +605,29 @@
         }
 
         function categorizeStatus(shipping) {
-            const status = (shipping.status || '').toLowerCase();
-            const substatus = (shipping.substatus || '').toLowerCase();
-
-            if (status === 'delivered' || substatus === 'delivered') {
+            const history = shipping.status_history || {};
+            
+            // ENTREGADO
+            if (history.date_delivered) {
                 return '✅ ENTREGADO';
             }
-
-            if (status === 'shipped' || status === 'handling' || 
-                substatus === 'in_transit' || substatus === 'out_for_delivery' || 
-                substatus === 'picked_up' || substatus === 'in_hub') {
+            
+            // EN CAMINO (salió del depósito)
+            if (history.date_shipped) {
                 return '🚚 EN CAMINO';
             }
-
-            if (status === 'ready_to_ship' || substatus === 'ready_to_print' || 
-                substatus === 'printed') {
-                return '📋 PENDIENTE (Listo para enviar)';
+            
+            // ETIQUETA IMPRESA (preparando)
+            if (history.date_handling) {
+                return '🏷️ ETIQUETA IMPRESA';
             }
-
-            if (status === 'cancelled' || status === 'canceled') {
-                return '❌ CANCELADO';
+            
+            // LISTO PARA ENVIAR
+            if (history.date_ready_to_ship) {
+                return '📋 LISTO PARA ENVIAR';
             }
-
-            if (substatus === 'delayed' || substatus === 'not_delivered' || 
-                status === 'returned' || substatus === 'contact_buyer') {
-                return '⚠️ PROBLEMA';
-            }
-
-            return `❓ DESCONOCIDO (${status} - ${substatus})`;
+            
+            return '❓ DESCONOCIDO';
         }
 
         document.addEventListener('DOMContentLoaded', init);
