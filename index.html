@@ -118,7 +118,7 @@
         
         <button onclick="conectar()">Conectar con MercadoLibre</button>
         <button onclick="cargarDatos()" id="loadBtn" style="display:none;">Cargar Últimas Ventas</button>
-        <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Últimas 30 SOLO MOTO</button>
+        <button onclick="cargarSoloFlex()" id="loadFlexBtn" style="display:none; background:#FF6B00;">🏍️ Últimas 50 SOLO MOTO</button>
         <button onclick="cargarEnCamino()" id="loadTransitBtn" style="display:none; background:#00d9ff;">🚚 Cargar EN CAMINO</button>
         <button onclick="cargarEntregados()" id="loadDeliveredBtn" style="display:none; background:#00ff88;">✅ Cargar ENTREGADOS</button>
         
@@ -204,30 +204,43 @@
 
         async function cargarSoloFlex() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Cargando últimas 30 ventas de MOTO...</div>';
+            content.innerHTML = '<div class="loading">🔍 Buscando 50 ventas de MOTO... esto puede tardar un poco</div>';
 
             try {
-                // Get orders
-                const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=0&limit=30&sort=date_desc`, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
+                const targetCount = 50; // Queremos 50 ventas FLEX
+                const flexOrders = [];
+                let offset = 0;
+                const limit = 50; // Cargar de a 50 por request (máximo de la API)
+                let totalChecked = 0;
+
+                // Loop hasta conseguir 50 ventas FLEX
+                while (flexOrders.length < targetCount) {
+                    content.innerHTML = `<div class="loading">🔍 Buscando ventas FLEX...<br>Encontradas: <strong>${flexOrders.length}/${targetCount}</strong><br>Revisadas: ${totalChecked}</div>`;
+
+                    // Get orders batch
+                    const response = await fetch(`${CONFIG.API_BASE}/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (!data.results || data.results.length === 0) {
+                        // No hay más ventas
+                        console.log('No hay más ventas disponibles');
+                        break;
                     }
-                });
 
-                const data = await response.json();
-                console.log('📦 DATOS COMPLETOS:', data);
+                    totalChecked += data.results.length;
 
-                if (!data.results || data.results.length === 0) {
-                    content.innerHTML = '<div class="error">No se encontraron ventas</div>';
-                    return;
-                }
+                    // Check each order for FLEX shipping
+                    for (const order of data.results) {
+                        if (flexOrders.length >= targetCount) break;
 
-                // Get shipping details for each order and filter FLEX only
-                const ordersWithShipping = await Promise.all(
-                    data.results.map(async (order) => {
                         try {
                             const shippingId = order.shipping?.id;
-                            if (!shippingId) return null;
+                            if (!shippingId) continue;
 
                             const shipResponse = await fetch(`${CONFIG.API_BASE}/shipments/${shippingId}`, {
                                 headers: {
@@ -239,29 +252,35 @@
                             
                             // Filter only FLEX (self_service)
                             if (shipping.logistic_type === 'self_service') {
-                                return { order, shipping };
+                                flexOrders.push({ order, shipping });
+                                content.innerHTML = `<div class="loading">🔍 Buscando ventas FLEX...<br>Encontradas: <strong style="color:#0f0;">${flexOrders.length}/${targetCount}</strong><br>Revisadas: ${totalChecked}</div>`;
                             }
-                            return null;
                         } catch (e) {
-                            return null;
+                            console.error('Error fetching shipping:', e);
                         }
-                    })
-                );
+                    }
 
-                // Remove nulls
-                const flexOnly = ordersWithShipping.filter(item => item !== null);
+                    // Move to next page
+                    offset += limit;
 
-                console.log(`🏍️ Encontradas ${flexOnly.length} ventas FLEX de ${data.results.length} totales`);
+                    // Safety check: don't check more than 500 orders
+                    if (totalChecked >= 500) {
+                        console.log('Límite de seguridad alcanzado (500 órdenes revisadas)');
+                        break;
+                    }
+                }
 
-                if (flexOnly.length === 0) {
-                    content.innerHTML = '<div class="error">No se encontraron ventas con envío FLEX en las últimas 30</div>';
+                console.log(`🏍️ Encontradas ${flexOrders.length} ventas FLEX después de revisar ${totalChecked} órdenes`);
+
+                if (flexOrders.length === 0) {
+                    content.innerHTML = '<div class="error">No se encontraron ventas con envío FLEX</div>';
                     return;
                 }
 
                 // Display data
-                let html = `<h2 style="margin-top:20px;">🏍️ ÚLTIMAS ${flexOnly.length} VENTAS FLEX (DE 30 TOTALES):</h2>`;
+                let html = `<h2 style="margin-top:20px;">🏍️ ÚLTIMAS ${flexOrders.length} VENTAS FLEX (de ${totalChecked} revisadas):</h2>`;
 
-                flexOnly.forEach(({ order, shipping }, index) => {
+                flexOrders.forEach(({ order, shipping }, index) => {
                     html += `
                         <div class="order-card">
                             <div class="order-header">
