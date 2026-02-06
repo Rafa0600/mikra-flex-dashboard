@@ -176,7 +176,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 10px;
             margin-bottom: 15px;
         }
@@ -239,6 +239,8 @@
         .progress-segment.pendiente { background: #9C27B0; }
         .progress-segment.en-camino { background: #00d9ff; color: #000; }
         .progress-segment.entregado { background: #00ff88; color: #000; }
+        .progress-segment.cancelado { background: #f44336; }
+        .progress-segment.reprogramado { background: #FF9800; color: #000; }
 
         .sort-controls {
             background: #1a1a1a;
@@ -280,6 +282,8 @@
         .envio-card.pendiente { border-left-color: #9C27B0; }
         .envio-card.en-camino { border-left-color: #00d9ff; }
         .envio-card.entregado { border-left-color: #00ff88; }
+        .envio-card.cancelado { border-left-color: #f44336; opacity: 0.7; }
+        .envio-card.reprogramado { border-left-color: #FF9800; }
 
         .envio-header {
             display: flex;
@@ -300,6 +304,8 @@
         .estado-badge.pendiente { background: #9C27B0; }
         .estado-badge.en-camino { background: #00d9ff; color: #000; }
         .estado-badge.entregado { background: #00ff88; color: #000; }
+        .estado-badge.cancelado { background: #f44336; }
+        .estado-badge.reprogramado { background: #FF9800; color: #000; }
 
         .envio-info {
             display: grid;
@@ -499,6 +505,8 @@
         .envio-card-simple.pendiente { border-left-color: #9C27B0; }
         .envio-card-simple.en-camino { border-left-color: #00d9ff; }
         .envio-card-simple.entregado { border-left-color: #00ff88; }
+        .envio-card-simple.cancelado { border-left-color: #f44336; opacity: 0.7; }
+        .envio-card-simple.reprogramado { border-left-color: #FF9800; }
 
         .simple-direccion {
             flex: 1;
@@ -517,10 +525,12 @@
         .simple-estado.pendiente { background: #9C27B0; }
         .simple-estado.en-camino { background: #00d9ff; color: #000; }
         .simple-estado.entregado { background: #00ff88; color: #000; }
+        .simple-estado.cancelado { background: #f44336; }
+        .simple-estado.reprogramado { background: #FF9800; color: #000; }
 
         @media (max-width: 768px) {
             .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
             
             .envio-info {
@@ -573,6 +583,14 @@
                 <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado">
                     <div class="stat-number" style="color:#00ff88;">0</div>
                     <div class="stat-label">ENTREGADOS</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('cancelado')" id="stat-cancelado">
+                    <div class="stat-number" style="color:#f44336;">0</div>
+                    <div class="stat-label">CANCELADOS</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('reprogramado')" id="stat-reprogramado">
+                    <div class="stat-number" style="color:#FF9800;">0</div>
+                    <div class="stat-label">REPROGRAMADOS</div>
                 </div>
             </div>
             <div class="progress-bar-container">
@@ -924,8 +942,14 @@
 
                     const shipping = await shipResponse.json();
                     
-                    if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
-                        return { order, shipping };
+                    // Incluir envíos FLEX que son para la fecha objetivo
+                    // También incluir cancelados y reprogramados del mismo día
+                    if (shipping.logistic_type === 'self_service') {
+                        if (esEntregaParaFecha(shipping, targetDate) || 
+                            shipping.status === 'cancelled' || 
+                            shipping.status === 'not_delivered') {
+                            return { order, shipping };
+                        }
                     }
                     return null;
                 } catch (e) {
@@ -957,7 +981,23 @@
         }
 
         function getOrderState(shipping) {
+            const status = shipping.status || '';
+            const substatus = shipping.substatus || '';
             const history = shipping.status_history || {};
+            
+            // 🔴 Detectar cancelado
+            if (status === 'cancelled' || substatus === 'cancelled' || 
+                substatus === 'buyer_cancelled' || substatus === 'cancelled_by_buyer' ||
+                status === 'not_delivered') {
+                return 'cancelado';
+            }
+            
+            // 🟠 Detectar reprogramado
+            if (substatus === 'rescheduled' || substatus === 'rescheduled_by_buyer' ||
+                substatus === 'delayed' || substatus === 'returning_to_sender' ||
+                substatus === 'waiting_for_withdrawal') {
+                return 'reprogramado';
+            }
             
             if (history.date_delivered) {
                 return 'entregado';
@@ -1040,7 +1080,7 @@
                     return horaB.localeCompare(horaA);
                 });
             } else if (currentSort === 'estado') {
-                const ordenEstados = { 'pendiente': 1, 'en-camino': 2, 'entregado': 3 };
+                const ordenEstados = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'en-camino': 3, 'entregado': 4 };
                 filtered.sort((a, b) => {
                     const estadoA = ordenEstados[getOrderState(a.shipping)];
                     const estadoB = ordenEstados[getOrderState(b.shipping)];
@@ -1064,23 +1104,31 @@
                 total: allFlexOrders.length,
                 pendiente: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
                 enCamino: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'en-camino').length,
-                entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
+                entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length,
+                cancelado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'cancelado').length,
+                reprogramado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'reprogramado').length
             };
 
             document.querySelector('#stat-all .stat-number').textContent = stats.total;
             document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
             document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
             document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
+            document.querySelector('#stat-cancelado .stat-number').textContent = stats.cancelado;
+            document.querySelector('#stat-reprogramado .stat-number').textContent = stats.reprogramado;
 
             const pendientePct = (stats.pendiente / stats.total) * 100;
             const enCaminoPct = (stats.enCamino / stats.total) * 100;
             const entregadoPct = (stats.entregado / stats.total) * 100;
+            const canceladoPct = (stats.cancelado / stats.total) * 100;
+            const reprogramadoPct = (stats.reprogramado / stats.total) * 100;
 
             const progressBar = document.getElementById('progressBar');
             progressBar.innerHTML = `
                 ${stats.pendiente > 0 ? `<div class="progress-segment pendiente" style="width:${pendientePct}%" onclick="filtrarPorEstado('pendiente')">${stats.pendiente}</div>` : ''}
                 ${stats.enCamino > 0 ? `<div class="progress-segment en-camino" style="width:${enCaminoPct}%" onclick="filtrarPorEstado('en-camino')">${stats.enCamino}</div>` : ''}
                 ${stats.entregado > 0 ? `<div class="progress-segment entregado" style="width:${entregadoPct}%" onclick="filtrarPorEstado('entregado')">${stats.entregado}</div>` : ''}
+                ${stats.reprogramado > 0 ? `<div class="progress-segment reprogramado" style="width:${reprogramadoPct}%" onclick="filtrarPorEstado('reprogramado')">${stats.reprogramado}</div>` : ''}
+                ${stats.cancelado > 0 ? `<div class="progress-segment cancelado" style="width:${canceladoPct}%" onclick="filtrarPorEstado('cancelado')">${stats.cancelado}</div>` : ''}
             `;
 
             let html = '';
@@ -1099,7 +1147,9 @@
                     const estadoLabelSimple = {
                         'pendiente': '⏳ Pendiente',
                         'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado'
+                        'entregado': '✅ Entregado',
+                        'cancelado': '❌ Cancelada',
+                        'reprogramado': '🔄 Reprogramado'
                     };
 
                     html += `
@@ -1136,7 +1186,9 @@
                     const estadoLabel = {
                         'pendiente': '📋 Pendiente',
                         'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado'
+                        'entregado': '✅ Entregado',
+                        'cancelado': '❌ Cancelada - No despaches',
+                        'reprogramado': '🔄 Reprogramado por comprador'
                     };
 
                     const cantidadItems = orderList.length;
