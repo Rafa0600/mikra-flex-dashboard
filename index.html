@@ -25,9 +25,40 @@
 
         h1 {
             color: #FFE600;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             text-align: center;
             font-size: 22px;
+        }
+
+        .account-indicator {
+            background: #2a2a2a;
+            padding: 10px 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .account-badge {
+            background: #3483FA;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 13px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .account-badge.mikra {
+            background: #9C27B0;
+        }
+
+        .account-badge.chaya {
+            background: #FF6B00;
         }
 
         .top-buttons {
@@ -478,46 +509,6 @@
             background: #FF6B00;
         }
 
-        /* VISTA SIMPLE */
-        .envio-card-simple {
-            background: #2a2a2a;
-            border-left: 5px solid;
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.3s;
-        }
-
-        .envio-card-simple:hover {
-            background: #333;
-            transform: translateX(5px);
-        }
-
-        .envio-card-simple.pendiente { border-left-color: #9C27B0; }
-        .envio-card-simple.en-camino { border-left-color: #00d9ff; }
-        .envio-card-simple.entregado { border-left-color: #00ff88; }
-
-        .simple-direccion {
-            flex: 1;
-            font-size: 15px;
-            font-weight: 500;
-        }
-
-        .simple-estado {
-            padding: 6px 15px;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 13px;
-            white-space: nowrap;
-        }
-
-        .simple-estado.pendiente { background: #9C27B0; }
-        .simple-estado.en-camino { background: #00d9ff; color: #000; }
-        .simple-estado.entregado { background: #00ff88; color: #000; }
-
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -531,11 +522,16 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX</h1>
+        <h1>🏍️ Envíos FLEX - Mikra + Chaya</h1>
+        
+        <div class="account-indicator">
+            <div class="account-badge mikra">🟣 MIKRA</div>
+            <div class="account-badge chaya">🟠 CHAYA</div>
+        </div>
 
         <div class="top-buttons">
-            <button onclick="toggleVista()" id="toggleVistaBtn">📋 Vista Simple</button>
-            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 Ver AYER</button>
+            <button onclick="cargarFlexHoy()" id="loadHoyBtn">📅 HOY</button>
+            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 AYER</button>
         </div>
 
         <div id="filterSection" class="filter-section hidden">
@@ -593,8 +589,14 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN - SOLO CHAYA PARA DEBUG
+        // CONFIGURACIÓN PERMANENTE DE AMBAS CUENTAS
         const CUENTAS = [
+            {
+                nombre: 'Mikra',
+                clientId: '6723747350775490',
+                proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev',
+                color: 'mikra'
+            },
             {
                 nombre: 'Chaya',
                 clientId: '1942700449315778',
@@ -608,7 +610,6 @@
         let currentZoneFilter = 'all';
         let currentSort = 'zona';
         let dropdownOpen = false;
-        let vistaSimple = false;
 
         const BARRIOS_CABA = [
             'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
@@ -790,10 +791,9 @@
 
         async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label} desde Mikra y Chaya...</div>`;
             
             let allOrdersFromAllAccounts = [];
-            const shippingIdsVistos = new Set(); // Para evitar duplicados
 
             for (const cuenta of CUENTAS) {
                 try {
@@ -804,20 +804,11 @@
                     }
 
                     const ordersFromAccount = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
-                    
-                    // Filtrar duplicados por shipping_id
-                    ordersFromAccount.forEach(item => {
-                        const shippingId = item.shipping.id;
-                        if (!shippingIdsVistos.has(shippingId)) {
-                            shippingIdsVistos.add(shippingId);
-                            allOrdersFromAllAccounts.push({
-                                ...item,
-                                cuentaNombre: cuenta.nombre,
-                                cuentaColor: cuenta.color,
-                                cuentaProxy: cuenta.proxy
-                            });
-                        }
-                    });
+                    allOrdersFromAllAccounts = allOrdersFromAllAccounts.concat(ordersFromAccount.map(item => ({
+                        ...item,
+                        cuentaNombre: cuenta.nombre,
+                        cuentaColor: cuenta.color
+                    })));
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
                 }
@@ -942,13 +933,6 @@
             });
 
             return Array.from(uniqueShippings.values());
-        }
-
-        function toggleVista() {
-            vistaSimple = !vistaSimple;
-            const btn = document.getElementById('toggleVistaBtn');
-            btn.textContent = vistaSimple ? '📊 Vista Completa' : '📋 Vista Simple';
-            aplicarFiltros();
         }
 
         function getOrderState(shipping) {
@@ -1082,31 +1066,8 @@
 
             if (orders.length === 0) {
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
-            } else if (vistaSimple) {
-                // VISTA SIMPLE - Solo dirección y estado
-                orders.forEach(({ orders: orderList, shipping }) => {
-                    const state = getOrderState(shipping);
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const direccionSimple = `${calle} ${numero}, ${ciudad}`;
-                    
-                    const estadoLabelSimple = {
-                        'pendiente': '⏳ Pendiente',
-                        'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado'
-                    };
-
-                    html += `
-                        <div class="envio-card-simple ${state}">
-                            <div class="simple-direccion">${direccionSimple}</div>
-                            <div class="simple-estado ${state}">${estadoLabelSimple[state]}</div>
-                        </div>
-                    `;
-                });
             } else {
-                // VISTA COMPLETA (original)
-                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor, cuentaProxy }) => {
+                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
@@ -1141,9 +1102,6 @@
 
                     html += `
                         <div class="envio-card ${state}">
-                            <div style="background: #FFE600; color: #000; padding: 8px 15px; margin: -15px -15px 15px -15px; border-radius: 12px 12px 0 0; font-weight: bold; font-size: 14px;">
-                                📦 WORKER: ${cuentaNombre} → ${cuentaProxy ? (cuentaProxy.includes('mikra') ? 'mikra-flex-proxy' : 'chaya-flex-proxy') : 'desconocido'}
-                            </div>
                             <div class="envio-header">
                                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                                     <span class="estado-badge ${state}">${estadoLabel[state]}</span>
@@ -1209,7 +1167,7 @@
                         </div>
                     `;
                 });
-            } // Cerrar el else de vista completa
+            }
 
             document.getElementById('content').innerHTML = html;
         }
@@ -1218,11 +1176,6 @@
             if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
                 toggleDropdown();
             }
-        });
-
-        // Auto-cargar HOY al entrar
-        window.addEventListener('DOMContentLoaded', () => {
-            cargarFlexHoy();
         });
     </script>
 </body>
