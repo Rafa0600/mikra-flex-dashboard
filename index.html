@@ -534,7 +534,6 @@
         <h1>🏍️ Envíos FLEX</h1>
 
         <div class="top-buttons">
-            <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
             <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 Ver AYER</button>
         </div>
 
@@ -594,13 +593,14 @@
 
     <script>
         // CONFIGURACIÓN PERMANENTE DE AMBAS CUENTAS
+        // TEMPORALMENTE SOLO CHAYA PARA DEBUGGING
         const CUENTAS = [
-            {
-                nombre: 'Mikra',
-                clientId: '6723747350775490',
-                proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev',
-                color: 'mikra'
-            },
+            // {
+            //     nombre: 'Mikra',
+            //     clientId: '6723747350775490',
+            //     proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev',
+            //     color: 'mikra'
+            // },
             {
                 nombre: 'Chaya',
                 clientId: '1942700449315778',
@@ -614,7 +614,6 @@
         let currentZoneFilter = 'all';
         let currentSort = 'zona';
         let dropdownOpen = false;
-        let vistaSimple = true; // Empezar en vista simple
         let envioExpandido = null; // Para guardar cuál envío está expandido
 
         const BARRIOS_CABA = [
@@ -950,14 +949,6 @@
             return Array.from(uniqueShippings.values());
         }
 
-        function toggleVista() {
-            vistaSimple = !vistaSimple;
-            envioExpandido = null; // Resetear envío expandido al cambiar vista
-            const btn = document.getElementById('toggleVistaBtn');
-            btn.textContent = vistaSimple ? '📊 Vista Completa' : '📋 Vista Simple';
-            aplicarFiltros();
-        }
-
         function expandirEnvio(shippingId) {
             if (envioExpandido === shippingId) {
                 // Si ya está expandido, colapsarlo
@@ -1099,8 +1090,8 @@
 
             if (orders.length === 0) {
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
-            } else if (vistaSimple) {
-                // VISTA SIMPLE - Solo dirección y estado, expandible
+            } else {
+                // SIEMPRE VISTA SIMPLE EXPANDIBLE
                 orders.forEach(({ orders: orderList, shipping }) => {
                     const state = getOrderState(shipping);
                     const shippingId = shipping.id;
@@ -1213,108 +1204,7 @@
                         `;
                     }
                 });
-            } else {
-                // VISTA COMPLETA (original)
-                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
-                    const state = getOrderState(shipping);
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
-                    
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
-                    const provincia = shipping.receiver_address?.state?.name || '';
-                    
-                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
-                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
-                    
-                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
-                                        shipping.shipping_option?.estimated_delivery_final?.date;
-                    
-                    const fechaFormateada = formatearFecha(fechaEntrega);
-                    const esHoy = fechaFormateada === 'Hoy';
-                    
-                    const history = shipping.status_history || {};
-                    const fechaCreacion = shipping.date_created;
-                    
-                    const estadoLabel = {
-                        'pendiente': '📋 Pendiente',
-                        'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado'
-                    };
-
-                    const cantidadItems = orderList.length;
-                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
-                    const orderId = orderList[0]?.id || '';
-                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-
-                    html += `
-                        <div class="envio-card ${state}">
-                            <div class="envio-header">
-                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                    <span class="estado-badge ${state}">${estadoLabel[state]}</span>
-                                    ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
-                                </div>
-                                <a href="${orderUrl}" target="_blank" class="order-link">
-                                    #${orderId}
-                                </a>
-                            </div>
-                            
-                            <div class="envio-info">
-                                <div class="info-item">
-                                    <div class="info-label">🌍 Zona</div>
-                                    <div class="info-value zona-highlight">${zona}</div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📍 Dirección</div>
-                                    <div class="info-value">
-                                        <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
-                                            ${calle} ${numero}, ${ciudad}
-                                        </a>
-                                    </div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">👤 Comprador</div>
-                                    <div class="info-value">${comprador}</div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📅 Entrega</div>
-                                    <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
-                                </div>
-                            </div>
-                            
-                            <div class="timeline">
-                                <div class="timeline-item">
-                                    <div class="timeline-dot done"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">📦 Recibida</div>
-                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">🚚 Enviado</div>
-                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">✅ Entregado</div>
-                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            } // Cerrar el else de vista completa
+            }
 
             document.getElementById('content').innerHTML = html;
         }
