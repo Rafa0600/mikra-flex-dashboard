@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envíos FLEX - Mikra + Chaya</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #FFE600;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 22px;
+        }
+
+        .top-buttons {
+            text-align: center;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #3483FA;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.btn-warning {
+            background: #FF9800;
+        }
+
+        .filter-section {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-row label {
+            color: #FFE600;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .search-select-wrapper {
+            flex: 1;
+            min-width: 250px;
+            position: relative;
+        }
+
+        .search-input-select {
+            width: 100%;
+            padding: 10px 40px 10px 15px;
+            background: #1a1a1a;
+            border: 2px solid #444;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .search-input-select:focus {
+            outline: none;
+            border-color: #FFE600;
+        }
+
+        .dropdown-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #888;
+            pointer-events: none;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            border: 2px solid #FFE600;
+            border-radius: 6px;
+            margin-top: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .dropdown-menu.active {
+            display: block;
+        }
+
+        .dropdown-search {
+            position: sticky;
+            top: 0;
+            background: #1a1a1a;
+            padding: 10px;
+            border-bottom: 1px solid #444;
+        }
+
+        .dropdown-search input {
+            width: 100%;
+            padding: 8px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .dropdown-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .dropdown-item:hover {
+            background: #2a2a2a;
+        }
+
+        .dropdown-item.selected {
+            background: #3483FA;
+        }
+
+        .stats-bar {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .stat-item:hover {
+            background: #333;
+        }
+
+        .stat-item.active {
+            background: #3483FA;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        .progress-bar-container {
+            background: #1a1a1a;
+            border-radius: 20px;
+            height: 30px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            display: flex;
+            position: relative;
+        }
+
+        .progress-segment {
+            transition: all 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .progress-segment:hover {
+            opacity: 0.8;
+        }
+
+        .progress-segment.pendiente { background: #9C27B0; }
+        .progress-segment.en-camino { background: #00d9ff; color: #000; }
+        .progress-segment.entregado { background: #00ff88; color: #000; }
+
+        .sort-controls {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .sort-btn {
+            padding: 8px 15px;
+            font-size: 13px;
+            background: #333;
+        }
+
+        .sort-btn.active {
+            background: #FFE600;
+            color: #000;
+        }
+
+        .envio-card {
+            background: #2a2a2a;
+            border-left: 5px solid;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .envio-card:hover {
+            background: #333;
+            transform: translateX(5px);
+        }
+
+        .envio-card.pendiente { border-left-color: #9C27B0; }
+        .envio-card.en-camino { border-left-color: #00d9ff; }
+        .envio-card.entregado { border-left-color: #00ff88; }
+
+        .envio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .estado-badge {
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .estado-badge.pendiente { background: #9C27B0; }
+        .estado-badge.en-camino { background: #00d9ff; color: #000; }
+        .estado-badge.entregado { background: #00ff88; color: #000; }
+
+        .envio-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .info-item {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .info-label {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .zona-highlight {
+            font-size: 16px;
+            font-weight: bold;
+            color: #FFE600;
+        }
+
+        .direccion-link, .order-link {
+            color: #3483FA;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .direccion-link:hover, .order-link:hover {
+            color: #FFE600;
+        }
+
+        .timeline {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            position: relative;
+        }
+
+        .timeline-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 25px;
+            width: 2px;
+            height: calc(100% - 8px);
+            background: #444;
+        }
+
+        .timeline-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        .timeline-dot.done {
+            background: #00ff88;
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+        }
+
+        .timeline-dot.pending {
+            background: #444;
+            border: 2px solid #666;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-label {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        .timeline-time {
+            color: #00ff88;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .timeline-time.pending {
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #FFE600;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #333;
+            border-top-color: #FFE600;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+            font-size: 16px;
+        }
+
+        .fecha-hoy {
+            color: #ff6b00;
+            font-weight: bold;
+        }
+
+        .items-count {
+            background: #FFE600;
+            color: #000;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .cuenta-badge {
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .cuenta-badge.mikra {
+            background: #9C27B0;
+        }
+
+        .cuenta-badge.chaya {
+            background: #FF6B00;
+        }
+
+        /* VISTA SIMPLE */
+        .envio-card-simple {
+            background: #2a2a2a;
+            border-left: 5px solid;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .envio-card-simple:hover {
+            background: #333;
+            transform: translateX(5px);
+        }
+
+        .envio-card-simple.pendiente { border-left-color: #9C27B0; }
+        .envio-card-simple.en-camino { border-left-color: #00d9ff; }
+        .envio-card-simple.entregado { border-left-color: #00ff88; }
+
+        .simple-direccion {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .simple-estado {
+            padding: 6px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .simple-estado.pendiente { background: #9C27B0; }
+        .simple-estado.en-camino { background: #00d9ff; color: #000; }
+        .simple-estado.entregado { background: #00ff88; color: #000; }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .envio-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏍️ Envíos FLEX</h1>
+
+        <div class="top-buttons">
+            <button onclick="toggleVista()" id="toggleVistaBtn">📋 Vista Simple</button>
+            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 Ver AYER</button>
+        </div>
+
+        <div id="filterSection" class="filter-section hidden">
+            <div class="filter-row">
+                <label>📍 Zona:</label>
+                <div class="search-select-wrapper">
+                    <div class="search-input-select" onclick="toggleDropdown()">
+                        <span id="selectedZone">Todas las zonas</span>
+                    </div>
+                    <span class="dropdown-icon">▼</span>
+                    <div id="dropdownMenu" class="dropdown-menu">
+                        <div class="dropdown-search">
+                            <input type="text" id="dropdownSearch" placeholder="🔍 Buscar zona..." oninput="filtrarDropdown()">
+                        </div>
+                        <div id="dropdownItems"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="statsSection" class="stats-bar hidden">
+            <div class="stats-grid">
+                <div class="stat-item" onclick="filtrarPorEstado('all')" id="stat-all">
+                    <div class="stat-number" style="color:#FFE600;">0</div>
+                    <div class="stat-label">TODOS</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente">
+                    <div class="stat-number" style="color:#9C27B0;">0</div>
+                    <div class="stat-label">PENDIENTES</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino">
+                    <div class="stat-number" style="color:#00d9ff;">0</div>
+                    <div class="stat-label">EN CAMINO</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado">
+                    <div class="stat-number" style="color:#00ff88;">0</div>
+                    <div class="stat-label">ENTREGADOS</div>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div id="sortSection" class="sort-controls hidden">
+            <label style="color: #FFE600; font-weight: bold;">📊 Ordenar por:</label>
+            <button class="sort-btn active" onclick="ordenarPor('zona')">🌍 Zona</button>
+            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')">📅 Fecha Entrega</button>
+            <button class="sort-btn" onclick="ordenarPor('hora-entrega')">🕐 Hora Entrega</button>
+            <button class="sort-btn" onclick="ordenarPor('estado')">📋 Estado</button>
+            <button class="sort-btn" onclick="ordenarPor('recientes')">🆕 Más Recientes</button>
+        </div>
+
+        <div id="content"></div>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
+        const CUENTAS = [
+            {
+                nombre: 'Mikra',
+                clientId: '6723747350775490',
+                proxy: 'https://mikra-flex-proxy.rafaelassir.workers.dev',
+                color: 'mikra'
+            },
+            {
+                nombre: 'Chaya',
+                clientId: '1942700449315778',
+                proxy: 'https://chaya-flex-proxy.rafaelassir.workers.dev',
+                color: 'chaya'
+            }
+        ];
+
+        let allFlexOrders = [];
+        let currentStateFilter = 'all';
+        let currentZoneFilter = 'all';
+        let currentSort = 'zona';
+        let dropdownOpen = false;
+        let vistaSimple = false;
+
+        const BARRIOS_CABA = [
+            'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
+            'Caballito', 'Chacarita', 'Coghlan', 'Colegiales', 'Constitución',
+            'Flores', 'Floresta', 'La Boca', 'Liniers', 'Mataderos',
+            'Monte Castro', 'Monserrat', 'Nueva Pompeya', 'Núñez', 'Palermo',
+            'Parque Avellaneda', 'Parque Chacabuco', 'Parque Patricios', 'Paternal',
+            'Recoleta', 'Retiro', 'Saavedra', 'San Cristóbal', 'San Nicolás',
+            'San Telmo', 'Velez Sarsfield', 'Versailles', 'Villa Crespo',
+            'Villa Devoto', 'Villa General Mitre', 'Villa Lugano', 'Villa Luro',
+            'Villa Ortúzar', 'Villa Pueyrredon', 'Villa Pueyrredón', 'Villa Real',
+            'Villa Santa Rita', 'Villa Urquiza'
+        ];
+
+        function normalizar(texto) {
+            return texto.toLowerCase().trim()
+                .replace(/á/g, 'a').replace(/é/g, 'e')
+                .replace(/í/g, 'i').replace(/ó/g, 'o')
+                .replace(/ú/g, 'u').replace(/ñ/g, 'n');
+        }
+
+        function esBarrioCABA(nombre) {
+            const nombreNorm = normalizar(nombre);
+            return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
+        }
+
+        function getZonaDetallada(barrio, ciudad) {
+            const barrioNorm = (barrio || '').trim();
+            const ciudadNorm = (ciudad || '').trim();
+            
+            if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
+                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
+                    return `CABA - ${barrioNorm}`;
+                }
+                return 'CABA - Otros';
+            }
+            
+            if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
+                const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
+                return `CABA - ${nombreBarrio}`;
+            }
+            
+            const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
+            if (zonaNorte.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
+                return `GBA Norte - ${ciudadNorm || barrioNorm}`;
+            }
+            
+            const zonaOeste = ['La Reja', 'Morón', 'Hurlingham', 'Ituzaingó', 'Ramos Mejía', 'Ciudadela', 'Santos Lugares', 'Villa Luzuriaga', 'Luzuriaga', 'Ingeniero Allan', 'Castelar', 'El Palomar', 'Ciudad Jardin Del Palomar', 'Caseros', 'San Justo', 'San justo', 'Villa Sarmiento', 'villa sarmiento'];
+            if (zonaOeste.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
+                return `GBA Oeste - ${ciudadNorm || barrioNorm}`;
+            }
+            
+            const zonaSur = ['Lomas de Zamora', 'Banfield', 'Lanús', 'Avellaneda', 'Quilmes', 'Sarandi', 'Sarandí', 'Tristán Suárez', 'Carlos Spegazzini', 'Bernal Oeste', 'Temperley', 'Remedios De Escalada', 'Valentin Alsina', 'Berazategui', 'Florencio Varela', 'Wilde'];
+            if (zonaSur.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
+                return `GBA Sur - ${ciudadNorm || barrioNorm}`;
+            }
+            
+            const interior = ['Zárate', 'Campana', 'La Plata', 'Mar del Plata', 'Bahía Blanca'];
+            if (interior.some(z => normalizar(z) === normalizar(ciudadNorm) || normalizar(z) === normalizar(barrioNorm))) {
+                return `Buenos Aires - ${ciudadNorm || barrioNorm}`;
+            }
+            
+            return ciudadNorm || barrioNorm || 'Otras zonas';
+        }
+
+        function esCABA(zona) {
+            return zona.startsWith('CABA');
+        }
+
+        function toggleDropdown() {
+            dropdownOpen = !dropdownOpen;
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdownOpen) {
+                menu.classList.add('active');
+                document.getElementById('dropdownSearch').focus();
+            } else {
+                menu.classList.remove('active');
+            }
+        }
+
+        function filtrarDropdown() {
+            const search = normalizar(document.getElementById('dropdownSearch').value);
+            const items = document.querySelectorAll('.dropdown-item');
+            items.forEach(item => {
+                const text = normalizar(item.textContent);
+                item.style.display = text.includes(search) ? 'block' : 'none';
+            });
+        }
+
+        function selectZone(zona) {
+            currentZoneFilter = zona;
+            const displayText = zona === 'all' ? 'Todas las zonas' : zona.split('(')[0].trim();
+            document.getElementById('selectedZone').textContent = displayText;
+            toggleDropdown();
+            aplicarFiltros();
+        }
+
+        async function obtenerTokenCuenta(cuenta) {
+            try {
+                // Llamar al worker para obtener el token válido
+                const response = await fetch(`${cuenta.proxy}/get-token`);
+                const data = await response.json();
+
+                if (data.access_token) {
+                    // Guardar user_id en una variable temporal si no lo tenemos
+                    if (data.user_id && !sessionStorage.getItem(`${cuenta.nombre.toLowerCase()}_user_id`)) {
+                        sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
+                    }
+                    return data.access_token;
+                }
+
+                if (data.error === 'no_token') {
+                    console.error(`Token no configurado para ${cuenta.nombre}`);
+                }
+
+                return null;
+            } catch (error) {
+                console.error(`Error obteniendo token de ${cuenta.nombre}:`, error);
+                return null;
+            }
+        }
+
+        function formatearFecha(fechaISO) {
+            if (!fechaISO) return '❌';
+            
+            const fecha = new Date(fechaISO);
+            const hoy = new Date();
+            
+            hoy.setHours(0, 0, 0, 0);
+            fecha.setHours(0, 0, 0, 0);
+            
+            const diffDias = Math.floor((fecha - hoy) / (1000 * 60 * 60 * 24));
+            
+            if (diffDias === 0) return 'Hoy';
+            if (diffDias === -1) return 'Ayer';
+            if (diffDias === 1) return 'Mañana';
+            
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const dia = dias[fecha.getDay()];
+            const fechaFormato = fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+            
+            return `${dia} ${fechaFormato}`;
+        }
+
+        function formatearSoloHora(fechaISO) {
+            if (!fechaISO) return null;
+            const fecha = new Date(fechaISO);
+            return fecha.toLocaleString('es-AR', { 
+                timeZone: 'America/Argentina/Buenos_Aires',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function esEntregaParaFecha(shipping, targetDate) {
+            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                                shipping.shipping_option?.estimated_delivery_final?.date;
+            
+            if (!fechaEntrega) return false;
+            
+            const entrega = new Date(fechaEntrega);
+            entrega.setHours(0, 0, 0, 0);
+            
+            return entrega.getTime() === targetDate.getTime();
+        }
+
+        async function cargarFlexHoy() {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            await cargarFlexPorFecha(hoy, 'HOY');
+        }
+
+        async function cargarFlexAyer() {
+            const ayer = new Date();
+            ayer.setDate(ayer.getDate() - 1);
+            ayer.setHours(0, 0, 0, 0);
+            await cargarFlexPorFecha(ayer, 'AYER');
+        }
+
+        async function cargarFlexPorFecha(targetDate, label) {
+            const content = document.getElementById('content');
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
+            
+            let allOrdersFromAllAccounts = [];
+            const shippingIdsVistos = new Set(); // Para evitar duplicados
+
+            for (const cuenta of CUENTAS) {
+                try {
+                    const token = await obtenerTokenCuenta(cuenta);
+                    if (!token) {
+                        console.error(`No hay token para ${cuenta.nombre}`);
+                        continue;
+                    }
+
+                    const ordersFromAccount = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
+                    
+                    // Filtrar duplicados por shipping_id
+                    ordersFromAccount.forEach(item => {
+                        const shippingId = item.shipping.id;
+                        if (!shippingIdsVistos.has(shippingId)) {
+                            shippingIdsVistos.add(shippingId);
+                            allOrdersFromAllAccounts.push({
+                                ...item,
+                                cuentaNombre: cuenta.nombre,
+                                cuentaColor: cuenta.color
+                            });
+                        }
+                    });
+                } catch (error) {
+                    console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
+                }
+            }
+
+            if (allOrdersFromAllAccounts.length === 0) {
+                content.innerHTML = `
+                    <div class="error">
+                        ⚠️ No hay envíos FLEX para ${label}<br><br>
+                        Si este es el primer uso, ejecutá el setup primero para configurar las cuentas.
+                        <br><br>
+                        <button onclick="window.location.href='setup-flex-seguro.html'" style="margin-top:15px;">
+                            ⚙️ Ir a Configuración
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            allFlexOrders = allOrdersFromAllAccounts;
+
+            const zonaCounts = new Map();
+            allFlexOrders.forEach(({ shipping }) => {
+                const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                const ciudad = shipping.receiver_address?.city?.name || '';
+                const zona = getZonaDetallada(barrio, ciudad);
+                zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
+            });
+
+            const dropdownItems = document.getElementById('dropdownItems');
+            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${allFlexOrders.length})</div>`;
+            
+            let cabaTotal = 0;
+            Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
+                if (esCABA(zona)) cabaTotal += count;
+            });
+            if (cabaTotal > 0) {
+                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('CABA')">🏙️ CABA - Todos (${cabaTotal})</div>`;
+            }
+            
+            Array.from(zonaCounts.entries()).sort().forEach(([zona, count]) => {
+                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
+            });
+
+            document.getElementById('filterSection').classList.remove('hidden');
+            document.getElementById('statsSection').classList.remove('hidden');
+            document.getElementById('sortSection').classList.remove('hidden');
+            displayOrders('all');
+        }
+
+        async function cargarOrdenesDeCuenta(cuenta, token, targetDate) {
+            let tempOrders = [];
+            
+            const allOrderPromises = [];
+            const totalPages = 20;
+
+            // Obtener seller ID del sessionStorage
+            const cuentaKey = cuenta.nombre.toLowerCase();
+            let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
+
+            if (!sellerId) {
+                // Si no está en session, hacer una llamada para obtenerlo
+                try {
+                    const tokenResponse = await fetch(`${cuenta.proxy}/get-token`);
+                    const tokenData = await tokenResponse.json();
+                    if (tokenData.user_id) {
+                        sellerId = tokenData.user_id;
+                        sessionStorage.setItem(`${cuentaKey}_user_id`, sellerId);
+                    }
+                } catch (error) {
+                    console.error(`Error obteniendo user_id para ${cuenta.nombre}:`, error);
+                }
+            }
+
+            if (!sellerId) {
+                console.error(`No se encontró user_id para ${cuenta.nombre}`);
+                return [];
+            }
+
+            for (let page = 0; page < totalPages; page++) {
+                allOrderPromises.push(
+                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json())
+                );
+            }
+
+            const allPagesData = await Promise.all(allOrderPromises);
+            const allOrders = allPagesData.flatMap(data => data.results || []);
+
+            const shippingPromises = allOrders.map(async (order) => {
+                try {
+                    const shippingId = order.shipping?.id;
+                    if (!shippingId) return null;
+
+                    const shipResponse = await fetch(`${cuenta.proxy}/api/shipments/${shippingId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    const shipping = await shipResponse.json();
+                    
+                    if (shipping.logistic_type === 'self_service' && esEntregaParaFecha(shipping, targetDate)) {
+                        return { order, shipping };
+                    }
+                    return null;
+                } catch (e) {
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(shippingPromises);
+            tempOrders = results.filter(item => item !== null);
+
+            const uniqueShippings = new Map();
+            tempOrders.forEach(({ order, shipping }) => {
+                const shippingId = shipping.id;
+                if (!uniqueShippings.has(shippingId)) {
+                    uniqueShippings.set(shippingId, { orders: [order], shipping });
+                } else {
+                    uniqueShippings.get(shippingId).orders.push(order);
+                }
+            });
+
+            return Array.from(uniqueShippings.values());
+        }
+
+        function toggleVista() {
+            vistaSimple = !vistaSimple;
+            const btn = document.getElementById('toggleVistaBtn');
+            btn.textContent = vistaSimple ? '📊 Vista Completa' : '📋 Vista Simple';
+            aplicarFiltros();
+        }
+
+        function getOrderState(shipping) {
+            const history = shipping.status_history || {};
+            
+            if (history.date_delivered) {
+                return 'entregado';
+            }
+            
+            if (history.date_shipped) {
+                return 'en-camino';
+            }
+            
+            return 'pendiente';
+        }
+
+        function filtrarPorEstado(estado) {
+            currentStateFilter = estado;
+            
+            document.querySelectorAll('.stat-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`stat-${estado}`).classList.add('active');
+            
+            aplicarFiltros();
+        }
+
+        function ordenarPor(tipo) {
+            currentSort = tipo;
+            
+            document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            aplicarFiltros();
+        }
+
+        function aplicarFiltros() {
+            let filtered = allFlexOrders;
+
+            if (currentStateFilter !== 'all') {
+                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
+            }
+
+            if (currentZoneFilter !== 'all') {
+                filtered = filtered.filter(({ shipping }) => {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaDetallada(barrio, ciudad);
+                    
+                    if (currentZoneFilter === 'CABA') {
+                        return esCABA(zona);
+                    }
+                    
+                    return zona === currentZoneFilter;
+                });
+            }
+
+            if (currentSort === 'zona') {
+                filtered.sort((a, b) => {
+                    const zonaA = getZonaDetallada(
+                        a.shipping.receiver_address?.neighborhood?.name || '',
+                        a.shipping.receiver_address?.city?.name || ''
+                    );
+                    const zonaB = getZonaDetallada(
+                        b.shipping.receiver_address?.neighborhood?.name || '',
+                        b.shipping.receiver_address?.city?.name || ''
+                    );
+                    return zonaA.localeCompare(zonaB);
+                });
+            } else if (currentSort === 'fecha-entrega') {
+                filtered.sort((a, b) => {
+                    const fechaA = a.shipping.shipping_option?.estimated_delivery_time?.date || 
+                                  a.shipping.shipping_option?.estimated_delivery_final?.date || '';
+                    const fechaB = b.shipping.shipping_option?.estimated_delivery_time?.date || 
+                                  b.shipping.shipping_option?.estimated_delivery_final?.date || '';
+                    return fechaA.localeCompare(fechaB);
+                });
+            } else if (currentSort === 'hora-entrega') {
+                filtered.sort((a, b) => {
+                    const horaA = a.shipping.status_history?.date_delivered || 
+                                 a.shipping.status_history?.date_shipped || 
+                                 a.shipping.date_created || '';
+                    const horaB = b.shipping.status_history?.date_delivered || 
+                                 b.shipping.status_history?.date_shipped || 
+                                 b.shipping.date_created || '';
+                    return horaB.localeCompare(horaA);
+                });
+            } else if (currentSort === 'estado') {
+                const ordenEstados = { 'pendiente': 1, 'en-camino': 2, 'entregado': 3 };
+                filtered.sort((a, b) => {
+                    const estadoA = ordenEstados[getOrderState(a.shipping)];
+                    const estadoB = ordenEstados[getOrderState(b.shipping)];
+                    return estadoA - estadoB;
+                });
+            } else if (currentSort === 'recientes') {
+                filtered.sort((a, b) => {
+                    const fechaA = a.shipping.date_created || '';
+                    const fechaB = b.shipping.date_created || '';
+                    return fechaB.localeCompare(fechaA);
+                });
+            }
+
+            displayOrders(currentStateFilter, filtered);
+        }
+
+        function displayOrders(filterType, customFiltered = null) {
+            const orders = customFiltered || allFlexOrders;
+
+            const stats = {
+                total: allFlexOrders.length,
+                pendiente: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
+                enCamino: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'en-camino').length,
+                entregado: allFlexOrders.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length
+            };
+
+            document.querySelector('#stat-all .stat-number').textContent = stats.total;
+            document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
+            document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
+            document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
+
+            const pendientePct = (stats.pendiente / stats.total) * 100;
+            const enCaminoPct = (stats.enCamino / stats.total) * 100;
+            const entregadoPct = (stats.entregado / stats.total) * 100;
+
+            const progressBar = document.getElementById('progressBar');
+            progressBar.innerHTML = `
+                ${stats.pendiente > 0 ? `<div class="progress-segment pendiente" style="width:${pendientePct}%" onclick="filtrarPorEstado('pendiente')">${stats.pendiente}</div>` : ''}
+                ${stats.enCamino > 0 ? `<div class="progress-segment en-camino" style="width:${enCaminoPct}%" onclick="filtrarPorEstado('en-camino')">${stats.enCamino}</div>` : ''}
+                ${stats.entregado > 0 ? `<div class="progress-segment entregado" style="width:${entregadoPct}%" onclick="filtrarPorEstado('entregado')">${stats.entregado}</div>` : ''}
+            `;
+
+            let html = '';
+
+            if (orders.length === 0) {
+                html = '<div class="no-results">No hay envíos con estos filtros</div>';
+            } else if (vistaSimple) {
+                // VISTA SIMPLE - Solo dirección y estado
+                orders.forEach(({ orders: orderList, shipping }) => {
+                    const state = getOrderState(shipping);
+                    const calle = shipping.receiver_address?.street_name || '';
+                    const numero = shipping.receiver_address?.street_number || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const direccionSimple = `${calle} ${numero}, ${ciudad}`;
+                    
+                    const estadoLabelSimple = {
+                        'pendiente': '⏳ Pendiente',
+                        'en-camino': '🚚 En camino',
+                        'entregado': '✅ Entregado'
+                    };
+
+                    html += `
+                        <div class="envio-card-simple ${state}">
+                            <div class="simple-direccion">${direccionSimple}</div>
+                            <div class="simple-estado ${state}">${estadoLabelSimple[state]}</div>
+                        </div>
+                    `;
+                });
+            } else {
+                // VISTA COMPLETA (original)
+                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
+                    const state = getOrderState(shipping);
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaDetallada(barrio, ciudad);
+                    
+                    const calle = shipping.receiver_address?.street_name || '';
+                    const numero = shipping.receiver_address?.street_number || '';
+                    const provincia = shipping.receiver_address?.state?.name || '';
+                    
+                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+                    
+                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                                        shipping.shipping_option?.estimated_delivery_final?.date;
+                    
+                    const fechaFormateada = formatearFecha(fechaEntrega);
+                    const esHoy = fechaFormateada === 'Hoy';
+                    
+                    const history = shipping.status_history || {};
+                    const fechaCreacion = shipping.date_created;
+                    
+                    const estadoLabel = {
+                        'pendiente': '📋 Pendiente',
+                        'en-camino': '🚚 En camino',
+                        'entregado': '✅ Entregado'
+                    };
+
+                    const cantidadItems = orderList.length;
+                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                    const orderId = orderList[0]?.id || '';
+                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+
+                    html += `
+                        <div class="envio-card ${state}">
+                            <div class="envio-header">
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <span class="estado-badge ${state}">${estadoLabel[state]}</span>
+                                    ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
+                                    <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
+                                </div>
+                                <a href="${orderUrl}" target="_blank" class="order-link">
+                                    #${orderId}
+                                </a>
+                            </div>
+                            
+                            <div class="envio-info">
+                                <div class="info-item">
+                                    <div class="info-label">🌍 Zona</div>
+                                    <div class="info-value zona-highlight">${zona}</div>
+                                </div>
+                                
+                                <div class="info-item">
+                                    <div class="info-label">📍 Dirección</div>
+                                    <div class="info-value">
+                                        <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
+                                            ${calle} ${numero}, ${ciudad}
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-item">
+                                    <div class="info-label">👤 Comprador</div>
+                                    <div class="info-value">${comprador}</div>
+                                </div>
+                                
+                                <div class="info-item">
+                                    <div class="info-label">📅 Entrega</div>
+                                    <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline">
+                                <div class="timeline-item">
+                                    <div class="timeline-dot done"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-label">📦 Recibida</div>
+                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="timeline-item">
+                                    <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-label">🚚 Enviado</div>
+                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="timeline-item">
+                                    <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-label">✅ Entregado</div>
+                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } // Cerrar el else de vista completa
+
+            document.getElementById('content').innerHTML = html;
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
+                toggleDropdown();
+            }
+        });
+
+        // Auto-cargar HOY al entrar
+        window.addEventListener('DOMContentLoaded', () => {
+            cargarFlexHoy();
+        });
+    </script>
+</body>
+</html>
