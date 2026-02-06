@@ -950,10 +950,13 @@
         }
 
         function expandirEnvio(shippingId) {
+            console.log('Click en envío:', shippingId);
             if (envioExpandido === shippingId) {
                 // Si ya está expandido, colapsarlo
+                console.log('Colapsando envío');
                 envioExpandido = null;
             } else {
+                console.log('Expandiendo envío');
                 envioExpandido = shippingId;
             }
             aplicarFiltros();
@@ -1092,7 +1095,7 @@
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
             } else {
                 // SIEMPRE VISTA SIMPLE EXPANDIBLE
-                orders.forEach(({ orders: orderList, shipping }) => {
+                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
                     const state = getOrderState(shipping);
                     const shippingId = shipping.id;
                     const calle = shipping.receiver_address?.street_name || '';
@@ -1106,8 +1109,11 @@
                         'entregado': '✅ Entregado'
                     };
 
+                    console.log('Renderizando envío:', shippingId, 'de cuenta:', cuentaNombre);
+
                     // Si este envío está expandido, mostrar vista completa
                     if (envioExpandido === shippingId) {
+                        console.log('  → Este envío ESTÁ expandido');
                         const barrio = shipping.receiver_address?.neighborhood?.name || '';
                         const zona = getZonaDetallada(barrio, ciudad);
                         const provincia = shipping.receiver_address?.state?.name || '';
@@ -1130,8 +1136,16 @@
                         const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
                         html += `
-                            <div class="envio-card ${state}" onclick="expandirEnvio('${shippingId}')" style="cursor: pointer;">
-                                <div class="envio-header">
+                            <div class="envio-card ${state}" style="cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #FFE600;">
+                                    <div style="font-size: 16px; font-weight: bold; color: #FFE600;">
+                                        📦 CUENTA: ${cuentaNombre || 'Chaya'}
+                                    </div>
+                                    <div onclick="expandirEnvio('${shippingId}')" style="cursor: pointer; font-size: 24px; color: #FFE600; padding: 0 10px;">
+                                        ✕
+                                    </div>
+                                </div>
+                                <div class="envio-header" onclick="expandirEnvio('${shippingId}')">
                                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                                         <span class="estado-badge ${state}">${estadoLabel[state]}</span>
                                         ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
@@ -1195,6 +1209,7 @@
                             </div>
                         `;
                     } else {
+                        console.log('  → Este envío NO está expandido (colapsado)');
                         // Vista simple colapsada
                         html += `
                             <div class="envio-card-simple ${state}" onclick="expandirEnvio('${shippingId}')" style="cursor: pointer;">
