@@ -719,11 +719,13 @@
             border-color: #66ffaa;
         }
 
-        #mapFrame {
-            width: 100%;
-            height: 70vh;
-            border: none;
-            border-radius: 8px;
+        #mapFrame a {
+            transition: all 0.3s;
+        }
+
+        #mapFrame a:hover {
+            color: #FFE600 !important;
+            transform: translateX(5px);
         }
 
         @media (max-width: 768px) {
@@ -747,10 +749,6 @@
             .map-container {
                 margin: 10px;
                 padding: 10px;
-            }
-
-            #mapFrame {
-                height: 60vh;
             }
         }
     </style>
@@ -846,7 +844,7 @@
                         ✅ Entregados (<span id="mapCountEntregado">0</span>)
                     </button>
                 </div>
-                <iframe id="mapFrame" src=""></iframe>
+                <div id="mapFrame" style="background: #1a1a1a; border-radius: 8px; min-height: 300px;"></div>
             </div>
         </div>
     </div>
@@ -974,6 +972,23 @@
         }
 
         // PUNTO 1: Calcular día anterior laborable (viernes si es domingo/lunes)
+        function getDiaHabilActual() {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay(); // 0=Dom, 6=Sáb
+            
+            // Si es sábado (6), cargar lunes (+2 días)
+            if (diaSemana === 6) {
+                hoy.setDate(hoy.getDate() + 2);
+            }
+            // Si es domingo (0), cargar lunes (+1 día)
+            else if (diaSemana === 0) {
+                hoy.setDate(hoy.getDate() + 1);
+            }
+            
+            hoy.setHours(0, 0, 0, 0);
+            return hoy;
+        }
+
         function getDiaAnteriorLaborable() {
             const hoy = new Date();
             const diaSemana = hoy.getDay(); // 0=Dom, 1=Lun, ..., 6=Sáb
@@ -987,6 +1002,10 @@
             // Si hoy es lunes (1), retroceder al viernes (3 días)
             else if (diaSemana === 1) {
                 diasAtras = 3;
+            }
+            // Si hoy es sábado (6), retroceder al viernes (1 día)
+            else if (diaSemana === 6) {
+                diasAtras = 1;
             }
             
             const diaAnterior = new Date();
@@ -1841,68 +1860,105 @@
             });
 
             if (ordersParaMapa.length === 0) {
-                document.getElementById('mapFrame').src = 'about:blank';
+                document.getElementById('mapFrame').innerHTML = '<div style="text-align:center; padding:40px; color:#888;">No hay entregas para mostrar con los filtros seleccionados</div>';
                 return;
             }
 
-            // Crear marcadores para Google Maps
-            let markers = ordersParaMapa.map(({ shipping }, index) => {
-                const lat = shipping.receiver_address?.latitude;
-                const lng = shipping.receiver_address?.longitude;
-                const calle = shipping.receiver_address?.street_name || '';
-                const numero = shipping.receiver_address?.street_number || '';
+            // Crear HTML con lista de direcciones clickeables
+            let mapHTML = '<div style="padding: 20px; max-height: 70vh; overflow-y: auto;">';
+            
+            let currentZona = '';
+            let zonasAgrupadas = {};
+            
+            // Agrupar por zona
+            ordersParaMapa.forEach(({ shipping, orders: orderList, cuentaNombre }) => {
+                const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
-                const state = getOrderState(shipping);
+                const zona = getZonaDetallada(barrio, ciudad);
                 
-                // Color según estado
-                let color = 'purple'; // pendiente
-                if (state === 'en-camino') color = 'blue';
-                if (state === 'entregado') color = 'green';
-                if (state === 'reprogramado') color = 'orange';
-
-                if (lat && lng) {
-                    return `markers=color:${color}%7C${lat},${lng}`;
+                if (!zonasAgrupadas[zona]) {
+                    zonasAgrupadas[zona] = [];
                 }
-                return null;
-            }).filter(m => m !== null);
-
-            if (markers.length === 0) {
-                document.getElementById('mapFrame').src = 'about:blank';
-                return;
-            }
-
-            // Calcular centro del mapa (promedio de coords)
-            let centerLat = 0;
-            let centerLng = 0;
-            let validCoords = 0;
-
-            ordersParaMapa.forEach(({ shipping }) => {
-                const lat = shipping.receiver_address?.latitude;
-                const lng = shipping.receiver_address?.longitude;
-                if (lat && lng) {
-                    centerLat += lat;
-                    centerLng += lng;
-                    validCoords++;
-                }
+                
+                zonasAgrupadas[zona].push({ shipping, orderList, cuentaNombre });
             });
-
-            if (validCoords > 0) {
-                centerLat /= validCoords;
-                centerLng /= validCoords;
-            } else {
-                // Default: Buenos Aires
-                centerLat = -34.6037;
-                centerLng = -58.3816;
-            }
-
-            // URL de Google Maps Static API (modo embed iframe)
-            const markersParam = markers.join('&');
-            const zoom = validCoords > 10 ? '11' : '12';
             
-            // Usar iframe embed de Google Maps con múltiples destinos
-            const iframeSrc = `https://www.google.com/maps/embed/v1/view?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dydOmZW7E5SkqQ&center=${centerLat},${centerLng}&zoom=${zoom}`;
+            // Ordenar zonas alfabéticamente
+            const zonasOrdenadas = Object.keys(zonasAgrupadas).sort();
             
-            document.getElementById('mapFrame').src = iframeSrc;
+            zonasOrdenadas.forEach(zona => {
+                const enviosZona = zonasAgrupadas[zona];
+                
+                mapHTML += `
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #FFE600; margin-bottom: 15px; font-size: 18px; border-bottom: 2px solid #FFE600; padding-bottom: 8px;">
+                            📍 ${zona} (${enviosZona.length})
+                        </h3>
+                `;
+                
+                enviosZona.forEach(({ shipping, orderList, cuentaNombre }) => {
+                    const state = getOrderState(shipping);
+                    const calle = shipping.receiver_address?.street_name || '';
+                    const numero = shipping.receiver_address?.street_number || '';
+                    const ciudadNombre = shipping.receiver_address?.city?.name || '';
+                    const provincia = shipping.receiver_address?.state?.name || '';
+                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                    const orderId = orderList[0]?.id || '';
+                    
+                    const direccionCompleta = `${calle} ${numero}, ${ciudadNombre}, ${provincia}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                    
+                    // Color de badge según estado
+                    let badgeColor = '#9C27B0'; // pendiente
+                    let badgeText = '⏳ Pendiente';
+                    if (state === 'en-camino') {
+                        badgeColor = '#00d9ff';
+                        badgeText = '🚚 En camino';
+                    } else if (state === 'entregado') {
+                        badgeColor = '#00ff88';
+                        badgeText = '✅ Entregado';
+                    } else if (state === 'reprogramado') {
+                        badgeColor = '#FF9800';
+                        badgeText = '🔄 Reprogramado';
+                    }
+                    
+                    // Badge de cuenta
+                    let cuentaBadge = '';
+                    if (cuentaNombre === 'Mikra') {
+                        cuentaBadge = '<span style="background:#9C27B0; color:white; padding:3px 8px; border-radius:10px; font-size:11px; margin-left:8px;">🟣 Mikra</span>';
+                    } else if (cuentaNombre === 'Chaya') {
+                        cuentaBadge = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:11px; margin-left:8px;">🟠 Chaya</span>';
+                    }
+                    
+                    mapHTML += `
+                        <div style="background: #2a2a2a; border-left: 4px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                                <div>
+                                    <span style="background:${badgeColor}; color:${state === 'en-camino' || state === 'entregado' || state === 'reprogramado' ? '#000' : '#fff'}; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:bold;">${badgeText}</span>
+                                    ${cuentaBadge}
+                                </div>
+                                <a href="${orderUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:12px;">#${orderId}</a>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <strong style="color:#fff;">👤 ${comprador}</strong>
+                            </div>
+                            <div>
+                                <a href="${googleMapsUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:14px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 18px;">📍</span>
+                                    ${calle} ${numero}, ${ciudadNombre}
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                mapHTML += '</div>';
+            });
+            
+            mapHTML += '</div>';
+            
+            document.getElementById('mapFrame').innerHTML = mapHTML;
         }
 
         function getDiaHabilActual() {
