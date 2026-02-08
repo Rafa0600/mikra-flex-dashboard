@@ -817,7 +817,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.9</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.0</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -1232,19 +1232,20 @@
             const shippingIdsVistos = new Set();
 
             const totalCuentas = CUENTAS.length;
-            let cuentasCompletadas = 0;
-
-            for (const cuenta of CUENTAS) {
+            
+            for (let i = 0; i < CUENTAS.length; i++) {
+                const cuenta = CUENTAS[i];
+                
                 try {
-                    document.getElementById('loadingDetails').textContent = `Cargando cuenta ${cuenta.nombre}...`;
+                    // Actualizar barra de progreso al comenzar cada cuenta
+                    const baseProgress = Math.round((i / totalCuentas) * 100);
+                    document.getElementById('progressFill').style.width = baseProgress + '%';
+                    document.getElementById('progressFill').textContent = baseProgress + '%';
+                    document.getElementById('loadingDetails').textContent = `Iniciando carga de ${cuenta.nombre}...`;
                     
                     const token = await obtenerTokenCuenta(cuenta);
                     if (!token) {
                         console.error(`No hay token para ${cuenta.nombre}`);
-                        cuentasCompletadas++;
-                        const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
-                        document.getElementById('progressFill').style.width = progreso + '%';
-                        document.getElementById('progressFill').textContent = progreso + '%';
                         continue;
                     }
 
@@ -1262,17 +1263,13 @@
                         }
                     });
                     
-                    cuentasCompletadas++;
-                    const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
-                    document.getElementById('progressFill').style.width = progreso + '%';
-                    document.getElementById('progressFill').textContent = progreso + '%';
+                    // Actualizar progreso al completar cuenta
+                    const completedProgress = Math.round(((i + 1) / totalCuentas) * 100);
+                    document.getElementById('progressFill').style.width = completedProgress + '%';
+                    document.getElementById('progressFill').textContent = completedProgress + '%';
                     
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
-                    cuentasCompletadas++;
-                    const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
-                    document.getElementById('progressFill').style.width = progreso + '%';
-                    document.getElementById('progressFill').textContent = progreso + '%';
                 }
             }
 
@@ -1332,9 +1329,6 @@
         async function cargarOrdenesDeCuenta(cuenta, token, targetDate) {
             let tempOrders = [];
             
-            const allOrderPromises = [];
-            const totalPages = 40; // AUMENTADO de 20 a 40 para cargar más órdenes
-
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
 
@@ -1356,24 +1350,51 @@
                 return [];
             }
 
-            // Cargar todas las páginas
-            for (let page = 0; page < totalPages; page++) {
-                allOrderPromises.push(
-                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }).then(r => r.json())
-                );
-            }
+            // PASO 1: Cargar TODAS las órdenes de forma progresiva
+            let allOrders = [];
+            let offset = 0;
+            let hasMore = true;
+            const limit = 50;
+            let pageNum = 0;
 
-            const allPagesData = await Promise.all(allOrderPromises);
-            const allOrders = allPagesData.flatMap(data => data.results || []);
+            while (hasMore && pageNum < 50) { // Máximo 50 páginas = 2500 órdenes
+                try {
+                    const response = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.results && data.results.length > 0) {
+                        allOrders = allOrders.concat(data.results);
+                        offset += limit;
+                        pageNum++;
+                        
+                        // Si recibimos menos de 50, ya no hay más
+                        if (data.results.length < limit) {
+                            hasMore = false;
+                        }
+                    } else {
+                        hasMore = false;
+                    }
+                } catch (error) {
+                    console.error(`Error cargando página ${pageNum} de ${cuenta.nombre}:`, error);
+                    hasMore = false;
+                }
+            }
 
             console.log(`${cuenta.nombre}: Cargadas ${allOrders.length} órdenes en total`);
 
-            const shippingPromises = allOrders.map(async (order) => {
+            // PASO 2: Procesar shipments de forma secuencial para ver progreso
+            const totalOrders = allOrders.length;
+            let processedOrders = 0;
+            
+            for (const order of allOrders) {
                 try {
                     const shippingId = order.shipping?.id;
-                    if (!shippingId) return null;
+                    if (!shippingId) {
+                        processedOrders++;
+                        continue;
+                    }
 
                     const shipResponse = await fetch(`${cuenta.proxy}/api/shipments/${shippingId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -1385,18 +1406,28 @@
                         if (esEntregaParaFecha(shipping, targetDate) || 
                             shipping.status === 'cancelled' || 
                             shipping.status === 'not_delivered') {
-                            return { order, shipping };
+                            tempOrders.push({ order, shipping });
                         }
                     }
-                    return null;
+                    
+                    processedOrders++;
+                    
+                    // Actualizar progreso cada 10 órdenes procesadas
+                    if (processedOrders % 10 === 0 || processedOrders === totalOrders) {
+                        const detailProgress = Math.round((processedOrders / totalOrders) * 100);
+                        if (document.getElementById('loadingDetails')) {
+                            document.getElementById('loadingDetails').textContent = 
+                                `${cuenta.nombre}: Procesando ${processedOrders}/${totalOrders} órdenes (${detailProgress}%)`;
+                        }
+                    }
+                    
                 } catch (e) {
-                    return null;
+                    processedOrders++;
+                    continue;
                 }
-            });
+            }
 
-            const results = await Promise.all(shippingPromises);
-            tempOrders = results.filter(item => item !== null);
-
+            // PASO 3: Eliminar duplicados
             const uniqueShippings = new Map();
             tempOrders.forEach(({ order, shipping }) => {
                 const shippingId = shipping.id;
@@ -1946,20 +1977,33 @@
 
             // Inicializar mapa si no existe
             if (!leafletMap) {
+                // Esperar a que el modal esté visible
                 setTimeout(() => {
-                    leafletMap = L.map('mapFrame').setView([-34.6037, -58.3816], 11);
-                    
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap contributors',
-                        maxZoom: 19
-                    }).addTo(leafletMap);
-                    
-                    markersLayer = L.layerGroup().addTo(leafletMap);
-                    
+                    try {
+                        leafletMap = L.map('mapFrame').setView([-34.6037, -58.3816], 11);
+                        
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors',
+                            maxZoom: 19
+                        }).addTo(leafletMap);
+                        
+                        markersLayer = L.layerGroup().addTo(leafletMap);
+                        
+                        // Forzar recálculo del tamaño del mapa
+                        setTimeout(() => {
+                            leafletMap.invalidateSize();
+                            actualizarMapa();
+                        }, 100);
+                    } catch (error) {
+                        console.error('Error inicializando mapa:', error);
+                    }
+                }, 200);
+            } else {
+                // Si ya existe, solo actualizar
+                setTimeout(() => {
+                    leafletMap.invalidateSize();
                     actualizarMapa();
                 }, 100);
-            } else {
-                actualizarMapa();
             }
         }
 
