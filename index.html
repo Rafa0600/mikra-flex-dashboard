@@ -30,6 +30,18 @@
             font-size: 22px;
         }
 
+        .version-badge {
+            display: inline-block;
+            background: #3483FA;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
         .top-buttons {
             text-align: center;
             margin-bottom: 20px;
@@ -272,6 +284,14 @@
 
         .cuenta-btn.canceladas-toggle.active span {
             background: rgba(255,255,255,0.3);
+        }
+
+        .cuenta-count {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
         }
 
         .stat-number {
@@ -568,15 +588,12 @@
             border-radius: 8px;
             padding: 12px 15px;
             margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             transition: all 0.3s;
+            cursor: pointer;
         }
 
         .envio-card-simple:hover {
             background: #333;
-            transform: translateX(5px);
         }
 
         .envio-card-simple.pendiente { border-left-color: #9C27B0; }
@@ -585,10 +602,18 @@
         .envio-card-simple.cancelado { border-left-color: #f44336; opacity: 0.7; }
         .envio-card-simple.reprogramado { border-left-color: #FF9800; }
 
-        .simple-direccion {
+        .simple-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .simple-zona {
             flex: 1;
-            font-size: 15px;
-            font-weight: 500;
+            font-size: 16px;
+            font-weight: bold;
+            color: #FFE600;
         }
 
         .simple-estado {
@@ -604,6 +629,17 @@
         .simple-estado.entregado { background: #00ff88; color: #000; }
         .simple-estado.cancelado { background: #f44336; }
         .simple-estado.reprogramado { background: #FF9800; color: #000; }
+
+        .simple-details {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #444;
+            display: none;
+        }
+
+        .simple-details.expanded {
+            display: block;
+        }
 
         @media (max-width: 768px) {
             .stats-grid {
@@ -627,18 +663,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX</h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.5</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📋 Vista Simple</button>
-            <button onclick="cargarFlexAyer()" id="loadAyerBtn" class="btn-warning">📅 Ver AYER</button>
+            <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning">📅 Ver <span id="diaAnteriorLabel"></span></button>
         </div>
 
         <!-- Filtro rápido por cuenta -->
         <div id="cuentaFilterSection" class="cuenta-filter hidden">
-            <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')">📦 Todas</button>
-            <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')">🟣 Mikra</button>
-            <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')">🟠 Chaya</button>
+            <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
+            <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
+            <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
             <span class="cuenta-separator">│</span>
             <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn">❌ Canceladas <span id="canceladasCount">0</span></button>
         </div>
@@ -823,14 +859,42 @@
             aplicarFiltros();
         }
 
+        // PUNTO 1: Calcular día anterior laborable (viernes si es domingo/lunes)
+        function getDiaAnteriorLaborable() {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay(); // 0=Dom, 1=Lun, ..., 6=Sáb
+            
+            let diasAtras = 1; // Por defecto ayer
+            
+            // Si hoy es domingo (0), retroceder al viernes (2 días)
+            if (diaSemana === 0) {
+                diasAtras = 2;
+            }
+            // Si hoy es lunes (1), retroceder al viernes (3 días)
+            else if (diaSemana === 1) {
+                diasAtras = 3;
+            }
+            
+            const diaAnterior = new Date();
+            diaAnterior.setDate(diaAnterior.getDate() - diasAtras);
+            diaAnterior.setHours(0, 0, 0, 0);
+            
+            return diaAnterior;
+        }
+
+        function actualizarLabelDiaAnterior() {
+            const diaAnterior = getDiaAnteriorLaborable();
+            const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const nombreDia = dias[diaAnterior.getDay()];
+            document.getElementById('diaAnteriorLabel').textContent = nombreDia;
+        }
+
         async function obtenerTokenCuenta(cuenta) {
             try {
-                // Llamar al worker para obtener el token válido
                 const response = await fetch(`${cuenta.proxy}/get-token`);
                 const data = await response.json();
 
                 if (data.access_token) {
-                    // Guardar user_id en una variable temporal si no lo tenemos
                     if (data.user_id && !sessionStorage.getItem(`${cuenta.nombre.toLowerCase()}_user_id`)) {
                         sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
                     }
@@ -876,7 +940,8 @@
             return fecha.toLocaleString('es-AR', { 
                 timeZone: 'America/Argentina/Buenos_Aires',
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
+                hour12: false
             });
         }
 
@@ -898,11 +963,12 @@
             await cargarFlexPorFecha(hoy, 'HOY');
         }
 
-        async function cargarFlexAyer() {
-            const ayer = new Date();
-            ayer.setDate(ayer.getDate() - 1);
-            ayer.setHours(0, 0, 0, 0);
-            await cargarFlexPorFecha(ayer, 'AYER');
+        // PUNTO 2: Nueva función para día anterior (reemplaza cargarFlexAyer)
+        async function cargarFlexDiaAnterior() {
+            const diaAnterior = getDiaAnteriorLaborable();
+            const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const nombreDia = dias[diaAnterior.getDay()].toUpperCase();
+            await cargarFlexPorFecha(diaAnterior, nombreDia);
         }
 
         async function cargarFlexPorFecha(targetDate, label) {
@@ -910,7 +976,7 @@
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
             
             let allOrdersFromAllAccounts = [];
-            const shippingIdsVistos = new Set(); // Para evitar duplicados
+            const shippingIdsVistos = new Set();
 
             for (const cuenta of CUENTAS) {
                 try {
@@ -922,7 +988,6 @@
 
                     const ordersFromAccount = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
                     
-                    // Filtrar duplicados por shipping_id
                     ordersFromAccount.forEach(item => {
                         const shippingId = item.shipping.id;
                         if (!shippingIdsVistos.has(shippingId)) {
@@ -954,10 +1019,14 @@
             }
 
             allFlexOrders = allOrdersFromAllAccounts;
-            logShippingStates(); // Debug: ver estados en consola F12
+            logShippingStates();
 
+            // PUNTO 3: Calcular zonas sin canceladas
             const zonaCounts = new Map();
             allFlexOrders.forEach(({ shipping }) => {
+                const state = getOrderState(shipping);
+                if (state === 'cancelado') return; // Excluir canceladas del conteo de zonas
+                
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
                 const zona = getZonaDetallada(barrio, ciudad);
@@ -965,7 +1034,8 @@
             });
 
             const dropdownItems = document.getElementById('dropdownItems');
-            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${allFlexOrders.length})</div>`;
+            const totalSinCanceladas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado').length;
+            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${totalSinCanceladas})</div>`;
             
             let cabaTotal = 0;
             Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
@@ -992,12 +1062,10 @@
             const allOrderPromises = [];
             const totalPages = 20;
 
-            // Obtener seller ID del sessionStorage
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
 
             if (!sellerId) {
-                // Si no está en session, hacer una llamada para obtenerlo
                 try {
                     const tokenResponse = await fetch(`${cuenta.proxy}/get-token`);
                     const tokenData = await tokenResponse.json();
@@ -1037,8 +1105,6 @@
 
                     const shipping = await shipResponse.json();
                     
-                    // Incluir envíos FLEX que son para la fecha objetivo
-                    // También incluir cancelados y reprogramados del mismo día
                     if (shipping.logistic_type === 'self_service') {
                         if (esEntregaParaFecha(shipping, targetDate) || 
                             shipping.status === 'cancelled' || 
@@ -1075,6 +1141,14 @@
             aplicarFiltros();
         }
 
+        // PUNTO 8: Toggle para expandir detalles en vista simple
+        function toggleSimpleDetails(index) {
+            const details = document.getElementById(`simple-details-${index}`);
+            if (details) {
+                details.classList.toggle('expanded');
+            }
+        }
+
         function getOrderState(shipping) {
             const status = (shipping.status || '').toLowerCase();
             const substatus = (shipping.substatus || '').toLowerCase();
@@ -1082,7 +1156,6 @@
             const tags = shipping.tags || [];
             const tagsLower = tags.map(t => (t || '').toLowerCase());
             
-            // 🔴 Detectar cancelado
             if (status === 'cancelled' || status === 'not_delivered' ||
                 substatus === 'cancelled' || substatus === 'buyer_cancelled' || 
                 substatus === 'cancelled_by_buyer' || substatus === 'cancelled_manually' ||
@@ -1090,8 +1163,6 @@
                 return 'cancelado';
             }
             
-            // 🟠 Detectar reprogramado / demorado
-            // ML usa: substatus, tags, y a veces el status_history
             if (substatus === 'rescheduled' || substatus === 'rescheduled_by_buyer' ||
                 substatus === 'delayed' || substatus === 'returning_to_sender' ||
                 substatus === 'waiting_for_withdrawal' || substatus === 'receiver_absent' ||
@@ -1102,7 +1173,6 @@
                 return 'reprogramado';
             }
 
-            // También detectar por status "not_delivered" con substatus que no sea cancelled
             if (status === 'not_delivered' && !substatus.includes('cancel')) {
                 return 'reprogramado';
             }
@@ -1118,7 +1188,6 @@
             return 'pendiente';
         }
 
-        // Debug: loguear estados de shipping para diagnosticar
         function logShippingStates() {
             console.log('=== ESTADOS DE ENVÍOS ===');
             allFlexOrders.forEach(({ shipping, cuentaNombre }) => {
@@ -1139,7 +1208,6 @@
             } else if (cuenta === 'Chaya') {
                 document.querySelector('.cuenta-btn.chaya-btn').classList.add('active');
             }
-            // Al cambiar cuenta, salir de vista canceladas
             if (mostrarCanceladas) {
                 mostrarCanceladas = false;
                 document.getElementById('toggleCanceladasBtn').classList.remove('active');
@@ -1167,7 +1235,6 @@
         }
 
         function filtrarPorEstado(estado) {
-            // Si tocan un estado normal, salir de modo canceladas
             if (estado !== 'cancelado') {
                 mostrarCanceladas = false;
                 document.getElementById('toggleCanceladasBtn').classList.remove('active');
@@ -1192,20 +1259,16 @@
         function aplicarFiltros() {
             let filtered = allFlexOrders;
 
-            // Filtro por cuenta (Mikra/Chaya)
             if (currentCuentaFilter !== 'all') {
                 filtered = filtered.filter(({ cuentaNombre }) => cuentaNombre === currentCuentaFilter);
             }
 
-            // Filtro de estados
+            // PUNTO 5: Canceladas no aparecen en listado por defecto
             if (currentStateFilter === 'cancelado') {
-                // Modo canceladas: mostrar SOLO canceladas
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === 'cancelado');
             } else if (currentStateFilter === 'all') {
-                // "all" = todo MENOS canceladas
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) !== 'cancelado');
             } else {
-                // Estado específico (pendiente, en-camino, entregado, reprogramado)
                 filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
             }
 
@@ -1223,6 +1286,7 @@
                 });
             }
 
+            // PUNTO 7: Ordenamiento por hora de entrega corregido
             if (currentSort === 'zona') {
                 filtered.sort((a, b) => {
                     const zonaA = getZonaDetallada(
@@ -1244,6 +1308,7 @@
                     return fechaA.localeCompare(fechaB);
                 });
             } else if (currentSort === 'hora-entrega') {
+                // FIX: Ordenar por timestamp completo en lugar de strings
                 filtered.sort((a, b) => {
                     const horaA = a.shipping.status_history?.date_delivered || 
                                  a.shipping.status_history?.date_shipped || 
@@ -1251,7 +1316,12 @@
                     const horaB = b.shipping.status_history?.date_delivered || 
                                  b.shipping.status_history?.date_shipped || 
                                  b.shipping.date_created || '';
-                    return horaB.localeCompare(horaA);
+                    
+                    // Convertir a timestamp para comparación numérica
+                    const timeA = horaA ? new Date(horaA).getTime() : 0;
+                    const timeB = horaB ? new Date(horaB).getTime() : 0;
+                    
+                    return timeB - timeA; // Más reciente primero
                 });
             } else if (currentSort === 'estado') {
                 const ordenEstados = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'en-camino': 3, 'entregado': 4 };
@@ -1274,7 +1344,6 @@
         function displayOrders(filterType, customFiltered = null) {
             const orders = customFiltered || allFlexOrders;
 
-            // Filtrar por cuenta para stats también
             let ordersForStats = allFlexOrders;
             if (currentCuentaFilter !== 'all') {
                 ordersForStats = ordersForStats.filter(({ cuentaNombre }) => cuentaNombre === currentCuentaFilter);
@@ -1287,8 +1356,22 @@
                 cancelado: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'cancelado').length,
                 reprogramado: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'reprogramado').length
             };
-            // TODOS = sin canceladas
             stats.total = stats.pendiente + stats.enCamino + stats.entregado + stats.reprogramado;
+
+            // PUNTO 6: Actualizar contadores por cuenta
+            const mikraOrders = allFlexOrders.filter(({ cuentaNombre, shipping }) => 
+                cuentaNombre === 'Mikra' && getOrderState(shipping) !== 'cancelado'
+            ).length;
+            const chayaOrders = allFlexOrders.filter(({ cuentaNombre, shipping }) => 
+                cuentaNombre === 'Chaya' && getOrderState(shipping) !== 'cancelado'
+            ).length;
+            const totalOrders = allFlexOrders.filter(({ shipping }) => 
+                getOrderState(shipping) !== 'cancelado'
+            ).length;
+
+            document.getElementById('allCount').textContent = totalOrders;
+            document.getElementById('mikraCount').textContent = mikraOrders;
+            document.getElementById('chayaCount').textContent = chayaOrders;
 
             document.querySelector('#stat-all .stat-number').textContent = stats.total;
             document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
@@ -1297,14 +1380,11 @@
             document.querySelector('#stat-reprogramado .stat-number').textContent = stats.reprogramado;
             document.getElementById('canceladasCount').textContent = stats.cancelado;
 
-            // Ocultar botón de canceladas si no hay
             const cancelBtn = document.getElementById('toggleCanceladasBtn');
             cancelBtn.style.display = stats.cancelado > 0 ? 'inline-flex' : 'none';
-            // Ocultar separador si no hay canceladas
             const separators = document.querySelectorAll('.cuenta-separator');
             separators.forEach(s => s.style.display = stats.cancelado > 0 ? 'inline' : 'none');
 
-            // Barra de progreso sin canceladas
             const totalSinCancel = stats.total || 1;
             const pendientePct = (stats.pendiente / totalSinCancel) * 100;
             const enCaminoPct = (stats.enCamino / totalSinCancel) * 100;
@@ -1324,15 +1404,28 @@
             if (orders.length === 0) {
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
             } else if (vistaSimple) {
-                // VISTA SIMPLE - Solo dirección y estado
-                orders.forEach(({ orders: orderList, shipping }) => {
+                // PUNTO 8: Vista simple mejorada - Solo CABA/Barrio + estado, expandible
+                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }, index) => {
                     const state = getOrderState(shipping);
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaDetallada(barrio, ciudad);
+                    
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const direccionSimple = `${calle} ${numero}, ${ciudad}`;
+                    const provincia = shipping.receiver_address?.state?.name || '';
+                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
                     
-                    const estadoLabelSimple = {
+                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                                        shipping.shipping_option?.estimated_delivery_final?.date;
+                    const fechaFormateada = formatearFecha(fechaEntrega);
+                    const esHoy = fechaFormateada === 'Hoy';
+                    
+                    const history = shipping.status_history || {};
+                    const fechaCreacion = shipping.date_created;
+                    
+                    const estadoLabel = {
                         'pendiente': '⏳ Pendiente',
                         'en-camino': '🚚 En camino',
                         'entregado': '✅ Entregado',
@@ -1340,15 +1433,81 @@
                         'reprogramado': '🔄 Reprogramado'
                     };
 
+                    const cantidadItems = orderList.length;
+                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                    const orderId = orderList[0]?.id || '';
+                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+
                     html += `
-                        <div class="envio-card-simple ${state}">
-                            <div class="simple-direccion">${direccionSimple}</div>
-                            <div class="simple-estado ${state}">${estadoLabelSimple[state]}</div>
+                        <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
+                            <div class="simple-header">
+                                <div class="simple-zona">${zona}</div>
+                                <div class="simple-estado ${state}">${estadoLabel[state]}</div>
+                            </div>
+                            
+                            <div class="simple-details" id="simple-details-${index}">
+                                <div class="envio-header" style="margin-top: 12px;">
+                                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                        ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
+                                        <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
+                                    </div>
+                                    <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()">
+                                        #${orderId}
+                                    </a>
+                                </div>
+                                
+                                <div class="envio-info">
+                                    <div class="info-item">
+                                        <div class="info-label">📍 Dirección</div>
+                                        <div class="info-value">
+                                            <a href="${googleMapsUrl}" target="_blank" class="direccion-link" onclick="event.stopPropagation()">
+                                                ${calle} ${numero}, ${ciudad}
+                                            </a>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="info-item">
+                                        <div class="info-label">👤 Comprador</div>
+                                        <div class="info-value">${comprador}</div>
+                                    </div>
+                                    
+                                    <div class="info-item">
+                                        <div class="info-label">📅 Entrega</div>
+                                        <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="timeline">
+                                    <div class="timeline-item">
+                                        <div class="timeline-dot done"></div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-label">📦 Recibida</div>
+                                            <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="timeline-item">
+                                        <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-label">🚚 Enviado</div>
+                                            <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="timeline-item">
+                                        <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-label">✅ Entregado</div>
+                                            <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     `;
                 });
             } else {
-                // VISTA COMPLETA (original)
+                // Vista completa (original)
                 orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
@@ -1451,7 +1610,7 @@
                         </div>
                     `;
                 });
-            } // Cerrar el else de vista completa
+            }
 
             document.getElementById('content').innerHTML = html;
         }
@@ -1462,8 +1621,8 @@
             }
         });
 
-        // Auto-cargar HOY al entrar
         window.addEventListener('DOMContentLoaded', () => {
+            actualizarLabelDiaAnterior(); // PUNTO 1: Actualizar label al cargar
             cargarFlexHoy();
         });
     </script>
