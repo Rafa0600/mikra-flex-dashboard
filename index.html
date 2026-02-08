@@ -530,36 +530,6 @@
             margin-bottom: 10px;
         }
 
-        .progress-container {
-            width: 80%;
-            max-width: 500px;
-            margin: 20px auto;
-            background: #2a2a2a;
-            border-radius: 20px;
-            height: 40px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #9C27B0, #FFE600, #00ff88);
-            border-radius: 20px;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #000;
-            font-size: 14px;
-        }
-
-        .loading-details {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #888;
-        }
-
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -817,7 +787,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.1</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.2</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -1217,32 +1187,13 @@
 
         async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="loading">
-                    <div class="loading-spinner"></div>
-                    <br>Cargando entregas de ${label}...
-                    <div class="progress-container">
-                        <div class="progress-fill" id="progressFill" style="width: 0%;">0%</div>
-                    </div>
-                    <div class="loading-details" id="loadingDetails">Inicializando...</div>
-                </div>
-            `;
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
             
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
 
-            const totalCuentas = CUENTAS.length;
-            
-            for (let i = 0; i < CUENTAS.length; i++) {
-                const cuenta = CUENTAS[i];
-                
+            for (const cuenta of CUENTAS) {
                 try {
-                    // Actualizar barra de progreso al comenzar cada cuenta
-                    const baseProgress = Math.round((i / totalCuentas) * 100);
-                    document.getElementById('progressFill').style.width = baseProgress + '%';
-                    document.getElementById('progressFill').textContent = baseProgress + '%';
-                    document.getElementById('loadingDetails').textContent = `Iniciando carga de ${cuenta.nombre}...`;
-                    
                     const token = await obtenerTokenCuenta(cuenta);
                     if (!token) {
                         console.error(`No hay token para ${cuenta.nombre}`);
@@ -1262,12 +1213,6 @@
                             });
                         }
                     });
-                    
-                    // Actualizar progreso al completar cuenta
-                    const completedProgress = Math.round(((i + 1) / totalCuentas) * 100);
-                    document.getElementById('progressFill').style.width = completedProgress + '%';
-                    document.getElementById('progressFill').textContent = completedProgress + '%';
-                    
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
                 }
@@ -1290,11 +1235,11 @@
             allFlexOrders = allOrdersFromAllAccounts;
             logShippingStates();
 
-            // PUNTO 3: Calcular zonas sin canceladas
+            // Calcular zonas sin canceladas
             const zonaCounts = new Map();
             allFlexOrders.forEach(({ shipping }) => {
                 const state = getOrderState(shipping);
-                if (state === 'cancelado') return; // Excluir canceladas del conteo de zonas
+                if (state === 'cancelado') return;
                 
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
@@ -1322,13 +1267,16 @@
             document.getElementById('statsSection').classList.remove('hidden');
             document.getElementById('sortSection').classList.remove('hidden');
             document.getElementById('cuentaFilterSection').classList.remove('hidden');
-            document.getElementById('btnMapa').classList.remove('hidden'); // Mostrar botón mapa
+            document.getElementById('btnMapa').classList.remove('hidden');
             displayOrders('all');
         }
 
         async function cargarOrdenesDeCuenta(cuenta, token, targetDate) {
             let tempOrders = [];
             
+            const allOrderPromises = [];
+            const totalPages = 20;
+
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
 
@@ -1350,50 +1298,17 @@
                 return [];
             }
 
-            // FILTRO POR FECHA: Solo últimos 30 días
-            const fechaDesde = new Date(targetDate);
-            fechaDesde.setDate(fechaDesde.getDate() - 30);
-            const fechaDesdeISO = fechaDesde.toISOString();
-            
-            const fechaHasta = new Date(targetDate);
-            fechaHasta.setDate(fechaHasta.getDate() + 7); // +7 días para agarrar todo
-            const fechaHastaISO = fechaHasta.toISOString();
-
-            // Cargar solo primeras 10 páginas (500 órdenes) - suficiente para 30 días
-            let allOrders = [];
-            const maxPages = 10;
-            
-            document.getElementById('loadingDetails').textContent = `${cuenta.nombre}: Buscando órdenes recientes...`;
-
-            for (let page = 0; page < maxPages; page++) {
-                try {
-                    const response = await fetch(
-                        `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc&order.date_created.from=${fechaDesdeISO}&order.date_created.to=${fechaHastaISO}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } }
-                    );
-                    const data = await response.json();
-                    
-                    if (data.results && data.results.length > 0) {
-                        allOrders = allOrders.concat(data.results);
-                        
-                        // Si recibimos menos de 50, ya no hay más
-                        if (data.results.length < 50) {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                } catch (error) {
-                    console.error(`Error en página ${page}:`, error);
-                    break;
-                }
+            for (let page = 0; page < totalPages; page++) {
+                allOrderPromises.push(
+                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json())
+                );
             }
 
-            console.log(`${cuenta.nombre}: ${allOrders.length} órdenes encontradas en los últimos 30 días`);
-            
-            document.getElementById('loadingDetails').textContent = `${cuenta.nombre}: Filtrando envíos FLEX...`;
+            const allPagesData = await Promise.all(allOrderPromises);
+            const allOrders = allPagesData.flatMap(data => data.results || []);
 
-            // PROCESAR EN PARALELO (mucho más rápido)
             const shippingPromises = allOrders.map(async (order) => {
                 try {
                     const shippingId = order.shipping?.id;
@@ -1405,9 +1320,7 @@
 
                     const shipping = await shipResponse.json();
                     
-                    // Solo FLEX
                     if (shipping.logistic_type === 'self_service') {
-                        // Verificar si es para la fecha objetivo o está cancelado/reprogramado
                         if (esEntregaParaFecha(shipping, targetDate) || 
                             shipping.status === 'cancelled' || 
                             shipping.status === 'not_delivered') {
@@ -1423,7 +1336,6 @@
             const results = await Promise.all(shippingPromises);
             tempOrders = results.filter(item => item !== null);
 
-            // Eliminar duplicados
             const uniqueShippings = new Map();
             tempOrders.forEach(({ order, shipping }) => {
                 const shippingId = shipping.id;
@@ -1434,7 +1346,6 @@
                 }
             });
 
-            console.log(`${cuenta.nombre}: ${uniqueShippings.size} envíos FLEX para la fecha`);
             return Array.from(uniqueShippings.values());
         }
 
