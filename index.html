@@ -46,6 +46,40 @@
             vertical-align: middle;
         }
 
+        .info-badges {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .info-badge {
+            background: #2a2a2a;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid #444;
+        }
+
+        .info-badge.fecha {
+            background: #FF6B00;
+            border-color: #FF9800;
+        }
+
+        .info-badge.caba {
+            background: #9C27B0;
+            border-color: #ce93d8;
+        }
+
+        .info-badge.provincia {
+            background: #00897B;
+            border-color: #26A69A;
+        }
+
         .top-buttons {
             text-align: center;
             margin-bottom: 20px;
@@ -787,7 +821,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.2</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.3</span></h1>
+
+        <!-- Info badges -->
+        <div class="info-badges" id="infoBadges" style="display: none;">
+            <span class="info-badge fecha" id="badgeFecha">📅 HOY</span>
+            <span class="info-badge caba" id="badgeCaba">🏙️ CABA: 0</span>
+            <span class="info-badge provincia" id="badgeProvincia">🗺️ Provincia: 0</span>
+        </div>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -1232,11 +1273,26 @@
                 return;
             }
 
-            allFlexOrders = allOrdersFromAllAccounts;
+            // FILTRAR CANCELADAS: Solo mostrar canceladas si son para HOY (targetDate)
+            allFlexOrders = allOrdersFromAllAccounts.filter(({ shipping }) => {
+                const state = getOrderState(shipping);
+                
+                // Si es cancelada, verificar que sea para la fecha objetivo
+                if (state === 'cancelado') {
+                    return esEntregaParaFecha(shipping, targetDate);
+                }
+                
+                // Todas las demás pasan
+                return true;
+            });
+
             logShippingStates();
 
             // Calcular zonas sin canceladas
             const zonaCounts = new Map();
+            let cabaCount = 0;
+            let provinciaCount = 0;
+            
             allFlexOrders.forEach(({ shipping }) => {
                 const state = getOrderState(shipping);
                 if (state === 'cancelado') return;
@@ -1245,7 +1301,20 @@
                 const ciudad = shipping.receiver_address?.city?.name || '';
                 const zona = getZonaDetallada(barrio, ciudad);
                 zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
+                
+                // Contar CABA vs Provincia
+                if (esCABA(zona)) {
+                    cabaCount++;
+                } else {
+                    provinciaCount++;
+                }
             });
+
+            // Actualizar badges de información
+            document.getElementById('badgeFecha').textContent = `📅 ${label}`;
+            document.getElementById('badgeCaba').textContent = `🏙️ CABA: ${cabaCount}`;
+            document.getElementById('badgeProvincia').textContent = `🗺️ Provincia: ${provinciaCount}`;
+            document.getElementById('infoBadges').style.display = 'flex';
 
             const dropdownItems = document.getElementById('dropdownItems');
             const totalSinCanceladas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado').length;
