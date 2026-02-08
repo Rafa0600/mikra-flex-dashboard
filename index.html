@@ -817,7 +817,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.0</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.1</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -1350,51 +1350,54 @@
                 return [];
             }
 
-            // PASO 1: Cargar TODAS las órdenes de forma progresiva
-            let allOrders = [];
-            let offset = 0;
-            let hasMore = true;
-            const limit = 50;
-            let pageNum = 0;
+            // FILTRO POR FECHA: Solo últimos 30 días
+            const fechaDesde = new Date(targetDate);
+            fechaDesde.setDate(fechaDesde.getDate() - 30);
+            const fechaDesdeISO = fechaDesde.toISOString();
+            
+            const fechaHasta = new Date(targetDate);
+            fechaHasta.setDate(fechaHasta.getDate() + 7); // +7 días para agarrar todo
+            const fechaHastaISO = fechaHasta.toISOString();
 
-            while (hasMore && pageNum < 50) { // Máximo 50 páginas = 2500 órdenes
+            // Cargar solo primeras 10 páginas (500 órdenes) - suficiente para 30 días
+            let allOrders = [];
+            const maxPages = 10;
+            
+            document.getElementById('loadingDetails').textContent = `${cuenta.nombre}: Buscando órdenes recientes...`;
+
+            for (let page = 0; page < maxPages; page++) {
                 try {
-                    const response = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${offset}&limit=${limit}&sort=date_desc`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    const response = await fetch(
+                        `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc&order.date_created.from=${fechaDesdeISO}&order.date_created.to=${fechaHastaISO}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
                     const data = await response.json();
                     
                     if (data.results && data.results.length > 0) {
                         allOrders = allOrders.concat(data.results);
-                        offset += limit;
-                        pageNum++;
                         
                         // Si recibimos menos de 50, ya no hay más
-                        if (data.results.length < limit) {
-                            hasMore = false;
+                        if (data.results.length < 50) {
+                            break;
                         }
                     } else {
-                        hasMore = false;
+                        break;
                     }
                 } catch (error) {
-                    console.error(`Error cargando página ${pageNum} de ${cuenta.nombre}:`, error);
-                    hasMore = false;
+                    console.error(`Error en página ${page}:`, error);
+                    break;
                 }
             }
 
-            console.log(`${cuenta.nombre}: Cargadas ${allOrders.length} órdenes en total`);
-
-            // PASO 2: Procesar shipments de forma secuencial para ver progreso
-            const totalOrders = allOrders.length;
-            let processedOrders = 0;
+            console.log(`${cuenta.nombre}: ${allOrders.length} órdenes encontradas en los últimos 30 días`);
             
-            for (const order of allOrders) {
+            document.getElementById('loadingDetails').textContent = `${cuenta.nombre}: Filtrando envíos FLEX...`;
+
+            // PROCESAR EN PARALELO (mucho más rápido)
+            const shippingPromises = allOrders.map(async (order) => {
                 try {
                     const shippingId = order.shipping?.id;
-                    if (!shippingId) {
-                        processedOrders++;
-                        continue;
-                    }
+                    if (!shippingId) return null;
 
                     const shipResponse = await fetch(`${cuenta.proxy}/api/shipments/${shippingId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -1402,32 +1405,25 @@
 
                     const shipping = await shipResponse.json();
                     
+                    // Solo FLEX
                     if (shipping.logistic_type === 'self_service') {
+                        // Verificar si es para la fecha objetivo o está cancelado/reprogramado
                         if (esEntregaParaFecha(shipping, targetDate) || 
                             shipping.status === 'cancelled' || 
                             shipping.status === 'not_delivered') {
-                            tempOrders.push({ order, shipping });
+                            return { order, shipping };
                         }
                     }
-                    
-                    processedOrders++;
-                    
-                    // Actualizar progreso cada 10 órdenes procesadas
-                    if (processedOrders % 10 === 0 || processedOrders === totalOrders) {
-                        const detailProgress = Math.round((processedOrders / totalOrders) * 100);
-                        if (document.getElementById('loadingDetails')) {
-                            document.getElementById('loadingDetails').textContent = 
-                                `${cuenta.nombre}: Procesando ${processedOrders}/${totalOrders} órdenes (${detailProgress}%)`;
-                        }
-                    }
-                    
+                    return null;
                 } catch (e) {
-                    processedOrders++;
-                    continue;
+                    return null;
                 }
-            }
+            });
 
-            // PASO 3: Eliminar duplicados
+            const results = await Promise.all(shippingPromises);
+            tempOrders = results.filter(item => item !== null);
+
+            // Eliminar duplicados
             const uniqueShippings = new Map();
             tempOrders.forEach(({ order, shipping }) => {
                 const shippingId = shipping.id;
@@ -1438,7 +1434,7 @@
                 }
             });
 
-            console.log(`${cuenta.nombre}: ${uniqueShippings.size} envíos FLEX encontrados para la fecha`);
+            console.log(`${cuenta.nombre}: ${uniqueShippings.size} envíos FLEX para la fecha`);
             return Array.from(uniqueShippings.values());
         }
 
