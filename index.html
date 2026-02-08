@@ -1152,8 +1152,22 @@
             allFlexOrders = []; // Limpiar datos previos
             
             const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-            await cargarFlexPorFecha(hoy, 'HOY');
+            const diaSemana = hoy.getDay();
+            
+            // Si es fin de semana (sábado o domingo), buscar entregas del LUNES
+            let fechaBusqueda = new Date();
+            let label = 'HOY';
+            
+            if (diaSemana === 0) { // Domingo
+                fechaBusqueda.setDate(fechaBusqueda.getDate() + 1); // Lunes
+                label = 'LUNES';
+            } else if (diaSemana === 6) { // Sábado
+                fechaBusqueda.setDate(fechaBusqueda.getDate() + 2); // Lunes
+                label = 'LUNES';
+            }
+            
+            fechaBusqueda.setHours(0, 0, 0, 0);
+            await cargarFlexPorFecha(fechaBusqueda, label);
         }
 
         // PUNTO 2: Nueva función para día anterior (reemplaza cargarFlexAyer)
@@ -2024,20 +2038,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             actualizarLabelDiaAnterior();
-            
-            const hoy = new Date();
-            const diaSemana = hoy.getDay();
-            
-            // Si es fin de semana (sábado o domingo), cargar LUNES
-            if (diaSemana === 0 || diaSemana === 6) {
-                const lunes = getDiaHabilActual(); // Ya devuelve lunes
-                const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
-                const nombreDia = dias[lunes.getDay()];
-                cargarFlexPorFecha(lunes, nombreDia);
-            } else {
-                // Día de semana normal, cargar HOY
-                cargarFlexHoy();
-            }
+            cargarFlexHoy(); // Ya maneja si es fin de semana internamente
         });
     </script>
     
