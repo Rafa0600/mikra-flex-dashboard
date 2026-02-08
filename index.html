@@ -641,6 +641,91 @@
             display: block;
         }
 
+        /* MAPA MODAL */
+        .map-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            overflow: auto;
+        }
+
+        .map-modal.active {
+            display: block;
+        }
+
+        .map-container {
+            position: relative;
+            max-width: 1200px;
+            margin: 20px auto;
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .map-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .map-header h2 {
+            color: #FFE600;
+            margin: 0;
+        }
+
+        .map-close-btn {
+            background: #f44336;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .map-filters {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .map-filter-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            background: #333;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .map-filter-btn.active-pendiente {
+            background: #9C27B0;
+            border-color: #ce93d8;
+        }
+
+        .map-filter-btn.active-entregado {
+            background: #00ff88;
+            color: #000;
+            border-color: #66ffaa;
+        }
+
+        #mapFrame {
+            width: 100%;
+            height: 70vh;
+            border: none;
+            border-radius: 8px;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -658,6 +743,15 @@
                 padding: 6px 12px;
                 font-size: 12px;
             }
+
+            .map-container {
+                margin: 10px;
+                padding: 10px;
+            }
+
+            #mapFrame {
+                height: 60vh;
+            }
         }
     </style>
 </head>
@@ -666,8 +760,9 @@
         <h1>🏍️ Envíos FLEX <span class="version-badge">v1.5</span></h1>
 
         <div class="top-buttons">
-            <button onclick="toggleVista()" id="toggleVistaBtn">📋 Vista Simple</button>
+            <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
             <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning">📅 Ver <span id="diaAnteriorLabel"></span></button>
+            <button onclick="mostrarMapa()" id="btnMapa" class="hidden">🗺️ Ver Mapa</button>
         </div>
 
         <!-- Filtro rápido por cuenta -->
@@ -735,6 +830,25 @@
         </div>
 
         <div id="content"></div>
+
+        <!-- MODAL MAPA -->
+        <div id="mapModal" class="map-modal">
+            <div class="map-container">
+                <div class="map-header">
+                    <h2>🗺️ Mapa de Entregas</h2>
+                    <button class="map-close-btn" onclick="cerrarMapa()">✕ Cerrar</button>
+                </div>
+                <div class="map-filters">
+                    <button class="map-filter-btn active-pendiente" onclick="toggleMapFilter('pendiente')" id="mapFilterPendiente">
+                        ⏳ Pendientes (<span id="mapCountPendiente">0</span>)
+                    </button>
+                    <button class="map-filter-btn active-entregado" onclick="toggleMapFilter('entregado')" id="mapFilterEntregado">
+                        ✅ Entregados (<span id="mapCountEntregado">0</span>)
+                    </button>
+                </div>
+                <iframe id="mapFrame" src=""></iframe>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -761,7 +875,7 @@
         let mostrarCanceladas = false;
         let currentSort = 'zona';
         let dropdownOpen = false;
-        let vistaSimple = false;
+        let vistaSimple = true; // ACTIVADA POR DEFECTO
 
         const BARRIOS_CABA = [
             'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
@@ -934,9 +1048,30 @@
             return `${dia} ${fechaFormato}`;
         }
 
-        function formatearSoloHora(fechaISO) {
+        function formatearSoloHora(fechaISO, fechaEsperada = null) {
             if (!fechaISO) return null;
             const fecha = new Date(fechaISO);
+            
+            // Si hay fecha esperada y no coincide, mostrar día también
+            if (fechaEsperada) {
+                const esperada = new Date(fechaEsperada);
+                esperada.setHours(0, 0, 0, 0);
+                const actual = new Date(fechaISO);
+                actual.setHours(0, 0, 0, 0);
+                
+                if (esperada.getTime() !== actual.getTime()) {
+                    const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                    const dia = dias[fecha.getDay()];
+                    const hora = fecha.toLocaleString('es-AR', { 
+                        timeZone: 'America/Argentina/Buenos_Aires',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                    return `${hora} (${dia})`;
+                }
+            }
+            
             return fecha.toLocaleString('es-AR', { 
                 timeZone: 'America/Argentina/Buenos_Aires',
                 hour: '2-digit',
@@ -958,6 +1093,13 @@
         }
 
         async function cargarFlexHoy() {
+            // Resetear filtros
+            currentStateFilter = 'all';
+            currentZoneFilter = 'all';
+            currentCuentaFilter = 'all';
+            mostrarCanceladas = false;
+            allFlexOrders = []; // Limpiar datos previos
+            
             const hoy = new Date();
             hoy.setHours(0, 0, 0, 0);
             await cargarFlexPorFecha(hoy, 'HOY');
@@ -965,6 +1107,13 @@
 
         // PUNTO 2: Nueva función para día anterior (reemplaza cargarFlexAyer)
         async function cargarFlexDiaAnterior() {
+            // Resetear filtros
+            currentStateFilter = 'all';
+            currentZoneFilter = 'all';
+            currentCuentaFilter = 'all';
+            mostrarCanceladas = false;
+            allFlexOrders = []; // Limpiar datos previos
+            
             const diaAnterior = getDiaAnteriorLaborable();
             const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const nombreDia = dias[diaAnterior.getDay()].toUpperCase();
@@ -1053,6 +1202,7 @@
             document.getElementById('statsSection').classList.remove('hidden');
             document.getElementById('sortSection').classList.remove('hidden');
             document.getElementById('cuentaFilterSection').classList.remove('hidden');
+            document.getElementById('btnMapa').classList.remove('hidden'); // Mostrar botón mapa
             displayOrders('all');
         }
 
@@ -1482,7 +1632,7 @@
                                         <div class="timeline-dot done"></div>
                                         <div class="timeline-content">
                                             <div class="timeline-label">📦 Recibida</div>
-                                            <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
+                                            <div class="timeline-time">${formatearSoloHora(fechaCreacion, fechaEntrega) || 'N/A'}</div>
                                         </div>
                                     </div>
                                     
@@ -1490,7 +1640,7 @@
                                         <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
                                         <div class="timeline-content">
                                             <div class="timeline-label">🚚 Enviado</div>
-                                            <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
+                                            <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped, fechaEntrega) || 'Pendiente'}</div>
                                         </div>
                                     </div>
                                     
@@ -1498,7 +1648,7 @@
                                         <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
                                         <div class="timeline-content">
                                             <div class="timeline-label">✅ Entregado</div>
-                                            <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
+                                            <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered, fechaEntrega) || 'Pendiente'}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1587,7 +1737,7 @@
                                     <div class="timeline-dot done"></div>
                                     <div class="timeline-content">
                                         <div class="timeline-label">📦 Recibida</div>
-                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion) || 'N/A'}</div>
+                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion, fechaEntrega) || 'N/A'}</div>
                                     </div>
                                 </div>
                                 
@@ -1595,7 +1745,7 @@
                                     <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
                                     <div class="timeline-content">
                                         <div class="timeline-label">🚚 Enviado</div>
-                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped) || 'Pendiente'}</div>
+                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped, fechaEntrega) || 'Pendiente'}</div>
                                     </div>
                                 </div>
                                 
@@ -1603,7 +1753,7 @@
                                     <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
                                     <div class="timeline-content">
                                         <div class="timeline-label">✅ Entregado</div>
-                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered) || 'Pendiente'}</div>
+                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered, fechaEntrega) || 'Pendiente'}</div>
                                     </div>
                                 </div>
                             </div>
@@ -1621,9 +1771,172 @@
             }
         });
 
+        // FUNCIONES DEL MAPA
+        let mapShowPendientes = true;
+        let mapShowEntregados = true;
+
+        function toggleMapFilter(tipo) {
+            if (tipo === 'pendiente') {
+                mapShowPendientes = !mapShowPendientes;
+                const btn = document.getElementById('mapFilterPendiente');
+                if (mapShowPendientes) {
+                    btn.classList.add('active-pendiente');
+                } else {
+                    btn.classList.remove('active-pendiente');
+                }
+            } else if (tipo === 'entregado') {
+                mapShowEntregados = !mapShowEntregados;
+                const btn = document.getElementById('mapFilterEntregado');
+                if (mapShowEntregados) {
+                    btn.classList.add('active-entregado');
+                } else {
+                    btn.classList.remove('active-entregado');
+                }
+            }
+            actualizarMapa();
+        }
+
+        function mostrarMapa() {
+            // Contar pendientes y entregados
+            let pendientes = allFlexOrders.filter(({ shipping }) => {
+                const state = getOrderState(shipping);
+                return state === 'pendiente' || state === 'en-camino';
+            });
+
+            let entregados = allFlexOrders.filter(({ shipping }) => {
+                const state = getOrderState(shipping);
+                return state === 'entregado';
+            });
+
+            document.getElementById('mapCountPendiente').textContent = pendientes.length;
+            document.getElementById('mapCountEntregado').textContent = entregados.length;
+
+            // Mostrar modal
+            document.getElementById('mapModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            actualizarMapa();
+        }
+
+        function cerrarMapa() {
+            document.getElementById('mapModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        function actualizarMapa() {
+            let ordersParaMapa = allFlexOrders.filter(({ shipping }) => {
+                const state = getOrderState(shipping);
+                
+                // Excluir canceladas siempre
+                if (state === 'cancelado') return false;
+                
+                // Filtrar según toggles
+                if (state === 'pendiente' || state === 'en-camino' || state === 'reprogramado') {
+                    return mapShowPendientes;
+                }
+                if (state === 'entregado') {
+                    return mapShowEntregados;
+                }
+                return false;
+            });
+
+            if (ordersParaMapa.length === 0) {
+                document.getElementById('mapFrame').src = 'about:blank';
+                return;
+            }
+
+            // Crear marcadores para Google Maps
+            let markers = ordersParaMapa.map(({ shipping }, index) => {
+                const lat = shipping.receiver_address?.latitude;
+                const lng = shipping.receiver_address?.longitude;
+                const calle = shipping.receiver_address?.street_name || '';
+                const numero = shipping.receiver_address?.street_number || '';
+                const ciudad = shipping.receiver_address?.city?.name || '';
+                const state = getOrderState(shipping);
+                
+                // Color según estado
+                let color = 'purple'; // pendiente
+                if (state === 'en-camino') color = 'blue';
+                if (state === 'entregado') color = 'green';
+                if (state === 'reprogramado') color = 'orange';
+
+                if (lat && lng) {
+                    return `markers=color:${color}%7C${lat},${lng}`;
+                }
+                return null;
+            }).filter(m => m !== null);
+
+            if (markers.length === 0) {
+                document.getElementById('mapFrame').src = 'about:blank';
+                return;
+            }
+
+            // Calcular centro del mapa (promedio de coords)
+            let centerLat = 0;
+            let centerLng = 0;
+            let validCoords = 0;
+
+            ordersParaMapa.forEach(({ shipping }) => {
+                const lat = shipping.receiver_address?.latitude;
+                const lng = shipping.receiver_address?.longitude;
+                if (lat && lng) {
+                    centerLat += lat;
+                    centerLng += lng;
+                    validCoords++;
+                }
+            });
+
+            if (validCoords > 0) {
+                centerLat /= validCoords;
+                centerLng /= validCoords;
+            } else {
+                // Default: Buenos Aires
+                centerLat = -34.6037;
+                centerLng = -58.3816;
+            }
+
+            // URL de Google Maps Static API (modo embed iframe)
+            const markersParam = markers.join('&');
+            const zoom = validCoords > 10 ? '11' : '12';
+            
+            // Usar iframe embed de Google Maps con múltiples destinos
+            const iframeSrc = `https://www.google.com/maps/embed/v1/view?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dydOmZW7E5SkqQ&center=${centerLat},${centerLng}&zoom=${zoom}`;
+            
+            document.getElementById('mapFrame').src = iframeSrc;
+        }
+
+        function getDiaHabilActual() {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay(); // 0=Dom, 6=Sáb
+            
+            // Si es sábado (6), cargar viernes
+            if (diaSemana === 6) {
+                hoy.setDate(hoy.getDate() - 1);
+            }
+            // Si es domingo (0), cargar viernes
+            else if (diaSemana === 0) {
+                hoy.setDate(hoy.getDate() - 2);
+            }
+            
+            hoy.setHours(0, 0, 0, 0);
+            return hoy;
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
-            actualizarLabelDiaAnterior(); // PUNTO 1: Actualizar label al cargar
-            cargarFlexHoy();
+            actualizarLabelDiaAnterior();
+            
+            const hoy = new Date();
+            const diaSemana = hoy.getDay();
+            
+            // Si es fin de semana, cargar viernes directamente
+            if (diaSemana === 0 || diaSemana === 6) {
+                const diaHabil = getDiaHabilActual();
+                const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+                const nombreDia = dias[diaHabil.getDay()];
+                cargarFlexPorFecha(diaHabil, nombreDia);
+            } else {
+                cargarFlexHoy();
+            }
         });
     </script>
 </body>
