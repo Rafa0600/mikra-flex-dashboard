@@ -530,6 +530,36 @@
             margin-bottom: 10px;
         }
 
+        .progress-container {
+            width: 80%;
+            max-width: 500px;
+            margin: 20px auto;
+            background: #2a2a2a;
+            border-radius: 20px;
+            height: 40px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #9C27B0, #FFE600, #00ff88);
+            border-radius: 20px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            font-size: 14px;
+        }
+
+        .loading-details {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #888;
+        }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -787,7 +817,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.8</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.9</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -1187,16 +1217,34 @@
 
         async function cargarFlexPorFecha(targetDate, label) {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
+            content.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <br>Cargando entregas de ${label}...
+                    <div class="progress-container">
+                        <div class="progress-fill" id="progressFill" style="width: 0%;">0%</div>
+                    </div>
+                    <div class="loading-details" id="loadingDetails">Inicializando...</div>
+                </div>
+            `;
             
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
 
+            const totalCuentas = CUENTAS.length;
+            let cuentasCompletadas = 0;
+
             for (const cuenta of CUENTAS) {
                 try {
+                    document.getElementById('loadingDetails').textContent = `Cargando cuenta ${cuenta.nombre}...`;
+                    
                     const token = await obtenerTokenCuenta(cuenta);
                     if (!token) {
                         console.error(`No hay token para ${cuenta.nombre}`);
+                        cuentasCompletadas++;
+                        const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
+                        document.getElementById('progressFill').style.width = progreso + '%';
+                        document.getElementById('progressFill').textContent = progreso + '%';
                         continue;
                     }
 
@@ -1213,8 +1261,18 @@
                             });
                         }
                     });
+                    
+                    cuentasCompletadas++;
+                    const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
+                    document.getElementById('progressFill').style.width = progreso + '%';
+                    document.getElementById('progressFill').textContent = progreso + '%';
+                    
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
+                    cuentasCompletadas++;
+                    const progreso = Math.round((cuentasCompletadas / totalCuentas) * 100);
+                    document.getElementById('progressFill').style.width = progreso + '%';
+                    document.getElementById('progressFill').textContent = progreso + '%';
                 }
             }
 
@@ -1275,7 +1333,7 @@
             let tempOrders = [];
             
             const allOrderPromises = [];
-            const totalPages = 20;
+            const totalPages = 40; // AUMENTADO de 20 a 40 para cargar más órdenes
 
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
@@ -1298,6 +1356,7 @@
                 return [];
             }
 
+            // Cargar todas las páginas
             for (let page = 0; page < totalPages; page++) {
                 allOrderPromises.push(
                     fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc`, {
@@ -1308,6 +1367,8 @@
 
             const allPagesData = await Promise.all(allOrderPromises);
             const allOrders = allPagesData.flatMap(data => data.results || []);
+
+            console.log(`${cuenta.nombre}: Cargadas ${allOrders.length} órdenes en total`);
 
             const shippingPromises = allOrders.map(async (order) => {
                 try {
@@ -1346,6 +1407,7 @@
                 }
             });
 
+            console.log(`${cuenta.nombre}: ${uniqueShippings.size} envíos FLEX encontrados para la fecha`);
             return Array.from(uniqueShippings.values());
         }
 
@@ -1912,20 +1974,41 @@
             // Limpiar marcadores anteriores
             markersLayer.clearLayers();
 
-            let ordersParaMapa = allFlexOrders.filter(({ shipping }) => {
+            let ordersParaMapa = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
                 const state = getOrderState(shipping);
                 
                 // Excluir canceladas siempre
                 if (state === 'cancelado') return false;
                 
-                // Filtrar según toggles
+                // Filtrar por estado según toggles
+                let estadoPasa = false;
                 if (state === 'pendiente' || state === 'en-camino' || state === 'reprogramado') {
-                    return mapShowPendientes;
+                    estadoPasa = mapShowPendientes;
+                } else if (state === 'entregado') {
+                    estadoPasa = mapShowEntregados;
                 }
-                if (state === 'entregado') {
-                    return mapShowEntregados;
+                
+                if (!estadoPasa) return false;
+                
+                // APLICAR FILTRO DE CUENTA
+                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) {
+                    return false;
                 }
-                return false;
+                
+                // APLICAR FILTRO DE ZONA
+                if (currentZoneFilter !== 'all') {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zona = getZonaDetallada(barrio, ciudad);
+                    
+                    if (currentZoneFilter === 'CABA') {
+                        if (!esCABA(zona)) return false;
+                    } else {
+                        if (zona !== currentZoneFilter) return false;
+                    }
+                }
+                
+                return true;
             });
 
             if (ordersParaMapa.length === 0) {
