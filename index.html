@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Envíos FLEX - Mikra + Chaya</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
         * {
             margin: 0;
@@ -728,6 +732,30 @@
             transform: translateX(5px);
         }
 
+        #mapFrame {
+            width: 100%;
+            height: 70vh;
+            border-radius: 8px;
+            background: #1a1a1a;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #2a2a2a;
+            color: #fff;
+        }
+
+        .leaflet-popup-tip {
+            background: #2a2a2a;
+        }
+
+        .leaflet-popup-content {
+            margin: 10px;
+        }
+
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #fff;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -750,12 +778,16 @@
                 margin: 10px;
                 padding: 10px;
             }
+
+            #mapFrame {
+                height: 60vh;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.5</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v1.8</span></h1>
 
         <div class="top-buttons">
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
@@ -844,7 +876,7 @@
                         ✅ Entregados (<span id="mapCountEntregado">0</span>)
                     </button>
                 </div>
-                <div id="mapFrame" style="background: #1a1a1a; border-radius: 8px; min-height: 300px;"></div>
+                <div id="mapFrame"></div>
             </div>
         </div>
     </div>
@@ -1793,6 +1825,8 @@
         // FUNCIONES DEL MAPA
         let mapShowPendientes = true;
         let mapShowEntregados = true;
+        let leafletMap = null;
+        let markersLayer = null;
 
         function toggleMapFilter(tipo) {
             if (tipo === 'pendiente') {
@@ -1834,7 +1868,23 @@
             document.getElementById('mapModal').classList.add('active');
             document.body.style.overflow = 'hidden';
 
-            actualizarMapa();
+            // Inicializar mapa si no existe
+            if (!leafletMap) {
+                setTimeout(() => {
+                    leafletMap = L.map('mapFrame').setView([-34.6037, -58.3816], 11);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19
+                    }).addTo(leafletMap);
+                    
+                    markersLayer = L.layerGroup().addTo(leafletMap);
+                    
+                    actualizarMapa();
+                }, 100);
+            } else {
+                actualizarMapa();
+            }
         }
 
         function cerrarMapa() {
@@ -1843,6 +1893,11 @@
         }
 
         function actualizarMapa() {
+            if (!leafletMap || !markersLayer) return;
+
+            // Limpiar marcadores anteriores
+            markersLayer.clearLayers();
+
             let ordersParaMapa = allFlexOrders.filter(({ shipping }) => {
                 const state = getOrderState(shipping);
                 
@@ -1860,105 +1915,94 @@
             });
 
             if (ordersParaMapa.length === 0) {
-                document.getElementById('mapFrame').innerHTML = '<div style="text-align:center; padding:40px; color:#888;">No hay entregas para mostrar con los filtros seleccionados</div>';
                 return;
             }
 
-            // Crear HTML con lista de direcciones clickeables
-            let mapHTML = '<div style="padding: 20px; max-height: 70vh; overflow-y: auto;">';
-            
-            let currentZona = '';
-            let zonasAgrupadas = {};
-            
-            // Agrupar por zona
-            ordersParaMapa.forEach(({ shipping, orders: orderList, cuentaNombre }) => {
-                const barrio = shipping.receiver_address?.neighborhood?.name || '';
+            let bounds = [];
+
+            ordersParaMapa.forEach(({ shipping, orders: orderList, cuentaNombre, cuentaColor }) => {
+                const lat = shipping.receiver_address?.latitude;
+                const lng = shipping.receiver_address?.longitude;
+                
+                if (!lat || !lng) return;
+
+                const state = getOrderState(shipping);
+                const calle = shipping.receiver_address?.street_name || '';
+                const numero = shipping.receiver_address?.street_number || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
+                const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const zona = getZonaDetallada(barrio, ciudad);
+                const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                const orderId = orderList[0]?.id || '';
+                const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                const direccionCompleta = `${calle} ${numero}, ${ciudad}`;
+                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+
+                // Color del marcador según estado
+                let markerColor = '#9C27B0'; // pendiente
+                let estadoEmoji = '⏳';
+                let estadoTexto = 'Pendiente';
                 
-                if (!zonasAgrupadas[zona]) {
-                    zonasAgrupadas[zona] = [];
+                if (state === 'en-camino') {
+                    markerColor = '#00d9ff';
+                    estadoEmoji = '🚚';
+                    estadoTexto = 'En camino';
+                } else if (state === 'entregado') {
+                    markerColor = '#00ff88';
+                    estadoEmoji = '✅';
+                    estadoTexto = 'Entregado';
+                } else if (state === 'reprogramado') {
+                    markerColor = '#FF9800';
+                    estadoEmoji = '🔄';
+                    estadoTexto = 'Reprogramado';
                 }
-                
-                zonasAgrupadas[zona].push({ shipping, orderList, cuentaNombre });
-            });
-            
-            // Ordenar zonas alfabéticamente
-            const zonasOrdenadas = Object.keys(zonasAgrupadas).sort();
-            
-            zonasOrdenadas.forEach(zona => {
-                const enviosZona = zonasAgrupadas[zona];
-                
-                mapHTML += `
-                    <div style="margin-bottom: 25px;">
-                        <h3 style="color: #FFE600; margin-bottom: 15px; font-size: 18px; border-bottom: 2px solid #FFE600; padding-bottom: 8px;">
-                            📍 ${zona} (${enviosZona.length})
-                        </h3>
-                `;
-                
-                enviosZona.forEach(({ shipping, orderList, cuentaNombre }) => {
-                    const state = getOrderState(shipping);
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
-                    const ciudadNombre = shipping.receiver_address?.city?.name || '';
-                    const provincia = shipping.receiver_address?.state?.name || '';
-                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
-                    const orderId = orderList[0]?.id || '';
-                    
-                    const direccionCompleta = `${calle} ${numero}, ${ciudadNombre}, ${provincia}`;
-                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
-                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-                    
-                    // Color de badge según estado
-                    let badgeColor = '#9C27B0'; // pendiente
-                    let badgeText = '⏳ Pendiente';
-                    if (state === 'en-camino') {
-                        badgeColor = '#00d9ff';
-                        badgeText = '🚚 En camino';
-                    } else if (state === 'entregado') {
-                        badgeColor = '#00ff88';
-                        badgeText = '✅ Entregado';
-                    } else if (state === 'reprogramado') {
-                        badgeColor = '#FF9800';
-                        badgeText = '🔄 Reprogramado';
-                    }
-                    
-                    // Badge de cuenta
-                    let cuentaBadge = '';
-                    if (cuentaNombre === 'Mikra') {
-                        cuentaBadge = '<span style="background:#9C27B0; color:white; padding:3px 8px; border-radius:10px; font-size:11px; margin-left:8px;">🟣 Mikra</span>';
-                    } else if (cuentaNombre === 'Chaya') {
-                        cuentaBadge = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:11px; margin-left:8px;">🟠 Chaya</span>';
-                    }
-                    
-                    mapHTML += `
-                        <div style="background: #2a2a2a; border-left: 4px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-                                <div>
-                                    <span style="background:${badgeColor}; color:${state === 'en-camino' || state === 'entregado' || state === 'reprogramado' ? '#000' : '#fff'}; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:bold;">${badgeText}</span>
-                                    ${cuentaBadge}
-                                </div>
-                                <a href="${orderUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:12px;">#${orderId}</a>
-                            </div>
-                            <div style="margin-bottom: 8px;">
-                                <strong style="color:#fff;">👤 ${comprador}</strong>
-                            </div>
-                            <div>
-                                <a href="${googleMapsUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:14px; display: inline-flex; align-items: center; gap: 6px;">
-                                    <span style="font-size: 18px;">📍</span>
-                                    ${calle} ${numero}, ${ciudadNombre}
-                                </a>
-                            </div>
-                        </div>
-                    `;
+
+                // Crear icono personalizado
+                const customIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${estadoEmoji}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
                 });
+
+                const marker = L.marker([lat, lng], { icon: customIcon });
+
+                // Badge de cuenta
+                let cuentaBadgeHtml = '';
+                if (cuentaNombre === 'Mikra') {
+                    cuentaBadgeHtml = '<span style="background:#9C27B0; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟣 Mikra</span>';
+                } else if (cuentaNombre === 'Chaya') {
+                    cuentaBadgeHtml = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟠 Chaya</span>';
+                }
+
+                const popupContent = `
+                    <div style="min-width:200px;">
+                        <div style="margin-bottom:8px;">
+                            <span style="background:${markerColor}; color:${state === 'en-camino' || state === 'entregado' || state === 'reprogramado' ? '#000' : '#fff'}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:bold;">${estadoEmoji} ${estadoTexto}</span>
+                            ${cuentaBadgeHtml}
+                        </div>
+                        <div style="margin-bottom:6px;"><strong>📍 ${zona}</strong></div>
+                        <div style="margin-bottom:6px;">👤 ${comprador}</div>
+                        <div style="margin-bottom:8px; font-size:12px; color:#aaa;">
+                            <a href="${orderUrl}" target="_blank" style="color:#3483FA; text-decoration:none;">#${orderId}</a>
+                        </div>
+                        <a href="${googleMapsUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:13px; display:block; margin-top:8px; padding:6px; background:#1a1a1a; border-radius:6px; text-align:center;">
+                            🗺️ Abrir en Google Maps<br>
+                            <small style="color:#888;">${direccionCompleta}</small>
+                        </a>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                marker.addTo(markersLayer);
                 
-                mapHTML += '</div>';
+                bounds.push([lat, lng]);
             });
-            
-            mapHTML += '</div>';
-            
-            document.getElementById('mapFrame').innerHTML = mapHTML;
+
+            // Ajustar vista para mostrar todos los marcadores
+            if (bounds.length > 0) {
+                leafletMap.fitBounds(bounds, { padding: [50, 50] });
+            }
         }
 
         function getDiaHabilActual() {
@@ -1984,16 +2028,20 @@
             const hoy = new Date();
             const diaSemana = hoy.getDay();
             
-            // Si es fin de semana, cargar viernes directamente
+            // Si es fin de semana (sábado o domingo), cargar LUNES
             if (diaSemana === 0 || diaSemana === 6) {
-                const diaHabil = getDiaHabilActual();
+                const lunes = getDiaHabilActual(); // Ya devuelve lunes
                 const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
-                const nombreDia = dias[diaHabil.getDay()];
-                cargarFlexPorFecha(diaHabil, nombreDia);
+                const nombreDia = dias[lunes.getDay()];
+                cargarFlexPorFecha(lunes, nombreDia);
             } else {
+                // Día de semana normal, cargar HOY
                 cargarFlexHoy();
             }
         });
     </script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
