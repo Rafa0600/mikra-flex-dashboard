@@ -973,31 +973,20 @@
             return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
         }
 
-        function esCABAPorCP(zipCode) {
-            if (!zipCode) return false;
-            const cp = parseInt(String(zipCode).replace(/\D/g, ''), 10);
-            return !isNaN(cp) && cp >= 1000 && cp <= 1499;
-        }
-
-        function getZonaDetallada(barrio, ciudad, zipCode) {
+        function getZonaDetallada(barrio, ciudad) {
             const barrioNorm = (barrio || '').trim();
             const ciudadNorm = (ciudad || '').trim();
             
-            // Detectar CABA por nombre
-            const esCABAporNombre = ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires'
-                || ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm);
-            
-            // Detectar CABA por código postal (1000-1499)
-            const esCABAporCP = esCABAPorCP(zipCode);
-            
-            if (esCABAporNombre || esCABAporCP) {
-                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires' && barrioNorm !== 'Capital Federal') {
+            if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
+                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
                     return `CABA - ${barrioNorm}`;
                 }
-                if (ciudadNorm && ciudadNorm !== 'CABA' && ciudadNorm !== 'Buenos aires' && ciudadNorm !== 'Capital Federal' && esBarrioCABA(ciudadNorm)) {
-                    return `CABA - ${ciudadNorm}`;
-                }
                 return 'CABA - Otros';
+            }
+            
+            if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
+                const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
+                return `CABA - ${nombreBarrio}`;
             }
             
             const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
@@ -1310,8 +1299,7 @@
                 
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
-                const zipCode = shipping.receiver_address?.zip_code || '';
-                const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                const zona = getZonaDetallada(barrio, ciudad);
                 zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
                 
                 // Contar CABA vs Provincia
@@ -1452,7 +1440,13 @@
             const tags = shipping.tags || [];
             const tagsLower = tags.map(t => (t || '').toLowerCase());
             
-            // Primero detectar reprogramados (incluye not_delivered con substatus específico)
+            if (status === 'cancelled' || status === 'not_delivered' ||
+                substatus === 'cancelled' || substatus === 'buyer_cancelled' || 
+                substatus === 'cancelled_by_buyer' || substatus === 'cancelled_manually' ||
+                tagsLower.includes('cancelled')) {
+                return 'cancelado';
+            }
+            
             if (substatus === 'rescheduled' || substatus === 'rescheduled_by_buyer' ||
                 substatus === 'delayed' || substatus === 'returning_to_sender' ||
                 substatus === 'waiting_for_withdrawal' || substatus === 'receiver_absent' ||
@@ -1463,18 +1457,8 @@
                 return 'reprogramado';
             }
 
-            // not_delivered sin substatus de cancelación → reprogramado
             if (status === 'not_delivered' && !substatus.includes('cancel')) {
                 return 'reprogramado';
-            }
-            
-            // Cancelados
-            if (status === 'cancelled' ||
-                substatus === 'cancelled' || substatus === 'buyer_cancelled' || 
-                substatus === 'cancelled_by_buyer' || substatus === 'cancelled_manually' ||
-                tagsLower.includes('cancelled') ||
-                (status === 'not_delivered' && substatus.includes('cancel'))) {
-                return 'cancelado';
             }
             
             if (history.date_delivered) {
@@ -1486,34 +1470,6 @@
             }
             
             return 'pendiente';
-        }
-
-        // Detalle específico para envíos reprogramados
-        function getReprogramadoDetail(shipping) {
-            const substatus = (shipping.substatus || '').toLowerCase();
-            
-            if (substatus === 'receiver_absent') {
-                return { label: '🚫 Comprador ausente', short: 'Comprador ausente' };
-            }
-            if (substatus === 'rescheduled_by_buyer' || substatus === 'rescheduled') {
-                return { label: '📅 Reprogramado por comprador', short: 'Reprogram. comprador' };
-            }
-            if (substatus === 'delayed') {
-                return { label: '⏰ Demorado', short: 'Demorado' };
-            }
-            if (substatus === 'returning_to_sender' || substatus === 'not_delivered_and_returning') {
-                return { label: '↩️ Devolviendo al vendedor', short: 'Devolviendo' };
-            }
-            if (substatus === 'out_of_delivery_area') {
-                return { label: '📍 Fuera de zona de entrega', short: 'Fuera de zona' };
-            }
-            if (substatus === 'delivery_failed') {
-                return { label: '❌ Entrega fallida', short: 'Entrega fallida' };
-            }
-            if (substatus === 'waiting_for_withdrawal') {
-                return { label: '📦 Esperando retiro', short: 'Esperando retiro' };
-            }
-            return { label: '🔄 Reprogramado', short: 'Reprogramado' };
         }
 
         function logShippingStates() {
@@ -1604,8 +1560,7 @@
                 filtered = filtered.filter(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                    const zona = getZonaDetallada(barrio, ciudad);
                     
                     if (currentZoneFilter === 'CABA') {
                         return esCABA(zona);
@@ -1620,13 +1575,11 @@
                 filtered.sort((a, b) => {
                     const zonaA = getZonaDetallada(
                         a.shipping.receiver_address?.neighborhood?.name || '',
-                        a.shipping.receiver_address?.city?.name || '',
-                        a.shipping.receiver_address?.zip_code || ''
+                        a.shipping.receiver_address?.city?.name || ''
                     );
                     const zonaB = getZonaDetallada(
                         b.shipping.receiver_address?.neighborhood?.name || '',
-                        b.shipping.receiver_address?.city?.name || '',
-                        b.shipping.receiver_address?.zip_code || ''
+                        b.shipping.receiver_address?.city?.name || ''
                     );
                     return zonaA.localeCompare(zonaB);
                 });
@@ -1740,8 +1693,7 @@
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                    const zona = getZonaDetallada(barrio, ciudad);
                     
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
@@ -1764,11 +1716,8 @@
                         'cancelado': '❌ Cancelada',
                         'reprogramado': '🔄 Reprogramado'
                     };
-                    
-                    // Detalle específico para reprogramados
-                    const estadoTexto = state === 'reprogramado' 
-                        ? getReprogramadoDetail(shipping).label 
-                        : estadoLabel[state];
+
+                    const cantidadItems = orderList.length;
                     const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
@@ -1777,7 +1726,7 @@
                         <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
-                                <div class="simple-estado ${state}">${estadoTexto}</div>
+                                <div class="simple-estado ${state}">${estadoLabel[state]}</div>
                             </div>
                             
                             <div class="simple-details" id="simple-details-${index}">
@@ -1847,8 +1796,7 @@
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                    const zona = getZonaDetallada(barrio, ciudad);
                     
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
@@ -1871,13 +1819,8 @@
                         'en-camino': '🚚 En camino',
                         'entregado': '✅ Entregado',
                         'cancelado': '❌ Cancelada - No despaches',
-                        'reprogramado': '🔄 Reprogramado'
+                        'reprogramado': '🔄 Reprogramado por comprador'
                     };
-                    
-                    // Detalle específico para reprogramados
-                    const estadoTextoCompleto = state === 'reprogramado' 
-                        ? getReprogramadoDetail(shipping).label 
-                        : estadoLabel[state];
 
                     const cantidadItems = orderList.length;
                     const comprador = orderList[0]?.buyer?.nickname || 'N/A';
@@ -1888,7 +1831,7 @@
                         <div class="envio-card ${state}">
                             <div class="envio-header">
                                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                    <span class="estado-badge ${state}">${estadoTextoCompleto}</span>
+                                    <span class="estado-badge ${state}">${estadoLabel[state]}</span>
                                     ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
                                     <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
                                 </div>
@@ -2076,8 +2019,7 @@
                 if (currentZoneFilter !== 'all') {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                    const zona = getZonaDetallada(barrio, ciudad);
                     
                     if (currentZoneFilter === 'CABA') {
                         if (!esCABA(zona)) return false;
@@ -2106,7 +2048,7 @@
                 const numero = shipping.receiver_address?.street_number || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const zona = getZonaDetallada(barrio, ciudad, shipping.receiver_address?.zip_code || '');
+                const zona = getZonaDetallada(barrio, ciudad);
                 const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                 const orderId = orderList[0]?.id || '';
                 const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
@@ -2129,7 +2071,7 @@
                 } else if (state === 'reprogramado') {
                     markerColor = '#FF9800';
                     estadoEmoji = '🔄';
-                    estadoTexto = getReprogramadoDetail(shipping).short;
+                    estadoTexto = 'Reprogramado';
                 }
 
                 // Crear icono personalizado
