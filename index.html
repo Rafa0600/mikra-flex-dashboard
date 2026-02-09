@@ -973,20 +973,31 @@
             return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
         }
 
-        function getZonaDetallada(barrio, ciudad) {
+        function esCABAPorCP(zipCode) {
+            if (!zipCode) return false;
+            const cp = parseInt(String(zipCode).replace(/\D/g, ''), 10);
+            return !isNaN(cp) && cp >= 1000 && cp <= 1499;
+        }
+
+        function getZonaDetallada(barrio, ciudad, zipCode) {
             const barrioNorm = (barrio || '').trim();
             const ciudadNorm = (ciudad || '').trim();
             
-            if (ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires') {
-                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires') {
+            // Detectar CABA por nombre
+            const esCABAporNombre = ciudadNorm === 'CABA' || barrioNorm === 'CABA' || ciudadNorm === 'Buenos aires'
+                || ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm);
+            
+            // Detectar CABA por código postal (1000-1499)
+            const esCABAporCP = esCABAPorCP(zipCode);
+            
+            if (esCABAporNombre || esCABAporCP) {
+                if (barrioNorm && barrioNorm !== 'CABA' && barrioNorm !== 'Buenos aires' && barrioNorm !== 'Capital Federal') {
                     return `CABA - ${barrioNorm}`;
                 }
+                if (ciudadNorm && ciudadNorm !== 'CABA' && ciudadNorm !== 'Buenos aires' && ciudadNorm !== 'Capital Federal' && esBarrioCABA(ciudadNorm)) {
+                    return `CABA - ${ciudadNorm}`;
+                }
                 return 'CABA - Otros';
-            }
-            
-            if (ciudadNorm === 'Capital Federal' || esBarrioCABA(barrioNorm) || esBarrioCABA(ciudadNorm)) {
-                const nombreBarrio = esBarrioCABA(barrioNorm) ? barrioNorm : ciudadNorm;
-                return `CABA - ${nombreBarrio}`;
             }
             
             const zonaNorte = ['San Isidro', 'Vicente López', 'San Fernando', 'Tigre', 'Olivos', 'Martínez', 'Acassuso', 'Beccar', 'La Lucila', 'Villa Adelina'];
@@ -1299,7 +1310,8 @@
                 
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
-                const zona = getZonaDetallada(barrio, ciudad);
+                const zipCode = shipping.receiver_address?.zip_code || '';
+                const zona = getZonaDetallada(barrio, ciudad, zipCode);
                 zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
                 
                 // Contar CABA vs Provincia
@@ -1560,7 +1572,8 @@
                 filtered = filtered.filter(({ shipping }) => {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
                     
                     if (currentZoneFilter === 'CABA') {
                         return esCABA(zona);
@@ -1575,11 +1588,13 @@
                 filtered.sort((a, b) => {
                     const zonaA = getZonaDetallada(
                         a.shipping.receiver_address?.neighborhood?.name || '',
-                        a.shipping.receiver_address?.city?.name || ''
+                        a.shipping.receiver_address?.city?.name || '',
+                        a.shipping.receiver_address?.zip_code || ''
                     );
                     const zonaB = getZonaDetallada(
                         b.shipping.receiver_address?.neighborhood?.name || '',
-                        b.shipping.receiver_address?.city?.name || ''
+                        b.shipping.receiver_address?.city?.name || '',
+                        b.shipping.receiver_address?.zip_code || ''
                     );
                     return zonaA.localeCompare(zonaB);
                 });
@@ -1693,7 +1708,8 @@
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
                     
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
@@ -1796,7 +1812,8 @@
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
                     
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
@@ -2019,7 +2036,8 @@
                 if (currentZoneFilter !== 'all') {
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zona = getZonaDetallada(barrio, ciudad);
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
                     
                     if (currentZoneFilter === 'CABA') {
                         if (!esCABA(zona)) return false;
@@ -2048,7 +2066,7 @@
                 const numero = shipping.receiver_address?.street_number || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const zona = getZonaDetallada(barrio, ciudad);
+                const zona = getZonaDetallada(barrio, ciudad, shipping.receiver_address?.zip_code || '');
                 const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                 const orderId = orderList[0]?.id || '';
                 const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
