@@ -834,6 +834,10 @@
             <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
             <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning">📅 Ver <span id="diaAnteriorLabel"></span></button>
             <button onclick="mostrarMapa()" id="btnMapa" class="hidden">🗺️ Ver Mapa</button>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <input type="date" id="fechaCustom" style="padding:8px 12px; background:#1a1a1a; border:2px solid #444; border-radius:6px; color:#fff; font-size:14px; cursor:pointer;">
+                <button onclick="cargarFechaCustom()" style="background:#9C27B0;">📅 Buscar fecha</button>
+            </div>
         </div>
 
         <!-- Filtro rápido por cuenta -->
@@ -1233,6 +1237,28 @@
             const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const nombreDia = dias[diaAnterior.getDay()].toUpperCase();
             await cargarFlexPorFecha(diaAnterior, nombreDia);
+        }
+
+        async function cargarFechaCustom() {
+            const input = document.getElementById('fechaCustom');
+            if (!input.value) {
+                alert('Seleccioná una fecha primero');
+                return;
+            }
+            currentStateFilter = 'all';
+            currentZoneFilter = 'all';
+            currentCuentaFilter = 'all';
+            mostrarCanceladas = false;
+            allFlexOrders = [];
+            
+            const partes = input.value.split('-');
+            const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+            fecha.setHours(0, 0, 0, 0);
+            
+            const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const label = `${dias[fecha.getDay()]} ${fecha.getDate()} ${meses[fecha.getMonth()]}`;
+            await cargarFlexPorFecha(fecha, label);
         }
 
         async function cargarFlexPorFecha(targetDate, label) {
