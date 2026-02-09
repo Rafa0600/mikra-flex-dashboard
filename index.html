@@ -1489,6 +1489,7 @@
             
             // Primero: detectar reprogramados (incluye not_delivered con substatus específico)
             if (substatus === 'rescheduled' || substatus === 'rescheduled_by_buyer' ||
+                substatus === 'buyer_rescheduled' ||
                 substatus === 'delayed' || substatus === 'returning_to_sender' ||
                 substatus === 'waiting_for_withdrawal' || substatus === 'receiver_absent' ||
                 substatus === 'out_of_delivery_area' || substatus === 'not_delivered_and_returning' ||
@@ -1526,7 +1527,7 @@
         function getReprogramadoDetail(shipping) {
             const substatus = (shipping.substatus || '').toLowerCase();
             if (substatus === 'receiver_absent') return { label: '🚫 Comprador ausente', short: 'Comprador ausente' };
-            if (substatus === 'rescheduled_by_buyer' || substatus === 'rescheduled') return { label: '📅 Reprogramado por comprador', short: 'Reprogram. comprador' };
+            if (substatus === 'buyer_rescheduled' || substatus === 'rescheduled_by_buyer' || substatus === 'rescheduled') return { label: '📅 Reprogramado por comprador', short: 'Reprogram. comprador' };
             if (substatus === 'delayed') return { label: '⏰ Demorado', short: 'Demorado' };
             if (substatus === 'returning_to_sender' || substatus === 'not_delivered_and_returning') return { label: '↩️ Devolviendo al vendedor', short: 'Devolviendo' };
             if (substatus === 'out_of_delivery_area') return { label: '📍 Fuera de zona', short: 'Fuera de zona' };
