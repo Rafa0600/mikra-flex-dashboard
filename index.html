@@ -1403,9 +1403,20 @@
                 return [];
             }
 
+            // Calcular rango de fechas: desde 3 días antes hasta 1 día después de la fecha objetivo
+            const dateFrom = new Date(targetDate);
+            dateFrom.setDate(dateFrom.getDate() - 3);
+            const dateTo = new Date(targetDate);
+            dateTo.setDate(dateTo.getDate() + 1);
+            dateTo.setHours(23, 59, 59, 0);
+            
+            const dateFromStr = dateFrom.toISOString().split('.')[0] + '.000-00:00';
+            const dateToStr = dateTo.toISOString().split('.')[0] + '.000-00:00';
+            const dateFilter = `&order.date_created.from=${encodeURIComponent(dateFromStr)}&order.date_created.to=${encodeURIComponent(dateToStr)}`;
+
             for (let page = 0; page < totalPages; page++) {
                 allOrderPromises.push(
-                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc`, {
+                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc${dateFilter}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).then(r => r.json())
                 );
