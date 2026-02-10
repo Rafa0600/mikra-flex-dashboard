@@ -89,37 +89,6 @@
             flex-wrap: wrap;
         }
 
-        .tools-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: #2a2a2a;
-            border: 2px solid #444;
-            color: #aaa;
-            padding: 8px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            margin-bottom: 10px;
-            transition: all 0.3s;
-            user-select: none;
-        }
-
-        .tools-toggle:hover {
-            border-color: #FFE600;
-            color: #fff;
-        }
-
-        .tools-toggle .arrow {
-            transition: transform 0.3s;
-            font-size: 10px;
-        }
-
-        .tools-toggle.open .arrow {
-            transform: rotate(180deg);
-        }
-
         .tools-panel {
             display: none;
         }
@@ -872,46 +841,44 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.6</span></h1>
-
-        <!-- Info badges - siempre visibles -->
-        <div class="info-badges" id="infoBadges" style="display: none;">
-            <span class="info-badge fecha" id="badgeFecha">📅 HOY</span>
-            <span class="info-badge caba" id="badgeCaba">🏙️ CABA: 0</span>
-            <span class="info-badge provincia" id="badgeProvincia">🗺️ Provincia: 0</span>
+        <!-- Header compacto: título + badges + mapa + settings en una sola zona -->
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+            <h1 style="margin:0; font-size:18px;">🏍️ FLEX <span class="version-badge">v2.7</span></h1>
+            <div class="info-badges" id="infoBadges" style="display:none; margin:0; gap:5px;">
+                <span class="info-badge fecha" id="badgeFecha" style="padding:4px 8px; font-size:11px;">📅 HOY</span>
+                <span class="info-badge caba" id="badgeCaba" style="padding:4px 8px; font-size:11px;">🏙️ CABA: 0</span>
+                <span class="info-badge provincia" id="badgeProvincia" style="padding:4px 8px; font-size:11px;">🗺️ Prov: 0</span>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:#3483FA; padding:6px 14px; font-size:13px; margin:0;">🗺️ Mapa</button>
+                <button onclick="toggleTools()" id="toolsToggle" style="background:#2a2a2a; border:2px solid #444; padding:6px 12px; font-size:16px; margin:0;" title="Herramientas">⚙️</button>
+            </div>
         </div>
 
-        <!-- Botón mapa siempre visible -->
-        <div style="text-align:center; margin-bottom:10px;">
-            <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:#3483FA; font-size:15px; padding:10px 25px;">🗺️ Ver Mapa</button>
-        </div>
-
-        <!-- Toggle herramientas -->
-        <div class="tools-toggle" id="toolsToggle" onclick="toggleTools()">
-            ⚙️ Herramientas <span class="arrow">▼</span>
-        </div>
-
+        <!-- Panel herramientas desplegable -->
         <div class="tools-panel" id="toolsPanel">
-            <div class="top-buttons">
-                <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
-                <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning">📅 Ver <span id="diaAnteriorLabel"></span></button>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" id="fechaCustom" style="padding:8px 12px; background:#1a1a1a; border:2px solid #444; border-radius:6px; color:#fff; font-size:14px; cursor:pointer;">
-                    <button onclick="cargarFechaCustom()" style="background:#9C27B0;">📅 Buscar fecha</button>
+            <div style="background:#2a2a2a; border-radius:10px; padding:12px; margin-bottom:10px;">
+                <div style="font-size:12px; color:#888; margin-bottom:8px; text-align:center;">HERRAMIENTAS</div>
+                <div class="top-buttons" style="margin-bottom:10px;">
+                    <button onclick="toggleVista()" id="toggleVistaBtn" style="font-size:12px; padding:7px 14px;">📊 Vista Completa</button>
+                    <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning" style="font-size:12px; padding:7px 14px;">📅 Ver <span id="diaAnteriorLabel"></span></button>
+                    <div style="display:flex; gap:4px; align-items:center;">
+                        <input type="date" id="fechaCustom" style="padding:6px 8px; background:#1a1a1a; border:2px solid #444; border-radius:6px; color:#fff; font-size:12px; cursor:pointer;">
+                        <button onclick="cargarFechaCustom()" style="background:#9C27B0; font-size:12px; padding:7px 12px;">📅 Buscar</button>
+                    </div>
+                </div>
+                <div style="font-size:12px; color:#888; margin-bottom:8px; text-align:center;">FILTROS</div>
+                <div id="cuentaFilterInTools" class="cuenta-filter" style="margin-bottom:0;">
+                    <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')" style="padding:5px 12px; font-size:11px;">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
+                    <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')" style="padding:5px 12px; font-size:11px;">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
+                    <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:5px 12px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
+                    <span class="cuenta-separator">│</span>
+                    <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:5px 12px; font-size:11px;">❌ Canceladas <span id="canceladasCount">0</span></button>
                 </div>
             </div>
         </div>
 
-        <!-- Filtro rápido por cuenta -->
-        <div id="cuentaFilterSection" class="cuenta-filter hidden">
-            <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
-            <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
-            <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
-            <span class="cuenta-separator">│</span>
-            <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn">❌ Canceladas <span id="canceladasCount">0</span></button>
-        </div>
-
-        <div id="filterSection" class="filter-section hidden">
+        <div id="filterSection" class="filter-section hidden" style="padding:10px; margin-bottom:10px;">
             <div class="filter-row">
                 <label>📍 Zona:</label>
                 <div class="search-select-wrapper">
@@ -929,27 +896,27 @@
             </div>
         </div>
 
-        <div id="statsSection" class="stats-bar hidden">
-            <div class="stats-grid">
-                <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all">
-                    <div class="stat-number" style="color:#FFE600;">0</div>
-                    <div class="stat-label">TODOS</div>
+        <div id="statsSection" class="stats-bar hidden" style="padding:10px; margin-bottom:10px;">
+            <div class="stats-grid" style="margin-bottom:8px;">
+                <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all" style="padding:6px;">
+                    <div class="stat-number" style="color:#FFE600; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:9px;">TODOS</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente">
-                    <div class="stat-number" style="color:#9C27B0;">0</div>
-                    <div class="stat-label">⏳ PENDIENTES</div>
+                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente" style="padding:6px;">
+                    <div class="stat-number" style="color:#9C27B0; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:9px;">⏳ PEND</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino">
-                    <div class="stat-number" style="color:#00d9ff;">0</div>
-                    <div class="stat-label">🚚 EN CAMINO</div>
+                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino" style="padding:6px;">
+                    <div class="stat-number" style="color:#00d9ff; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:9px;">🚚 CAMINO</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado">
-                    <div class="stat-number" style="color:#00ff88;">0</div>
-                    <div class="stat-label">✅ ENTREGADOS</div>
+                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado" style="padding:6px;">
+                    <div class="stat-number" style="color:#00ff88; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:9px;">✅ ENTREG</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('reprogramado')" id="stat-reprogramado">
-                    <div class="stat-number" style="color:#FF9800;">0</div>
-                    <div class="stat-label">🔄 REPROGRAMADOS</div>
+                <div class="stat-item" onclick="filtrarPorEstado('reprogramado')" id="stat-reprogramado" style="padding:6px;">
+                    <div class="stat-number" style="color:#FF9800; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:9px;">🔄 REPROG</div>
                 </div>
             </div>
             <div class="progress-bar-container">
@@ -957,13 +924,13 @@
             </div>
         </div>
 
-        <div id="sortSection" class="sort-controls hidden">
-            <label style="color: #FFE600; font-weight: bold;">📊 Ordenar por:</label>
-            <button class="sort-btn active" onclick="ordenarPor('zona')">🌍 Zona</button>
-            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')">📅 Fecha Entrega</button>
-            <button class="sort-btn" onclick="ordenarPor('hora-entrega')">🕐 Hora Entrega</button>
-            <button class="sort-btn" onclick="ordenarPor('estado')">📋 Estado</button>
-            <button class="sort-btn" onclick="ordenarPor('recientes')">🆕 Más Recientes</button>
+        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:8px; padding:8px;">
+            <label style="color: #FFE600; font-weight: bold; font-size:12px;">📊 Ordenar:</label>
+            <button class="sort-btn active" onclick="ordenarPor('zona')" style="font-size:11px; padding:5px 10px;">🌍 Zona</button>
+            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')" style="font-size:11px; padding:5px 10px;">📅 Fecha</button>
+            <button class="sort-btn" onclick="ordenarPor('hora-entrega')" style="font-size:11px; padding:5px 10px;">🕐 Hora</button>
+            <button class="sort-btn" onclick="ordenarPor('estado')" style="font-size:11px; padding:5px 10px;">📋 Estado</button>
+            <button class="sort-btn" onclick="ordenarPor('recientes')" style="font-size:11px; padding:5px 10px;">🆕 Recientes</button>
         </div>
 
         <div id="content"></div>
@@ -1334,7 +1301,6 @@
             document.getElementById('filterSection').classList.add('hidden');
             document.getElementById('statsSection').classList.add('hidden');
             document.getElementById('sortSection').classList.add('hidden');
-            document.getElementById('cuentaFilterSection').classList.add('hidden');
             document.getElementById('btnMapa').classList.add('hidden');
             
             const hoy = new Date();
@@ -1670,7 +1636,6 @@
             document.getElementById('filterSection').classList.remove('hidden');
             document.getElementById('statsSection').classList.remove('hidden');
             document.getElementById('sortSection').classList.remove('hidden');
-            document.getElementById('cuentaFilterSection').classList.remove('hidden');
             document.getElementById('btnMapa').classList.remove('hidden');
             displayOrders('all');
         }
@@ -1766,9 +1731,7 @@
 
         function toggleTools() {
             const panel = document.getElementById('toolsPanel');
-            const toggle = document.getElementById('toolsToggle');
             panel.classList.toggle('open');
-            toggle.classList.toggle('open');
         }
 
         function toggleVista() {
