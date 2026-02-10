@@ -790,6 +790,18 @@
             border-color: #ce93d8;
         }
 
+        .map-filter-btn.active-encamino {
+            background: #00d9ff;
+            color: #000;
+            border-color: #66eeff;
+        }
+
+        .map-filter-btn.active-reprogramado {
+            background: #FF9800;
+            color: #000;
+            border-color: #ffcc80;
+        }
+
         .map-filter-btn.active-entregado {
             background: #00ff88;
             color: #000;
@@ -860,13 +872,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.5</span></h1>
+        <h1>🏍️ Envíos FLEX <span class="version-badge">v2.6</span></h1>
 
         <!-- Info badges - siempre visibles -->
         <div class="info-badges" id="infoBadges" style="display: none;">
             <span class="info-badge fecha" id="badgeFecha">📅 HOY</span>
             <span class="info-badge caba" id="badgeCaba">🏙️ CABA: 0</span>
             <span class="info-badge provincia" id="badgeProvincia">🗺️ Provincia: 0</span>
+        </div>
+
+        <!-- Botón mapa siempre visible -->
+        <div style="text-align:center; margin-bottom:10px;">
+            <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:#3483FA; font-size:15px; padding:10px 25px;">🗺️ Ver Mapa</button>
         </div>
 
         <!-- Toggle herramientas -->
@@ -878,8 +895,6 @@
             <div class="top-buttons">
                 <button onclick="toggleVista()" id="toggleVistaBtn">📊 Vista Completa</button>
                 <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning">📅 Ver <span id="diaAnteriorLabel"></span></button>
-                <button onclick="mostrarMapa()" id="btnMapa" class="hidden">🗺️ Ver Mapa</button>
-                <button onclick="cargarReprogramados()" style="background:#FF9800; color:#000; font-weight:bold;">🔄 Ver Reprogramados</button>
                 <div style="display:flex; gap:6px; align-items:center;">
                     <input type="date" id="fechaCustom" style="padding:8px 12px; background:#1a1a1a; border:2px solid #444; border-radius:6px; color:#fff; font-size:14px; cursor:pointer;">
                     <button onclick="cargarFechaCustom()" style="background:#9C27B0;">📅 Buscar fecha</button>
@@ -961,8 +976,11 @@
                     <button class="map-close-btn" onclick="cerrarMapa()">✕ Cerrar</button>
                 </div>
                 <div class="map-filters">
-                    <button class="map-filter-btn active-pendiente" onclick="toggleMapFilter('pendiente')" id="mapFilterPendiente">
-                        ⏳ Pendientes (<span id="mapCountPendiente">0</span>)
+                    <button class="map-filter-btn active-encamino" onclick="toggleMapFilter('en-camino')" id="mapFilterEnCamino">
+                        🚚 En camino (<span id="mapCountEnCamino">0</span>)
+                    </button>
+                    <button class="map-filter-btn active-reprogramado" onclick="toggleMapFilter('reprogramado')" id="mapFilterReprogramado">
+                        🔄 Reprogramados (<span id="mapCountReprogramado">0</span>)
                     </button>
                     <button class="map-filter-btn active-entregado" onclick="toggleMapFilter('entregado')" id="mapFilterEntregado">
                         ✅ Entregados (<span id="mapCountEntregado">0</span>)
@@ -2265,37 +2283,39 @@
         });
 
         // FUNCIONES DEL MAPA
-        let mapShowPendientes = true;
+        let mapShowEnCamino = true;
+        let mapShowReprogramados = true;
         let mapShowEntregados = true;
         let leafletMap = null;
         let markersLayer = null;
 
         function toggleMapFilter(tipo) {
-            if (tipo === 'pendiente') {
-                mapShowPendientes = !mapShowPendientes;
-                const btn = document.getElementById('mapFilterPendiente');
-                if (mapShowPendientes) {
-                    btn.classList.add('active-pendiente');
-                } else {
-                    btn.classList.remove('active-pendiente');
-                }
+            if (tipo === 'en-camino') {
+                mapShowEnCamino = !mapShowEnCamino;
+                const btn = document.getElementById('mapFilterEnCamino');
+                btn.classList.toggle('active-encamino', mapShowEnCamino);
+            } else if (tipo === 'reprogramado') {
+                mapShowReprogramados = !mapShowReprogramados;
+                const btn = document.getElementById('mapFilterReprogramado');
+                btn.classList.toggle('active-reprogramado', mapShowReprogramados);
             } else if (tipo === 'entregado') {
                 mapShowEntregados = !mapShowEntregados;
                 const btn = document.getElementById('mapFilterEntregado');
-                if (mapShowEntregados) {
-                    btn.classList.add('active-entregado');
-                } else {
-                    btn.classList.remove('active-entregado');
-                }
+                btn.classList.toggle('active-entregado', mapShowEntregados);
             }
             actualizarMapa();
         }
 
         function mostrarMapa() {
-            // Contar pendientes y entregados
-            let pendientes = allFlexOrders.filter(({ shipping }) => {
+            // Contar en camino, reprogramados y entregados
+            let enCamino = allFlexOrders.filter(({ shipping }) => {
                 const state = getOrderState(shipping);
                 return state === 'pendiente' || state === 'en-camino';
+            });
+
+            let reprogramados = allFlexOrders.filter(({ shipping }) => {
+                const state = getOrderState(shipping);
+                return state === 'reprogramado';
             });
 
             let entregados = allFlexOrders.filter(({ shipping }) => {
@@ -2303,7 +2323,8 @@
                 return state === 'entregado';
             });
 
-            document.getElementById('mapCountPendiente').textContent = pendientes.length;
+            document.getElementById('mapCountEnCamino').textContent = enCamino.length;
+            document.getElementById('mapCountReprogramado').textContent = reprogramados.length;
             document.getElementById('mapCountEntregado').textContent = entregados.length;
 
             // Mostrar modal
@@ -2361,8 +2382,10 @@
                 
                 // Filtrar por estado según toggles
                 let estadoPasa = false;
-                if (state === 'pendiente' || state === 'en-camino' || state === 'reprogramado') {
-                    estadoPasa = mapShowPendientes;
+                if (state === 'pendiente' || state === 'en-camino') {
+                    estadoPasa = mapShowEnCamino;
+                } else if (state === 'reprogramado') {
+                    estadoPasa = mapShowReprogramados;
                 } else if (state === 'entregado') {
                     estadoPasa = mapShowEntregados;
                 }
