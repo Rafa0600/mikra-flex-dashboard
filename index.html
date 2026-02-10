@@ -554,6 +554,99 @@
             color: #666;
         }
 
+        /* TRACKING DETALLADO */
+        .tracking-detail {
+            background: #111;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 8px;
+            border-left: 3px solid #3483FA;
+        }
+
+        .tracking-event {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .tracking-event .track-icon {
+            flex-shrink: 0;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 4px;
+        }
+
+        .tracking-event .track-icon.shipped { background: #00d9ff; }
+        .tracking-event .track-icon.near { background: #FFE600; }
+        .tracking-event .track-icon.absent { background: #f44336; }
+        .tracking-event .track-icon.retry { background: #FF9800; }
+        .tracking-event .track-icon.delivered { background: #00ff88; }
+        .tracking-event .track-icon.default { background: #888; }
+
+        .tracking-event .track-time {
+            color: #888;
+            font-size: 11px;
+            min-width: 40px;
+        }
+
+        .tracking-event .track-msg {
+            flex: 1;
+        }
+
+        .tracking-event.highlight-absent {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        .tracking-event.highlight-near {
+            color: #FFE600;
+        }
+
+        .driver-info {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #1a3a5c;
+            color: #7ec8e3;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .reputation-warning {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f44336;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            animation: pulse-rep 2s infinite;
+        }
+
+        @keyframes pulse-rep {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .reputation-ok {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #1b5e20;
+            color: #a5d6a7;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -843,7 +936,7 @@
     <div class="container">
         <!-- Header compacto: título + badges + mapa + settings en una sola zona -->
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-            <h1 style="margin:0; font-size:18px;">🏍️ FLEX <span class="version-badge">v2.7</span></h1>
+            <h1 style="margin:0; font-size:18px;">🏍️ FLEX <span class="version-badge">v2.8</span></h1>
             <div class="info-badges" id="infoBadges" style="display:none; margin:0; gap:5px;">
                 <span class="info-badge fecha" id="badgeFecha" style="padding:4px 8px; font-size:11px;">📅 HOY</span>
                 <span class="info-badge caba" id="badgeCaba" style="padding:4px 8px; font-size:11px;">🏙️ CABA: 0</span>
@@ -1716,6 +1809,15 @@
             const results = await Promise.all(shippingPromises);
             tempOrders = results.filter(item => item !== null);
 
+            // Enriquecer datos con tracking detallado (en batches para no saturar)
+            const enrichBatchSize = 5;
+            for (let i = 0; i < tempOrders.length; i += enrichBatchSize) {
+                const batch = tempOrders.slice(i, i + enrichBatchSize);
+                await Promise.all(batch.map(({ order, shipping }) => 
+                    enrichShippingData(cuenta, token, shipping, order.id).catch(() => {})
+                ));
+            }
+
             const uniqueShippings = new Map();
             tempOrders.forEach(({ order, shipping }) => {
                 const shippingId = shipping.id;
@@ -1803,6 +1905,119 @@
             if (substatus === 'delivery_failed') return { label: '❌ Entrega fallida', short: 'Entrega fallida' };
             if (substatus === 'waiting_for_withdrawal') return { label: '📦 Esperando retiro', short: 'Esperando retiro' };
             return { label: '🔄 Reprogramado', short: 'Reprogramado' };
+        }
+
+        // === TRACKING DETALLADO - Clasifica eventos del historial de ML ===
+        function classifyTrackingEvent(label) {
+            const lower = (label || '').toLowerCase();
+            if (lower.includes('en camino nuevamente') || lower.includes('reintento')) return { icon: 'retry', css: '' };
+            if (lower.includes('está en camino')) return { icon: 'shipped', css: '' };
+            if (lower.includes('muy cerca')) return { icon: 'near', css: 'highlight-near' };
+            if (lower.includes('ausente')) return { icon: 'absent', css: 'highlight-absent' };
+            if (lower.includes('entregamos') || lower.includes('entregado')) return { icon: 'delivered', css: '' };
+            return { icon: 'default', css: '' };
+        }
+
+        function renderTrackingDetail(shipping) {
+            // Si hay tracking_events guardados (del scraping), usarlos
+            const events = shipping._trackingEvents;
+            if (!events || events.length === 0) return '';
+
+            let html = '<div class="tracking-detail">';
+            html += '<div style="font-size:11px; color:#888; margin-bottom:6px; font-weight:bold;">📋 HISTORIAL DE RASTREO</div>';
+            
+            events.forEach(ev => {
+                const cls = classifyTrackingEvent(ev.label);
+                html += `<div class="tracking-event ${cls.css}">
+                    <div class="track-icon ${cls.icon}"></div>
+                    <div class="track-msg">${ev.label}</div>
+                </div>`;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+
+        function renderDriverInfo(shipping) {
+            const driver = shipping._driverName;
+            if (!driver) return '';
+            return `<span class="driver-info">🚗 ${driver}</span>`;
+        }
+
+        function renderReputationBadge(shipping) {
+            const problems = shipping._problems;
+            if (!problems || problems.length === 0) return '';
+            
+            return problems.map(p => {
+                if (p.reputationAffected) {
+                    return `<span class="reputation-warning">⚠️ Reputación afectada (${p.type})</span>`;
+                } else {
+                    return `<span class="reputation-ok">✓ Rep. no afectada (${p.type})</span>`;
+                }
+            }).join(' ');
+        }
+
+        // Enriquecer datos de shipping con info extra del detalle de ML
+        async function enrichShippingData(cuenta, token, shipping, orderId) {
+            try {
+                // Obtener tracking events desde la API de shipments (historial detallado)
+                const trackResp = await fetch(`${cuenta.proxy}/api/shipments/${shipping.id}/history`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (trackResp.ok) {
+                    const trackData = await trackResp.json();
+                    // El historial viene como array de eventos
+                    if (Array.isArray(trackData)) {
+                        shipping._trackingEvents = trackData.map(ev => ({
+                            label: `${ev.date_created ? new Date(ev.date_created).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false}) : ''} | ${ev.status || ''} ${ev.substatus ? '- ' + ev.substatus : ''}`,
+                            status: ev.status,
+                            substatus: ev.substatus,
+                            date: ev.date_created
+                        }));
+                    }
+                }
+            } catch(e) {
+                // Silenciar - la info extra es opcional
+            }
+
+            // Generar tracking events a partir de status_history si no tenemos del endpoint
+            if (!shipping._trackingEvents || shipping._trackingEvents.length === 0) {
+                const history = shipping.status_history || {};
+                let events = [];
+                
+                if (history.date_handling) {
+                    events.push({ label: `${formatDateShort(history.date_handling)} | Preparando envío` });
+                }
+                if (history.date_ready_to_ship) {
+                    events.push({ label: `${formatDateShort(history.date_ready_to_ship)} | Listo para enviar` });
+                }
+                if (history.date_shipped) {
+                    events.push({ label: `${formatDateShort(history.date_shipped)} | El paquete está en camino.` });
+                }
+                if (shipping.substatus === 'receiver_absent') {
+                    events.push({ label: `Comprador ausente.` });
+                }
+                if (history.date_delivered) {
+                    events.push({ label: `${formatDateShort(history.date_delivered)} | Entregamos el paquete.` });
+                }
+                if (history.date_not_delivered) {
+                    events.push({ label: `${formatDateShort(history.date_not_delivered)} | No se pudo entregar` });
+                }
+                
+                if (events.length > 0) {
+                    shipping._trackingEvents = events;
+                }
+            }
+        }
+
+        function formatDateShort(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleString('es-AR', {
+                timeZone: 'America/Argentina/Buenos_Aires',
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+            });
         }
 
         function logShippingStates() {
@@ -2124,6 +2339,13 @@
                                         </div>
                                     </div>
                                 </div>
+                                
+                                ${renderTrackingDetail(shipping)}
+                                
+                                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                                    ${renderDriverInfo(shipping)}
+                                    ${renderReputationBadge(shipping)}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -2230,6 +2452,13 @@
                                         <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered, fechaEntrega) || 'Pendiente'}</div>
                                     </div>
                                 </div>
+                            </div>
+                            
+                            ${renderTrackingDetail(shipping)}
+                            
+                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                                ${renderDriverInfo(shipping)}
+                                ${renderReputationBadge(shipping)}
                             </div>
                         </div>
                     `;
