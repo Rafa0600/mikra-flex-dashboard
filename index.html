@@ -1809,14 +1809,10 @@
             const results = await Promise.all(shippingPromises);
             tempOrders = results.filter(item => item !== null);
 
-            // Enriquecer datos con tracking detallado (en batches para no saturar)
-            const enrichBatchSize = 5;
-            for (let i = 0; i < tempOrders.length; i += enrichBatchSize) {
-                const batch = tempOrders.slice(i, i + enrichBatchSize);
-                await Promise.all(batch.map(({ order, shipping }) => 
-                    enrichShippingData(cuenta, token, shipping, order.id).catch(() => {})
-                ));
-            }
+            // Enriquecer datos con tracking detallado (síncrono, datos ya en shipping)
+            tempOrders.forEach(({ order, shipping }) => {
+                enrichShippingData(null, null, shipping, order.id);
+            });
 
             const uniqueShippings = new Map();
             tempOrders.forEach(({ order, shipping }) => {
@@ -1908,18 +1904,21 @@
         }
 
         // === TRACKING DETALLADO - Clasifica eventos del historial de ML ===
-        function classifyTrackingEvent(label) {
-            const lower = (label || '').toLowerCase();
-            if (lower.includes('en camino nuevamente') || lower.includes('reintento')) return { icon: 'retry', css: '' };
-            if (lower.includes('está en camino')) return { icon: 'shipped', css: '' };
-            if (lower.includes('muy cerca')) return { icon: 'near', css: 'highlight-near' };
-            if (lower.includes('ausente')) return { icon: 'absent', css: 'highlight-absent' };
-            if (lower.includes('entregamos') || lower.includes('entregado')) return { icon: 'delivered', css: '' };
+        function classifyTrackingEvent(event) {
+            const label = (event.label || '').toLowerCase();
+            const sub = (event.substatus || '').toLowerCase();
+            
+            if (sub === 'receiver_absent' || label.includes('ausente')) return { icon: 'absent', css: 'highlight-absent' };
+            if (sub === 'nearby' || sub === 'almost_there' || label.includes('muy cerca')) return { icon: 'near', css: 'highlight-near' };
+            if (sub === 'rescheduled' || label.includes('nuevamente') || label.includes('reintento')) return { icon: 'retry', css: '' };
+            if (sub === 'delivered' || label.includes('entregamos')) return { icon: 'delivered', css: '' };
+            if (sub === 'in_transit' || sub === 'out_for_delivery' || sub === 'shipped' || label.includes('en camino')) return { icon: 'shipped', css: '' };
+            if (sub === 'returning_to_sender' || sub === 'not_delivered_and_returning' || label.includes('devolv')) return { icon: 'absent', css: 'highlight-absent' };
+            if (sub === 'delivery_failed' || label.includes('fallid')) return { icon: 'absent', css: 'highlight-absent' };
             return { icon: 'default', css: '' };
         }
 
         function renderTrackingDetail(shipping) {
-            // Si hay tracking_events guardados (del scraping), usarlos
             const events = shipping._trackingEvents;
             if (!events || events.length === 0) return '';
 
@@ -1927,7 +1926,7 @@
             html += '<div style="font-size:11px; color:#888; margin-bottom:6px; font-weight:bold;">📋 HISTORIAL DE RASTREO</div>';
             
             events.forEach(ev => {
-                const cls = classifyTrackingEvent(ev.label);
+                const cls = classifyTrackingEvent(ev);
                 html += `<div class="tracking-event ${cls.css}">
                     <div class="track-icon ${cls.icon}"></div>
                     <div class="track-msg">${ev.label}</div>
@@ -1958,56 +1957,92 @@
         }
 
         // Enriquecer datos de shipping con info extra del detalle de ML
-        async function enrichShippingData(cuenta, token, shipping, orderId) {
-            try {
-                // Obtener tracking events desde la API de shipments (historial detallado)
-                const trackResp = await fetch(`${cuenta.proxy}/api/shipments/${shipping.id}/history`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (trackResp.ok) {
-                    const trackData = await trackResp.json();
-                    // El historial viene como array de eventos
-                    if (Array.isArray(trackData)) {
-                        shipping._trackingEvents = trackData.map(ev => ({
-                            label: `${ev.date_created ? new Date(ev.date_created).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:false}) : ''} | ${ev.status || ''} ${ev.substatus ? '- ' + ev.substatus : ''}`,
-                            status: ev.status,
-                            substatus: ev.substatus,
-                            date: ev.date_created
-                        }));
+        function enrichShippingData(cuenta, token, shipping, orderId) {
+            // El substatus_history ya viene en el shipping object
+            // Lo convertimos a tracking events legibles
+            const subHistory = shipping.substatus_history || [];
+            const history = shipping.status_history || {};
+            let events = [];
+
+            // Mapeo de substatus a textos legibles (como los muestra ML)
+            const substatusLabels = {
+                'shipment_paid': 'Preparando envío',
+                'ready_to_ship': 'Listo para enviar',
+                'picked_up': 'Retirado por el transportista',
+                'in_hub': 'En centro de distribución',
+                'in_transit': 'El paquete está en camino.',
+                'out_for_delivery': 'El paquete está en camino.',
+                'nearby': 'El paquete está muy cerca.',
+                'almost_there': 'El paquete está muy cerca.',
+                'receiver_absent': 'Comprador ausente.',
+                'waiting_for_withdrawal': 'Esperando retiro en punto de entrega.',
+                'delivered': 'Entregamos el paquete.',
+                'returning_to_sender': 'Devolviendo al vendedor.',
+                'not_delivered_and_returning': 'No se pudo entregar, en devolución.',
+                'rescheduled': 'El paquete está en camino nuevamente.',
+                'rescheduled_by_buyer': 'Reprogramado por el comprador.',
+                'buyer_rescheduled': 'Reprogramado por el comprador.',
+                'delayed': 'Envío demorado.',
+                'out_of_delivery_area': 'Fuera de zona de entrega.',
+                'delivery_failed': 'Entrega fallida.',
+                'claimed_me': 'Reclamo abierto.',
+                'stolen': 'Paquete robado.',
+                'lost': 'Paquete extraviado.',
+                'damaged': 'Paquete dañado.',
+                'cancelled': 'Envío cancelado.',
+                'buyer_cancelled': 'Cancelado por el comprador.',
+                'cancelled_by_buyer': 'Cancelado por el comprador.',
+            };
+
+            // Construir eventos desde substatus_history
+            if (subHistory.length > 0) {
+                subHistory.forEach(entry => {
+                    const dateStr = entry.date ? formatDateShort(entry.date) : '';
+                    const label = substatusLabels[entry.substatus] || entry.substatus || entry.status || '';
+                    if (label) {
+                        events.push({ label: `${dateStr} | ${label}`, substatus: entry.substatus });
                     }
-                }
-            } catch(e) {
-                // Silenciar - la info extra es opcional
+                });
             }
 
-            // Generar tracking events a partir de status_history si no tenemos del endpoint
-            if (!shipping._trackingEvents || shipping._trackingEvents.length === 0) {
-                const history = shipping.status_history || {};
-                let events = [];
-                
-                if (history.date_handling) {
-                    events.push({ label: `${formatDateShort(history.date_handling)} | Preparando envío` });
-                }
-                if (history.date_ready_to_ship) {
-                    events.push({ label: `${formatDateShort(history.date_ready_to_ship)} | Listo para enviar` });
-                }
-                if (history.date_shipped) {
-                    events.push({ label: `${formatDateShort(history.date_shipped)} | El paquete está en camino.` });
-                }
-                if (shipping.substatus === 'receiver_absent') {
-                    events.push({ label: `Comprador ausente.` });
-                }
-                if (history.date_delivered) {
-                    events.push({ label: `${formatDateShort(history.date_delivered)} | Entregamos el paquete.` });
-                }
-                if (history.date_not_delivered) {
-                    events.push({ label: `${formatDateShort(history.date_not_delivered)} | No se pudo entregar` });
-                }
-                
-                if (events.length > 0) {
-                    shipping._trackingEvents = events;
-                }
+            // Agregar eventos del status_history que no estén ya cubiertos
+            if (history.date_shipped && !events.some(e => e.substatus === 'in_transit' || e.substatus === 'out_for_delivery')) {
+                events.push({ label: `${formatDateShort(history.date_shipped)} | El paquete está en camino.`, substatus: 'shipped' });
+            }
+            if (history.date_delivered && !events.some(e => e.substatus === 'delivered')) {
+                events.push({ label: `${formatDateShort(history.date_delivered)} | Entregamos el paquete.`, substatus: 'delivered' });
+            }
+            if (history.date_not_delivered) {
+                events.push({ label: `${formatDateShort(history.date_not_delivered)} | No se pudo entregar.`, substatus: 'not_delivered' });
+            }
+
+            // Eliminar duplicados y ordenar por fecha
+            const seen = new Set();
+            events = events.filter(e => {
+                const key = e.label;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            if (events.length > 0) {
+                shipping._trackingEvents = events;
+            }
+
+            // Detectar problemas de reputación desde substatus_history
+            const problemSubstatuses = ['delayed', 'delivery_failed', 'receiver_absent', 'lost', 'stolen', 'damaged'];
+            const problems = [];
+            
+            // Si el envío es not_delivered o tiene substatus problemático
+            if (shipping.status === 'not_delivered' || problemSubstatuses.includes(shipping.substatus)) {
+                problems.push({
+                    type: shipping.substatus || shipping.status,
+                    reputationAffected: false // No podemos saber desde la API, asumimos no afectada
+                });
+            }
+            
+            if (problems.length > 0) {
+                shipping._problems = problems;
             }
         }
 
@@ -2343,7 +2378,6 @@
                                 ${renderTrackingDetail(shipping)}
                                 
                                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-                                    ${renderDriverInfo(shipping)}
                                     ${renderReputationBadge(shipping)}
                                 </div>
                             </div>
@@ -2457,7 +2491,6 @@
                             ${renderTrackingDetail(shipping)}
                             
                             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-                                ${renderDriverInfo(shipping)}
                                 ${renderReputationBadge(shipping)}
                             </div>
                         </div>
