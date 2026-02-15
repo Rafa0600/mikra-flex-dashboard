@@ -1087,147 +1087,13 @@
         ::-webkit-scrollbar-track { background: #0d1117; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #484f58; }
-
-        /* RUTA - Selección */
-        .route-bar {
-            background: linear-gradient(135deg, #238636, #1a7f37);
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            flex-wrap: wrap;
-            animation: slideDown 0.2s ease-out;
-        }
-
-        .route-bar-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .route-bar-actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
-        .route-bar-actions button {
-            background: rgba(255,255,255,0.2);
-            border: 1.5px solid rgba(255,255,255,0.3);
-            padding: 6px 14px;
-            font-size: 12px;
-            border-radius: 8px;
-            min-height: 36px;
-            font-weight: 700;
-        }
-
-        .route-bar-actions button:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        .route-bar-actions .btn-go {
-            background: white;
-            color: #1a7f37;
-            border-color: white;
-        }
-
-        .route-check {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: 2px solid #30363d;
-            background: #0d1117;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 700;
-            color: #484f58;
-            transition: all 0.15s;
-            z-index: 2;
-        }
-
-        .route-check.selected {
-            background: #238636;
-            border-color: #3fb950;
-            color: white;
-            box-shadow: 0 0 8px rgba(35, 134, 54, 0.4);
-        }
-
-        .envio-card-simple {
-            position: relative;
-        }
-
-        /* Marker seleccionado en mapa */
-        .marker-selected {
-            outline: 3px solid #3fb950 !important;
-            outline-offset: 2px;
-        }
-
-        /* Botones rápidos de ruta en mapa */
-        .map-route-section {
-            background: #0d1117;
-            padding: 10px 12px;
-            border-radius: 10px;
-            margin-bottom: 12px;
-            border: 1px solid #21262d;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .map-route-section button {
-            font-size: 11px;
-            padding: 7px 12px;
-            border-radius: 8px;
-            min-height: 36px;
-            font-weight: 700;
-        }
-
-        .btn-route-go {
-            background: linear-gradient(135deg, #238636, #1a7f37) !important;
-        }
-
-        .btn-route-quick {
-            background: #21262d !important;
-            border: 1.5px solid #30363d !important;
-        }
-
-        .btn-route-quick:hover {
-            border-color: #3fb950 !important;
-        }
-
-        .btn-route-clear {
-            background: transparent !important;
-            border: 1.5px solid #30363d !important;
-            color: #8b949e !important;
-        }
-
-        .map-route-count {
-            background: #238636;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 700;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- Header compacto: título + badges + mapa + settings en una sola zona -->
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-            <h1 style="margin:0; font-size:18px; letter-spacing:-0.5px;">🏍️ FLEX <span class="version-badge">v3.1</span></h1>
+            <h1 style="margin:0; font-size:18px; letter-spacing:-0.5px;">🏍️ FLEX <span class="version-badge">v3.0</span></h1>
             <div class="info-badges" id="infoBadges" style="display:none; margin:0; gap:5px;">
                 <span class="info-badge fecha" id="badgeFecha" style="padding:4px 10px; font-size:11px;">📅 HOY</span>
                 <span class="info-badge caba" id="badgeCaba" style="padding:4px 10px; font-size:11px;">🏙️ CABA: 0</span>
@@ -1336,14 +1202,6 @@
                     <button class="map-filter-btn active-entregado" onclick="toggleMapFilter('entregado')" id="mapFilterEntregado">
                         ✅ Entregados (<span id="mapCountEntregado">0</span>)
                     </button>
-                </div>
-                <div class="map-route-section" id="mapRouteSection">
-                    <span style="font-size:12px; color:#8b949e; font-weight:700;">🛣️ RUTA:</span>
-                    <button class="btn-route-quick" onclick="seleccionarParaRuta('caba')">📍 CABA</button>
-                    <button class="btn-route-quick" onclick="seleccionarParaRuta('pendientes')">⏳ Pendientes</button>
-                    <button class="btn-route-quick" onclick="seleccionarParaRuta('visibles')">👁️ Visibles</button>
-                    <button class="btn-route-go" id="btnAbrirRuta" onclick="abrirRutaGoogleMaps()" style="display:none;">🗺️ Abrir ruta (<span id="rutaCount">0</span>)</button>
-                    <button class="btn-route-clear" id="btnLimpiarRuta" onclick="limpiarSeleccionRuta()" style="display:none;">✕ Limpiar</button>
                 </div>
                 <div id="mapFrame"></div>
             </div>
@@ -1950,11 +1808,6 @@
         async function cargarFlexPorFecha(targetDate, label, silentRetry = false) {
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
-            
-            // Limpiar ruta seleccionada
-            selectedForRoute.clear();
-            const routeBarEl = document.getElementById('routeBarOutside');
-            if (routeBarEl) routeBarEl.remove();
             
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
@@ -2673,12 +2526,8 @@
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                    const hasCoords = shipping.receiver_address?.latitude && shipping.receiver_address?.longitude;
-                    const isRouteSelected = selectedForRoute.has(shipping.id);
-
                     html += `
                         <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
-                            ${hasCoords && state !== 'cancelado' ? `<div class="route-check ${isRouteSelected ? 'selected' : ''}" id="route-check-${shipping.id}" onclick="event.stopPropagation(); toggleRouteSelection(${shipping.id})">${isRouteSelected ? '✓' : ''}</div>` : ''}
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
                                 <div class="simple-estado ${state}">${estadoTexto}</div>
@@ -2881,161 +2730,6 @@
         let leafletMap = null;
         let markersLayer = null;
 
-        // RUTA - Selección de envíos para Google Maps
-        let selectedForRoute = new Set(); // shipping IDs seleccionados
-
-        function toggleRouteSelection(shippingId) {
-            if (selectedForRoute.has(shippingId)) {
-                selectedForRoute.delete(shippingId);
-            } else {
-                if (selectedForRoute.size >= 25) {
-                    alert('Google Maps permite máximo 25 paradas');
-                    return;
-                }
-                selectedForRoute.add(shippingId);
-            }
-            actualizarRouteUI();
-            actualizarMapa();
-            // Actualizar check en card si existe
-            const check = document.getElementById(`route-check-${shippingId}`);
-            if (check) {
-                check.classList.toggle('selected', selectedForRoute.has(shippingId));
-                check.textContent = selectedForRoute.has(shippingId) ? '✓' : '';
-            }
-        }
-
-        function seleccionarParaRuta(tipo) {
-            selectedForRoute.clear();
-            
-            const ordenesFiltradas = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
-                const state = getOrderState(shipping);
-                if (state === 'cancelado' || state === 'entregado') return false;
-                
-                const lat = shipping.receiver_address?.latitude;
-                const lng = shipping.receiver_address?.longitude;
-                if (!lat || !lng) return false;
-
-                // Filtro de cuenta actual
-                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return false;
-                
-                if (tipo === 'caba') {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    return esCABA(zona);
-                }
-                
-                if (tipo === 'pendientes') {
-                    return state === 'pendiente' || state === 'en-camino';
-                }
-                
-                if (tipo === 'visibles') {
-                    // Respetar filtros del mapa
-                    if (state === 'pendiente' || state === 'en-camino') return mapShowEnCamino;
-                    if (state === 'reprogramado') return mapShowReprogramados;
-                    return false;
-                }
-                
-                return true;
-            });
-
-            ordenesFiltradas.forEach(({ shipping }) => {
-                if (selectedForRoute.size < 25) {
-                    selectedForRoute.add(shipping.id);
-                }
-            });
-
-            actualizarRouteUI();
-            actualizarMapa();
-        }
-
-        function limpiarSeleccionRuta() {
-            selectedForRoute.clear();
-            actualizarRouteUI();
-            actualizarMapa();
-            // Limpiar checks en cards
-            document.querySelectorAll('.route-check').forEach(el => {
-                el.classList.remove('selected');
-                el.textContent = '';
-            });
-        }
-
-        function actualizarRouteUI() {
-            const count = selectedForRoute.size;
-            const btnAbrir = document.getElementById('btnAbrirRuta');
-            const btnLimpiar = document.getElementById('btnLimpiarRuta');
-            const spanCount = document.getElementById('rutaCount');
-            
-            if (btnAbrir) {
-                btnAbrir.style.display = count > 0 ? 'inline-flex' : 'none';
-                spanCount.textContent = count;
-            }
-            if (btnLimpiar) {
-                btnLimpiar.style.display = count > 0 ? 'inline-flex' : 'none';
-            }
-
-            // Actualizar barra de ruta fuera del mapa
-            const routeBarEl = document.getElementById('routeBarOutside');
-            if (count > 0) {
-                if (!routeBarEl) {
-                    const bar = document.createElement('div');
-                    bar.id = 'routeBarOutside';
-                    bar.className = 'route-bar';
-                    bar.innerHTML = `
-                        <div class="route-bar-info">🛣️ <span id="routeBarCount">${count}</span> paradas seleccionadas</div>
-                        <div class="route-bar-actions">
-                            <button onclick="abrirRutaGoogleMaps()" class="btn-go">🗺️ Abrir en Google Maps</button>
-                            <button onclick="limpiarSeleccionRuta()">✕ Limpiar</button>
-                        </div>
-                    `;
-                    const contentEl = document.getElementById('content');
-                    contentEl.parentNode.insertBefore(bar, contentEl);
-                } else {
-                    document.getElementById('routeBarCount').textContent = count;
-                }
-            } else if (routeBarEl) {
-                routeBarEl.remove();
-            }
-        }
-
-        function abrirRutaGoogleMaps() {
-            if (selectedForRoute.size === 0) return;
-            
-            // Obtener coordenadas de los envíos seleccionados
-            const waypoints = [];
-            allFlexOrders.forEach(({ shipping }) => {
-                if (selectedForRoute.has(shipping.id)) {
-                    const lat = shipping.receiver_address?.latitude;
-                    const lng = shipping.receiver_address?.longitude;
-                    if (lat && lng) {
-                        waypoints.push({ lat, lng, id: shipping.id });
-                    }
-                }
-            });
-
-            if (waypoints.length === 0) return;
-
-            if (waypoints.length === 1) {
-                // Solo 1 punto → abrir navegación directa
-                window.open(`https://www.google.com/maps/dir/?api=1&destination=${waypoints[0].lat},${waypoints[0].lng}&travelmode=driving`, '_blank');
-                return;
-            }
-
-            // Múltiples puntos → ruta con paradas
-            // Usar primer punto como origin y último como destination, intermedios como waypoints
-            const origin = `${waypoints[0].lat},${waypoints[0].lng}`;
-            const destination = `${waypoints[waypoints.length - 1].lat},${waypoints[waypoints.length - 1].lng}`;
-            const middlePoints = waypoints.slice(1, -1).map(w => `${w.lat},${w.lng}`).join('|');
-
-            let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
-            if (middlePoints) {
-                url += `&waypoints=${encodeURIComponent(middlePoints)}`;
-            }
-
-            window.open(url, '_blank');
-        }
-
         function toggleMapFilter(tipo) {
             if (tipo === 'en-camino') {
                 mapShowEnCamino = !mapShowEnCamino;
@@ -3205,12 +2899,9 @@
                 }
 
                 // Crear icono personalizado
-                const isSelected = selectedForRoute.has(shipping.id);
-                const selectedBorder = isSelected ? '3px solid #3fb950' : '3px solid white';
-                const selectedShadow = isSelected ? '0 0 10px rgba(63,185,80,0.5)' : '0 2px 8px rgba(0,0,0,0.3)';
                 const customIcon = L.divIcon({
                     className: 'custom-marker',
-                    html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:${selectedBorder}; box-shadow:${selectedShadow}; position:relative;">${estadoEmoji}${isSelected ? '<div style="position:absolute;top:-8px;right:-8px;background:#238636;color:white;width:18px;height:18px;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;">✓</div>' : ''}</div>`,
+                    html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${estadoEmoji}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -3225,12 +2916,6 @@
                     cuentaBadgeHtml = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟠 Chaya</span>';
                 }
 
-                const isInRoute = selectedForRoute.has(shipping.id);
-                const routeBtnStyle = isInRoute 
-                    ? 'background:#238636; color:white; border:1px solid #3fb950;' 
-                    : 'background:#21262d; color:#8b949e; border:1px solid #30363d;';
-                const routeBtnText = isInRoute ? '✓ En la ruta' : '+ Agregar a ruta';
-                
                 const popupContent = `
                     <div style="min-width:200px;">
                         <div style="margin-bottom:8px;">
@@ -3242,15 +2927,10 @@
                         <div style="margin-bottom:8px; font-size:12px; color:#8b949e;">
                             <a href="${orderUrl}" target="_blank" style="color:#58a6ff; text-decoration:none;">#${orderId}</a>
                         </div>
-                        <div style="display:flex; gap:6px; flex-direction:column;">
-                            <button onclick="toggleRouteSelection(${shipping.id}); actualizarMapa();" style="${routeBtnStyle} padding:8px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center; min-height:36px;">
-                                🛣️ ${routeBtnText}
-                            </button>
-                            <a href="${googleMapsUrl}" target="_blank" style="color:#58a6ff; text-decoration:none; font-size:12px; display:block; padding:8px; background:#0d1117; border-radius:8px; text-align:center; border:1px solid #21262d;">
-                                🗺️ Ver en Google Maps<br>
-                                <small style="color:#484f58;">${direccionCompleta}</small>
-                            </a>
-                        </div>
+                        <a href="${googleMapsUrl}" target="_blank" style="color:#58a6ff; text-decoration:none; font-size:13px; display:block; margin-top:8px; padding:8px; background:#0d1117; border-radius:8px; text-align:center; border:1px solid #21262d;">
+                            🗺️ Abrir en Google Maps<br>
+                            <small style="color:#484f58;">${direccionCompleta}</small>
+                        </a>
                     </div>
                 `;
 
