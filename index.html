@@ -9,21 +9,26 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a1a;
-            color: #fff;
-            padding: 10px;
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 12px;
+            padding-bottom: env(safe-area-inset-bottom, 12px);
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -31,24 +36,27 @@
             color: #FFE600;
             margin-bottom: 20px;
             text-align: center;
-            font-size: 22px;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
 
         .version-badge {
             display: inline-block;
-            background: #3483FA;
+            background: linear-gradient(135deg, #3483FA, #2563eb);
             color: white;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 10px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: 8px;
             vertical-align: middle;
+            letter-spacing: 0.5px;
         }
 
         .info-badges {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             justify-content: center;
             align-items: center;
             margin-bottom: 15px;
@@ -56,41 +64,48 @@
         }
 
         .info-badge {
-            background: #2a2a2a;
+            background: #161b22;
             color: white;
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-            border: 2px solid #444;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1.5px solid #30363d;
+            backdrop-filter: blur(8px);
         }
 
         .info-badge.fecha {
-            background: #FF6B00;
-            border-color: #FF9800;
+            background: linear-gradient(135deg, #FF6B00, #e85d04);
+            border-color: transparent;
         }
 
         .info-badge.caba {
-            background: #9C27B0;
-            border-color: #ce93d8;
+            background: linear-gradient(135deg, #9C27B0, #7b1fa2);
+            border-color: transparent;
         }
 
         .info-badge.provincia {
-            background: #00897B;
-            border-color: #26A69A;
+            background: linear-gradient(135deg, #00897B, #00695c);
+            border-color: transparent;
         }
 
         .top-buttons {
             text-align: center;
             margin-bottom: 20px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: center;
             flex-wrap: wrap;
         }
 
         .tools-panel {
             display: none;
+            animation: slideDown 0.25s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .tools-panel.open {
@@ -98,34 +113,45 @@
         }
 
         button {
-            background: #3483FA;
+            background: linear-gradient(135deg, #3483FA, #2563eb);
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+            min-height: 44px;
         }
 
         button:hover {
-            transform: scale(1.05);
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0) scale(0.98);
         }
 
         button:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
+            transform: none;
         }
 
         button.btn-warning {
-            background: #FF9800;
+            background: linear-gradient(135deg, #FF9800, #e68900);
         }
 
         .filter-section {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
+            background: #161b22;
+            padding: 14px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #21262d;
         }
 
         .filter-row {
@@ -137,31 +163,34 @@
 
         .filter-row label {
             color: #FFE600;
-            font-weight: bold;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 13px;
         }
 
         .search-select-wrapper {
             flex: 1;
-            min-width: 250px;
+            min-width: 200px;
             position: relative;
         }
 
         .search-input-select {
             width: 100%;
-            padding: 10px 40px 10px 15px;
-            background: #1a1a1a;
-            border: 2px solid #444;
-            border-radius: 6px;
-            color: #fff;
+            padding: 12px 40px 12px 15px;
+            background: #0d1117;
+            border: 1.5px solid #30363d;
+            border-radius: 10px;
+            color: #e6edf3;
             font-size: 14px;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            min-height: 44px;
         }
 
         .search-input-select:focus {
             outline: none;
             border-color: #FFE600;
+            box-shadow: 0 0 0 3px rgba(255, 230, 0, 0.15);
         }
 
         .dropdown-icon {
@@ -169,7 +198,7 @@
             right: 15px;
             top: 50%;
             transform: translateY(-50%);
-            color: #888;
+            color: #484f58;
             pointer-events: none;
         }
 
@@ -178,47 +207,57 @@
             top: 100%;
             left: 0;
             right: 0;
-            background: #1a1a1a;
-            border: 2px solid #FFE600;
-            border-radius: 6px;
+            background: #161b22;
+            border: 1.5px solid #FFE600;
+            border-radius: 12px;
             margin-top: 5px;
             max-height: 300px;
             overflow-y: auto;
             z-index: 1000;
             display: none;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
         }
 
         .dropdown-menu.active {
             display: block;
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .dropdown-search {
             position: sticky;
             top: 0;
-            background: #1a1a1a;
+            background: #161b22;
             padding: 10px;
-            border-bottom: 1px solid #444;
+            border-bottom: 1px solid #21262d;
         }
 
         .dropdown-search input {
             width: 100%;
-            padding: 8px;
-            background: #2a2a2a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            color: #fff;
+            padding: 10px;
+            background: #0d1117;
+            border: 1.5px solid #30363d;
+            border-radius: 8px;
+            color: #e6edf3;
             font-size: 14px;
+            font-family: inherit;
+            min-height: 44px;
         }
 
         .dropdown-item {
-            padding: 10px 15px;
+            padding: 12px 15px;
             cursor: pointer;
-            transition: all 0.2s;
-            border-bottom: 1px solid #2a2a2a;
+            transition: all 0.15s;
+            border-bottom: 1px solid #21262d;
+            font-size: 14px;
         }
 
-        .dropdown-item:hover {
-            background: #2a2a2a;
+        .dropdown-item:hover, .dropdown-item:active {
+            background: #21262d;
         }
 
         .dropdown-item.selected {
@@ -226,41 +265,51 @@
         }
 
         .stats-bar {
-            background: #2a2a2a;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
+            background: #161b22;
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 12px;
+            border: 1px solid #21262d;
         }
 
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
+            gap: 6px;
+            margin-bottom: 12px;
         }
 
         .stat-item {
             text-align: center;
             cursor: pointer;
-            padding: 10px;
-            border-radius: 8px;
-            transition: all 0.3s;
+            padding: 8px 4px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
             border: 2px solid transparent;
+            min-height: 44px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .stat-item:hover {
-            background: #333;
+            background: #21262d;
+        }
+
+        .stat-item:active {
+            transform: scale(0.95);
         }
 
         .stat-item.active {
-            background: #3483FA;
-            border-color: #5ba3ff;
+            background: linear-gradient(135deg, #3483FA, #2563eb);
+            border-color: rgba(52, 131, 250, 0.4);
+            box-shadow: 0 4px 12px rgba(52, 131, 250, 0.2);
         }
 
         /* Filtro rápido por cuenta */
         .cuenta-filter {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             justify-content: center;
             align-items: center;
             margin-bottom: 15px;
@@ -268,93 +317,103 @@
         }
 
         .cuenta-btn {
-            padding: 8px 18px;
+            padding: 8px 16px;
             border-radius: 25px;
-            font-size: 13px;
-            font-weight: bold;
-            background: #333;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: inherit;
+            background: #21262d;
             border: 2px solid transparent;
-            color: white;
+            color: #8b949e;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s ease;
+            min-height: 40px;
+            touch-action: manipulation;
         }
 
-        .cuenta-btn:hover { transform: scale(1.05); }
+        .cuenta-btn:hover { filter: brightness(1.1); }
+        .cuenta-btn:active { transform: scale(0.95); }
 
         .cuenta-btn.all.active {
             border-color: #FFE600;
-            background: #3483FA;
+            background: linear-gradient(135deg, #3483FA, #2563eb);
+            color: white;
         }
 
         .cuenta-btn.mikra-btn.active {
-            background: #9C27B0;
+            background: linear-gradient(135deg, #9C27B0, #7b1fa2);
             border-color: #ce93d8;
+            color: white;
         }
 
         .cuenta-btn.chaya-btn.active {
-            background: #FF6B00;
+            background: linear-gradient(135deg, #FF6B00, #e85d04);
             border-color: #ffab40;
+            color: white;
         }
 
         .cuenta-separator {
-            color: #555;
+            color: #30363d;
             font-size: 20px;
             user-select: none;
         }
 
         .cuenta-btn.canceladas-toggle {
-            background: #2a1515;
-            border: 2px solid #662222;
-            color: #f44336;
+            background: #1c1215;
+            border: 2px solid #3d1a1a;
+            color: #f85149;
         }
 
         .cuenta-btn.canceladas-toggle:hover {
-            border-color: #f44336;
+            border-color: #f85149;
         }
 
         .cuenta-btn.canceladas-toggle.active {
-            background: #f44336;
-            border-color: #ff6659;
+            background: #f85149;
+            border-color: #ff7b72;
             color: white;
-            box-shadow: 0 0 12px rgba(244, 67, 54, 0.4);
+            box-shadow: 0 4px 12px rgba(248, 81, 73, 0.3);
         }
 
         .cuenta-btn.canceladas-toggle span {
-            background: #f44336;
+            background: #f85149;
             color: white;
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 12px;
+            font-size: 11px;
             margin-left: 4px;
         }
 
         .cuenta-btn.canceladas-toggle.active span {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.25);
         }
 
         .cuenta-count {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.15);
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 11px;
+            font-size: 10px;
             margin-left: 4px;
         }
 
         .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 3px;
+            letter-spacing: -0.5px;
         }
 
         .stat-label {
-            font-size: 11px;
-            color: #aaa;
+            font-size: 10px;
+            color: #8b949e;
+            font-weight: 500;
+            letter-spacing: 0.3px;
         }
 
         .progress-bar-container {
-            background: #1a1a1a;
+            background: #0d1117;
             border-radius: 20px;
-            height: 30px;
+            height: 28px;
             overflow: hidden;
             position: relative;
         }
@@ -366,126 +425,136 @@
         }
 
         .progress-segment {
-            transition: all 0.5s;
+            transition: all 0.4s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 700;
             cursor: pointer;
         }
 
-        .progress-segment:hover {
-            opacity: 0.8;
+        .progress-segment:active {
+            opacity: 0.7;
         }
 
-        .progress-segment.pendiente { background: #9C27B0; }
-        .progress-segment.en-camino { background: #00d9ff; color: #000; }
-        .progress-segment.entregado { background: #00ff88; color: #000; }
-        .progress-segment.cancelado { background: #f44336; }
-        .progress-segment.reprogramado { background: #FF9800; color: #000; }
+        .progress-segment.pendiente { background: linear-gradient(90deg, #9C27B0, #8e24aa); }
+        .progress-segment.en-camino { background: linear-gradient(90deg, #00d9ff, #00b8d4); color: #000; }
+        .progress-segment.entregado { background: linear-gradient(90deg, #00ff88, #00e676); color: #000; }
+        .progress-segment.cancelado { background: linear-gradient(90deg, #f85149, #da3633); }
+        .progress-segment.reprogramado { background: linear-gradient(90deg, #FF9800, #f57c00); color: #000; }
 
         .sort-controls {
-            background: #1a1a1a;
+            background: #0d1117;
             padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 15px;
+            border-radius: 12px;
+            margin-bottom: 12px;
             display: flex;
-            gap: 10px;
+            gap: 6px;
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
+            border: 1px solid #21262d;
         }
 
         .sort-btn {
-            padding: 8px 15px;
-            font-size: 13px;
-            background: #333;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #21262d;
+            border-radius: 10px;
+            min-height: 38px;
         }
 
         .sort-btn.active {
             background: #FFE600;
             color: #000;
+            font-weight: 700;
         }
 
         .envio-card {
-            background: #2a2a2a;
-            border-left: 5px solid;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            transition: all 0.3s;
+            background: #161b22;
+            border-left: 4px solid;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            border: 1px solid #21262d;
+            border-left-width: 4px;
         }
 
         .envio-card:hover {
-            background: #333;
-            transform: translateX(5px);
+            background: #1c2128;
         }
 
         .envio-card.pendiente { border-left-color: #9C27B0; }
         .envio-card.en-camino { border-left-color: #00d9ff; }
         .envio-card.entregado { border-left-color: #00ff88; }
-        .envio-card.cancelado { border-left-color: #f44336; opacity: 0.7; }
+        .envio-card.cancelado { border-left-color: #f85149; opacity: 0.7; }
         .envio-card.reprogramado { border-left-color: #FF9800; }
 
         .envio-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             flex-wrap: wrap;
             gap: 8px;
         }
 
         .estado-badge {
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 12px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.3px;
         }
 
-        .estado-badge.pendiente { background: #9C27B0; }
-        .estado-badge.en-camino { background: #00d9ff; color: #000; }
-        .estado-badge.entregado { background: #00ff88; color: #000; }
-        .estado-badge.cancelado { background: #f44336; }
-        .estado-badge.reprogramado { background: #FF9800; color: #000; }
+        .estado-badge.pendiente { background: linear-gradient(135deg, #9C27B0, #7b1fa2); }
+        .estado-badge.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
+        .estado-badge.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
+        .estado-badge.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
+        .estado-badge.reprogramado { background: linear-gradient(135deg, #FF9800, #f57c00); color: #000; }
 
         .envio-info {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-top: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
         }
 
         .info-item {
-            background: #1a1a1a;
+            background: #0d1117;
             padding: 10px;
-            border-radius: 6px;
+            border-radius: 10px;
+            border: 1px solid #21262d;
         }
 
         .info-label {
-            color: #888;
-            font-size: 11px;
+            color: #8b949e;
+            font-size: 10px;
             margin-bottom: 4px;
             text-transform: uppercase;
+            font-weight: 500;
+            letter-spacing: 0.5px;
         }
 
         .info-value {
-            color: #fff;
-            font-size: 14px;
+            color: #e6edf3;
+            font-size: 13px;
             font-weight: 500;
         }
 
         .zona-highlight {
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 14px;
+            font-weight: 700;
             color: #FFE600;
         }
 
         .direccion-link, .order-link {
-            color: #3483FA;
+            color: #58a6ff;
             text-decoration: none;
-            transition: all 0.3s;
+            transition: all 0.2s;
         }
 
         .direccion-link:hover, .order-link:hover {
@@ -493,10 +562,11 @@
         }
 
         .timeline {
-            background: #1a1a1a;
+            background: #0d1117;
             padding: 12px;
-            border-radius: 6px;
-            margin-top: 12px;
+            border-radius: 10px;
+            margin-top: 10px;
+            border: 1px solid #21262d;
         }
 
         .timeline-item {
@@ -514,7 +584,7 @@
             top: 25px;
             width: 2px;
             height: calc(100% - 8px);
-            background: #444;
+            background: #21262d;
         }
 
         .timeline-dot {
@@ -523,16 +593,17 @@
             border-radius: 50%;
             flex-shrink: 0;
             z-index: 1;
+            transition: all 0.3s;
         }
 
         .timeline-dot.done {
             background: #00ff88;
-            box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
         }
 
         .timeline-dot.pending {
-            background: #444;
-            border: 2px solid #666;
+            background: #21262d;
+            border: 2px solid #30363d;
         }
 
         .timeline-content {
@@ -540,27 +611,29 @@
         }
 
         .timeline-label {
-            color: #aaa;
+            color: #8b949e;
             font-size: 12px;
         }
 
         .timeline-time {
             color: #00ff88;
-            font-weight: bold;
+            font-weight: 700;
             font-size: 13px;
         }
 
         .timeline-time.pending {
-            color: #666;
+            color: #484f58;
         }
 
         /* TRACKING DETALLADO */
         .tracking-detail {
-            background: #111;
-            border-radius: 6px;
+            background: #0d1117;
+            border-radius: 10px;
             padding: 10px;
             margin-top: 8px;
-            border-left: 3px solid #3483FA;
+            border-left: 3px solid #58a6ff;
+            border: 1px solid #21262d;
+            border-left: 3px solid #58a6ff;
         }
 
         .tracking-event {
@@ -569,7 +642,7 @@
             gap: 8px;
             padding: 4px 0;
             font-size: 12px;
-            color: #ccc;
+            color: #8b949e;
         }
 
         .tracking-event .track-icon {
@@ -580,15 +653,15 @@
             margin-top: 4px;
         }
 
-        .tracking-event .track-icon.shipped { background: #00d9ff; }
-        .tracking-event .track-icon.near { background: #FFE600; }
-        .tracking-event .track-icon.absent { background: #f44336; }
-        .tracking-event .track-icon.retry { background: #FF9800; }
-        .tracking-event .track-icon.delivered { background: #00ff88; }
-        .tracking-event .track-icon.default { background: #888; }
+        .tracking-event .track-icon.shipped { background: #00d9ff; box-shadow: 0 0 6px rgba(0,217,255,0.3); }
+        .tracking-event .track-icon.near { background: #FFE600; box-shadow: 0 0 6px rgba(255,230,0,0.3); }
+        .tracking-event .track-icon.absent { background: #f85149; box-shadow: 0 0 6px rgba(248,81,73,0.3); }
+        .tracking-event .track-icon.retry { background: #FF9800; box-shadow: 0 0 6px rgba(255,152,0,0.3); }
+        .tracking-event .track-icon.delivered { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.3); }
+        .tracking-event .track-icon.default { background: #484f58; }
 
         .tracking-event .track-time {
-            color: #888;
+            color: #484f58;
             font-size: 11px;
             min-width: 40px;
         }
@@ -598,8 +671,8 @@
         }
 
         .tracking-event.highlight-absent {
-            color: #f44336;
-            font-weight: bold;
+            color: #f85149;
+            font-weight: 700;
         }
 
         .tracking-event.highlight-near {
@@ -610,24 +683,24 @@
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            background: #1a3a5c;
-            color: #7ec8e3;
+            background: #0d2137;
+            color: #58a6ff;
             padding: 4px 10px;
             border-radius: 10px;
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 700;
         }
 
         .reputation-warning {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            background: #f44336;
+            background: #f85149;
             color: white;
             padding: 4px 10px;
             border-radius: 10px;
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 700;
             animation: pulse-rep 2s infinite;
         }
 
@@ -640,8 +713,8 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            background: #1b5e20;
-            color: #a5d6a7;
+            background: #0d2d15;
+            color: #56d364;
             padding: 4px 10px;
             border-radius: 10px;
             font-size: 11px;
@@ -649,20 +722,21 @@
 
         .loading {
             text-align: center;
-            padding: 40px;
-            font-size: 18px;
+            padding: 50px 20px;
+            font-size: 15px;
             color: #FFE600;
+            font-weight: 500;
         }
 
         .loading-spinner {
             display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #333;
+            width: 36px;
+            height: 36px;
+            border: 3px solid #21262d;
             border-top-color: #FFE600;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
         }
 
         @keyframes spin {
@@ -670,12 +744,13 @@
         }
 
         .error {
-            background: #f44336;
+            background: linear-gradient(135deg, #f85149, #da3633);
             color: white;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 20px;
+            border-radius: 14px;
             margin: 15px 0;
             text-align: center;
+            font-weight: 500;
         }
 
         .hidden {
@@ -684,61 +759,64 @@
 
         .no-results {
             text-align: center;
-            padding: 30px;
-            color: #888;
-            font-size: 16px;
+            padding: 40px;
+            color: #484f58;
+            font-size: 15px;
         }
 
         .fecha-hoy {
             color: #ff6b00;
-            font-weight: bold;
+            font-weight: 700;
         }
 
         .items-count {
             background: #FFE600;
             color: #000;
-            padding: 4px 8px;
+            padding: 3px 8px;
             border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
+            font-size: 10px;
+            font-weight: 700;
         }
 
         .cuenta-badge {
             color: white;
             padding: 3px 8px;
             border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 8px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: 6px;
         }
 
         .cuenta-badge.mikra {
-            background: #9C27B0;
+            background: linear-gradient(135deg, #9C27B0, #7b1fa2);
         }
 
         .cuenta-badge.chaya {
-            background: #FF6B00;
+            background: linear-gradient(135deg, #FF6B00, #e85d04);
         }
 
         /* VISTA SIMPLE */
         .envio-card-simple {
-            background: #2a2a2a;
-            border-left: 5px solid;
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            transition: all 0.3s;
+            background: #161b22;
+            border-left: 4px solid;
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
             cursor: pointer;
+            border: 1px solid #21262d;
+            border-left-width: 4px;
         }
 
-        .envio-card-simple:hover {
-            background: #333;
+        .envio-card-simple:active {
+            transform: scale(0.99);
+            background: #1c2128;
         }
 
         .envio-card-simple.pendiente { border-left-color: #9C27B0; }
         .envio-card-simple.en-camino { border-left-color: #00d9ff; }
         .envio-card-simple.entregado { border-left-color: #00ff88; }
-        .envio-card-simple.cancelado { border-left-color: #f44336; opacity: 0.7; }
+        .envio-card-simple.cancelado { border-left-color: #f85149; opacity: 0.7; }
         .envio-card-simple.reprogramado { border-left-color: #FF9800; }
 
         .simple-header {
@@ -750,30 +828,37 @@
 
         .simple-zona {
             flex: 1;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 15px;
+            font-weight: 700;
             color: #FFE600;
+            letter-spacing: -0.3px;
         }
 
         .simple-estado {
-            padding: 6px 15px;
-            border-radius: 15px;
-            font-weight: bold;
-            font-size: 13px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 12px;
             white-space: nowrap;
         }
 
-        .simple-estado.pendiente { background: #9C27B0; }
-        .simple-estado.en-camino { background: #00d9ff; color: #000; }
-        .simple-estado.entregado { background: #00ff88; color: #000; }
-        .simple-estado.cancelado { background: #f44336; }
-        .simple-estado.reprogramado { background: #FF9800; color: #000; }
+        .simple-estado.pendiente { background: linear-gradient(135deg, #9C27B0, #7b1fa2); }
+        .simple-estado.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
+        .simple-estado.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
+        .simple-estado.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
+        .simple-estado.reprogramado { background: linear-gradient(135deg, #FF9800, #f57c00); color: #000; }
 
         .simple-details {
             margin-top: 12px;
             padding-top: 12px;
-            border-top: 1px solid #444;
+            border-top: 1px solid #21262d;
             display: none;
+            animation: expandIn 0.2s ease-out;
+        }
+
+        @keyframes expandIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .simple-details.expanded {
@@ -788,68 +873,83 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(1, 4, 9, 0.95);
             z-index: 9999;
             overflow: auto;
+            backdrop-filter: blur(8px);
         }
 
         .map-modal.active {
             display: block;
+            animation: fadeIn 0.2s ease-out;
         }
 
         .map-container {
             position: relative;
-            max-width: 1200px;
-            margin: 20px auto;
-            background: #1a1a1a;
-            border-radius: 12px;
-            padding: 20px;
+            max-width: 1000px;
+            margin: 12px auto;
+            background: #0d1117;
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid #21262d;
         }
 
         .map-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .map-header h2 {
             color: #FFE600;
             margin: 0;
+            font-size: 18px;
+            font-weight: 700;
         }
 
         .map-close-btn {
-            background: #f44336;
+            background: #f85149;
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 14px;
+            font-weight: 700;
+            min-height: 44px;
         }
 
         .map-filters {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            background: #161b22;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 12px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
+            border: 1px solid #21262d;
         }
 
         .map-filter-btn {
-            padding: 8px 16px;
+            padding: 8px 14px;
             border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            background: #333;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: inherit;
+            background: #21262d;
             border: 2px solid transparent;
             cursor: pointer;
+            color: #8b949e;
+            min-height: 40px;
+            transition: all 0.2s;
+            touch-action: manipulation;
         }
+
+        .map-filter-btn:active { transform: scale(0.95); }
 
         .map-filter-btn.active-pendiente {
             background: #9C27B0;
             border-color: #ce93d8;
+            color: white;
         }
 
         .map-filter-btn.active-encamino {
@@ -871,28 +971,29 @@
         }
 
         #mapFrame a {
-            transition: all 0.3s;
+            transition: all 0.2s;
         }
 
         #mapFrame a:hover {
             color: #FFE600 !important;
-            transform: translateX(5px);
         }
 
         #mapFrame {
             width: 100%;
             height: 70vh;
-            border-radius: 8px;
-            background: #1a1a1a;
+            border-radius: 12px;
+            background: #0d1117;
         }
 
         .leaflet-popup-content-wrapper {
-            background: #2a2a2a;
-            color: #fff;
+            background: #161b22;
+            color: #e6edf3;
+            border-radius: 12px;
+            border: 1px solid #21262d;
         }
 
         .leaflet-popup-tip {
-            background: #2a2a2a;
+            background: #161b22;
         }
 
         .leaflet-popup-content {
@@ -900,12 +1001,29 @@
         }
 
         .leaflet-container a.leaflet-popup-close-button {
-            color: #fff;
+            color: #e6edf3;
         }
 
         @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+
             .stats-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(5, 1fr);
+                gap: 4px;
+            }
+            
+            .stat-item {
+                padding: 6px 2px;
+            }
+
+            .stat-number {
+                font-size: 18px;
+            }
+
+            .stat-label {
+                font-size: 9px;
             }
             
             .envio-info {
@@ -913,65 +1031,238 @@
             }
 
             .cuenta-filter {
-                gap: 6px;
+                gap: 5px;
             }
 
             .cuenta-btn {
                 padding: 6px 12px;
-                font-size: 12px;
+                font-size: 11px;
+                min-height: 36px;
             }
 
             .map-container {
-                margin: 10px;
-                padding: 10px;
+                margin: 8px;
+                padding: 12px;
             }
 
             #mapFrame {
-                height: 60vh;
+                height: 65vh;
             }
+
+            .sort-controls {
+                gap: 4px;
+            }
+
+            .sort-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                min-height: 34px;
+            }
+
+            .simple-zona {
+                font-size: 14px;
+            }
+
+            .simple-estado {
+                font-size: 11px;
+                padding: 5px 10px;
+            }
+
+            .envio-card-simple {
+                padding: 12px 14px;
+            }
+
+            .filter-section {
+                padding: 10px;
+            }
+
+            .search-select-wrapper {
+                min-width: 0;
+                flex: 1;
+            }
+        }
+
+        /* Scrollbar personalizado */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+        /* RUTA - Selección */
+        .route-bar {
+            background: linear-gradient(135deg, #238636, #1a7f37);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        .route-bar-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .route-bar-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .route-bar-actions button {
+            background: rgba(255,255,255,0.2);
+            border: 1.5px solid rgba(255,255,255,0.3);
+            padding: 6px 14px;
+            font-size: 12px;
+            border-radius: 8px;
+            min-height: 36px;
+            font-weight: 700;
+        }
+
+        .route-bar-actions button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .route-bar-actions .btn-go {
+            background: white;
+            color: #1a7f37;
+            border-color: white;
+        }
+
+        .route-check {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #30363d;
+            background: #0d1117;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            color: #484f58;
+            transition: all 0.15s;
+            z-index: 2;
+        }
+
+        .route-check.selected {
+            background: #238636;
+            border-color: #3fb950;
+            color: white;
+            box-shadow: 0 0 8px rgba(35, 134, 54, 0.4);
+        }
+
+        .envio-card-simple {
+            position: relative;
+        }
+
+        /* Marker seleccionado en mapa */
+        .marker-selected {
+            outline: 3px solid #3fb950 !important;
+            outline-offset: 2px;
+        }
+
+        /* Botones rápidos de ruta en mapa */
+        .map-route-section {
+            background: #0d1117;
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #21262d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .map-route-section button {
+            font-size: 11px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            min-height: 36px;
+            font-weight: 700;
+        }
+
+        .btn-route-go {
+            background: linear-gradient(135deg, #238636, #1a7f37) !important;
+        }
+
+        .btn-route-quick {
+            background: #21262d !important;
+            border: 1.5px solid #30363d !important;
+        }
+
+        .btn-route-quick:hover {
+            border-color: #3fb950 !important;
+        }
+
+        .btn-route-clear {
+            background: transparent !important;
+            border: 1.5px solid #30363d !important;
+            color: #8b949e !important;
+        }
+
+        .map-route-count {
+            background: #238636;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- Header compacto: título + badges + mapa + settings en una sola zona -->
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-            <h1 style="margin:0; font-size:18px;">🏍️ FLEX <span class="version-badge">v2.8</span></h1>
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+            <h1 style="margin:0; font-size:18px; letter-spacing:-0.5px;">🏍️ FLEX <span class="version-badge">v3.1</span></h1>
             <div class="info-badges" id="infoBadges" style="display:none; margin:0; gap:5px;">
-                <span class="info-badge fecha" id="badgeFecha" style="padding:4px 8px; font-size:11px;">📅 HOY</span>
-                <span class="info-badge caba" id="badgeCaba" style="padding:4px 8px; font-size:11px;">🏙️ CABA: 0</span>
-                <span class="info-badge provincia" id="badgeProvincia" style="padding:4px 8px; font-size:11px;">🗺️ Prov: 0</span>
+                <span class="info-badge fecha" id="badgeFecha" style="padding:4px 10px; font-size:11px;">📅 HOY</span>
+                <span class="info-badge caba" id="badgeCaba" style="padding:4px 10px; font-size:11px;">🏙️ CABA: 0</span>
+                <span class="info-badge provincia" id="badgeProvincia" style="padding:4px 10px; font-size:11px;">🗺️ Prov: 0</span>
             </div>
             <div style="display:flex; gap:6px; align-items:center;">
-                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:#3483FA; padding:6px 14px; font-size:13px; margin:0;">🗺️ Mapa</button>
-                <button onclick="toggleTools()" id="toolsToggle" style="background:#2a2a2a; border:2px solid #444; padding:6px 12px; font-size:16px; margin:0;" title="Herramientas">⚙️</button>
+                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:8px 14px; font-size:13px; margin:0; min-height:40px;">🗺️ Mapa</button>
+                <button onclick="toggleTools()" id="toolsToggle" style="background:#161b22; border:1.5px solid #30363d; padding:8px 12px; font-size:16px; margin:0; min-height:40px;" title="Herramientas">⚙️</button>
             </div>
         </div>
 
         <!-- Panel herramientas desplegable -->
         <div class="tools-panel" id="toolsPanel">
-            <div style="background:#2a2a2a; border-radius:10px; padding:12px; margin-bottom:10px;">
-                <div style="font-size:12px; color:#888; margin-bottom:8px; text-align:center;">HERRAMIENTAS</div>
-                <div class="top-buttons" style="margin-bottom:10px;">
-                    <button onclick="toggleVista()" id="toggleVistaBtn" style="font-size:12px; padding:7px 14px;">📊 Vista Completa</button>
-                    <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning" style="font-size:12px; padding:7px 14px;">📅 Ver <span id="diaAnteriorLabel"></span></button>
+            <div style="background:#161b22; border-radius:14px; padding:14px; margin-bottom:10px; border:1px solid #21262d;">
+                <div style="font-size:11px; color:#484f58; margin-bottom:10px; text-align:center; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Herramientas</div>
+                <div class="top-buttons" style="margin-bottom:12px;">
+                    <button onclick="toggleVista()" id="toggleVistaBtn" style="font-size:12px; padding:8px 14px;">📊 Vista Completa</button>
+                    <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning" style="font-size:12px; padding:8px 14px;">📅 Ver <span id="diaAnteriorLabel"></span></button>
                     <div style="display:flex; gap:4px; align-items:center;">
-                        <input type="date" id="fechaCustom" style="padding:6px 8px; background:#1a1a1a; border:2px solid #444; border-radius:6px; color:#fff; font-size:12px; cursor:pointer;">
-                        <button onclick="cargarFechaCustom()" style="background:#9C27B0; font-size:12px; padding:7px 12px;">📅 Buscar</button>
+                        <input type="date" id="fechaCustom" style="padding:8px 10px; background:#0d1117; border:1.5px solid #30363d; border-radius:10px; color:#e6edf3; font-size:12px; font-family:inherit; cursor:pointer; min-height:40px;">
+                        <button onclick="cargarFechaCustom()" style="background:linear-gradient(135deg,#9C27B0,#7b1fa2); font-size:12px; padding:8px 14px;">📅 Buscar</button>
                     </div>
                 </div>
-                <div style="font-size:12px; color:#888; margin-bottom:8px; text-align:center;">FILTROS</div>
+                <div style="font-size:11px; color:#484f58; margin-bottom:10px; text-align:center; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Filtros</div>
                 <div id="cuentaFilterInTools" class="cuenta-filter" style="margin-bottom:0;">
-                    <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')" style="padding:5px 12px; font-size:11px;">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
-                    <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')" style="padding:5px 12px; font-size:11px;">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
-                    <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:5px 12px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
+                    <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')" style="padding:6px 12px; font-size:11px;">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
+                    <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')" style="padding:6px 12px; font-size:11px;">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
+                    <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:6px 12px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
                     <span class="cuenta-separator">│</span>
-                    <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:5px 12px; font-size:11px;">❌ Canceladas <span id="canceladasCount">0</span></button>
+                    <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:6px 12px; font-size:11px;">❌ Canceladas <span id="canceladasCount">0</span></button>
                 </div>
             </div>
         </div>
 
-        <div id="filterSection" class="filter-section hidden" style="padding:10px; margin-bottom:10px;">
+        <div id="filterSection" class="filter-section hidden" style="padding:12px; margin-bottom:10px;">
             <div class="filter-row">
                 <label>📍 Zona:</label>
                 <div class="search-select-wrapper">
@@ -989,8 +1280,8 @@
             </div>
         </div>
 
-        <div id="statsSection" class="stats-bar hidden" style="padding:10px; margin-bottom:10px;">
-            <div class="stats-grid" style="margin-bottom:8px;">
+        <div id="statsSection" class="stats-bar hidden" style="padding:12px; margin-bottom:10px;">
+            <div class="stats-grid" style="margin-bottom:10px;">
                 <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all" style="padding:6px;">
                     <div class="stat-number" style="color:#FFE600; font-size:20px;">0</div>
                     <div class="stat-label" style="font-size:9px;">TODOS</div>
@@ -1017,13 +1308,13 @@
             </div>
         </div>
 
-        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:8px; padding:8px;">
-            <label style="color: #FFE600; font-weight: bold; font-size:12px;">📊 Ordenar:</label>
-            <button class="sort-btn active" onclick="ordenarPor('zona')" style="font-size:11px; padding:5px 10px;">🌍 Zona</button>
-            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')" style="font-size:11px; padding:5px 10px;">📅 Fecha</button>
-            <button class="sort-btn" onclick="ordenarPor('hora-entrega')" style="font-size:11px; padding:5px 10px;">🕐 Hora</button>
-            <button class="sort-btn" onclick="ordenarPor('estado')" style="font-size:11px; padding:5px 10px;">📋 Estado</button>
-            <button class="sort-btn" onclick="ordenarPor('recientes')" style="font-size:11px; padding:5px 10px;">🆕 Recientes</button>
+        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:10px; padding:8px;">
+            <label style="color: #FFE600; font-weight: 700; font-size:11px; letter-spacing:0.5px;">📊 Ordenar:</label>
+            <button class="sort-btn active" onclick="ordenarPor('zona')" style="font-size:11px; padding:6px 10px;">🌍 Zona</button>
+            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')" style="font-size:11px; padding:6px 10px;">📅 Fecha</button>
+            <button class="sort-btn" onclick="ordenarPor('hora-entrega')" style="font-size:11px; padding:6px 10px;">🕐 Hora</button>
+            <button class="sort-btn" onclick="ordenarPor('estado')" style="font-size:11px; padding:6px 10px;">📋 Estado</button>
+            <button class="sort-btn" onclick="ordenarPor('recientes')" style="font-size:11px; padding:6px 10px;">🆕 Recientes</button>
         </div>
 
         <div id="content"></div>
@@ -1045,6 +1336,14 @@
                     <button class="map-filter-btn active-entregado" onclick="toggleMapFilter('entregado')" id="mapFilterEntregado">
                         ✅ Entregados (<span id="mapCountEntregado">0</span>)
                     </button>
+                </div>
+                <div class="map-route-section" id="mapRouteSection">
+                    <span style="font-size:12px; color:#8b949e; font-weight:700;">🛣️ RUTA:</span>
+                    <button class="btn-route-quick" onclick="seleccionarParaRuta('caba')">📍 CABA</button>
+                    <button class="btn-route-quick" onclick="seleccionarParaRuta('pendientes')">⏳ Pendientes</button>
+                    <button class="btn-route-quick" onclick="seleccionarParaRuta('visibles')">👁️ Visibles</button>
+                    <button class="btn-route-go" id="btnAbrirRuta" onclick="abrirRutaGoogleMaps()" style="display:none;">🗺️ Abrir ruta (<span id="rutaCount">0</span>)</button>
+                    <button class="btn-route-clear" id="btnLimpiarRuta" onclick="limpiarSeleccionRuta()" style="display:none;">✕ Limpiar</button>
                 </div>
                 <div id="mapFrame"></div>
             </div>
@@ -1328,25 +1627,54 @@
             currentZoneFilter = 'all';
             currentCuentaFilter = 'all';
             mostrarCanceladas = false;
-            allFlexOrders = []; // Limpiar datos previos
+            allFlexOrders = [];
             
             const hoy = new Date();
             const diaSemana = hoy.getDay();
+            const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             
-            // Si es fin de semana (sábado o domingo), buscar entregas del LUNES
-            let fechaBusqueda = new Date();
-            let label = 'HOY';
+            // Si es fin de semana, empezar desde el LUNES
+            let fechaBase = new Date();
+            if (diaSemana === 0) fechaBase.setDate(fechaBase.getDate() + 1);
+            else if (diaSemana === 6) fechaBase.setDate(fechaBase.getDate() + 2);
+            fechaBase.setHours(0, 0, 0, 0);
             
-            if (diaSemana === 0) { // Domingo
-                fechaBusqueda.setDate(fechaBusqueda.getDate() + 1); // Lunes
-                label = 'LUNES';
-            } else if (diaSemana === 6) { // Sábado
-                fechaBusqueda.setDate(fechaBusqueda.getDate() + 2); // Lunes
-                label = 'LUNES';
+            // Buscar hasta 7 días hábiles hacia adelante hasta encontrar envíos
+            let fechaActual = new Date(fechaBase);
+            const content = document.getElementById('content');
+            
+            for (let intento = 0; intento < 10; intento++) { // 10 días calendario = ~7 hábiles
+                // Saltar fines de semana
+                while (fechaActual.getDay() === 0 || fechaActual.getDay() === 6) {
+                    fechaActual.setDate(fechaActual.getDate() + 1);
+                }
+                
+                const esHoy = fechaActual.toDateString() === new Date().toDateString();
+                const label = esHoy ? 'HOY' : `${dias[fechaActual.getDay()]} ${fechaActual.getDate()}/${fechaActual.getMonth()+1}`;
+                
+                if (intento > 0) {
+                    content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Sin envíos... buscando ${label}...</div>`;
+                }
+                
+                allFlexOrders = [];
+                await cargarFlexPorFecha(fechaActual, label, true);
+                
+                const activas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado');
+                if (activas.length > 0) return; // Encontró envíos, listo
+                
+                // Avanzar al siguiente día
+                fechaActual.setDate(fechaActual.getDate() + 1);
             }
             
-            fechaBusqueda.setHours(0, 0, 0, 0);
-            await cargarFlexPorFecha(fechaBusqueda, label);
+            // Si no encontró nada en 7+ días hábiles
+            content.innerHTML = `
+                <div class="no-results" style="padding:40px;">
+                    <div style="font-size:40px; margin-bottom:15px;">📭</div>
+                    No se encontraron envíos FLEX próximos
+                    <br><br>
+                    <button onclick="cargarFlexHoy()" style="margin-top:10px;">🔄 Reintentar</button>
+                </div>
+            `;
         }
 
         // PUNTO 2: Nueva función para día anterior (reemplaza cargarFlexAyer)
@@ -1619,40 +1947,50 @@
             content.innerHTML = html;
         }
 
-        async function cargarFlexPorFecha(targetDate, label) {
+        async function cargarFlexPorFecha(targetDate, label, silentRetry = false) {
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
+            
+            // Limpiar ruta seleccionada
+            selectedForRoute.clear();
+            const routeBarEl = document.getElementById('routeBarOutside');
+            if (routeBarEl) routeBarEl.remove();
             
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
 
-            for (const cuenta of CUENTAS) {
+            // Cargar AMBAS cuentas en PARALELO (2x más rápido)
+            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta) => {
                 try {
                     const token = await obtenerTokenCuenta(cuenta);
                     if (!token) {
                         console.error(`No hay token para ${cuenta.nombre}`);
-                        continue;
+                        return [];
                     }
-
-                    const ordersFromAccount = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
-                    
-                    ordersFromAccount.forEach(item => {
-                        const shippingId = item.shipping.id;
-                        if (!shippingIdsVistos.has(shippingId)) {
-                            shippingIdsVistos.add(shippingId);
-                            allOrdersFromAllAccounts.push({
-                                ...item,
-                                cuentaNombre: cuenta.nombre,
-                                cuentaColor: cuenta.color
-                            });
-                        }
-                    });
+                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
+                    return orders.map(item => ({
+                        ...item,
+                        cuentaNombre: cuenta.nombre,
+                        cuentaColor: cuenta.color
+                    }));
                 } catch (error) {
                     console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
+                    return [];
                 }
-            }
+            }));
+
+            cuentaResults.flat().forEach(item => {
+                const shippingId = item.shipping.id;
+                if (!shippingIdsVistos.has(shippingId)) {
+                    shippingIdsVistos.add(shippingId);
+                    allOrdersFromAllAccounts.push(item);
+                }
+            });
 
             if (allOrdersFromAllAccounts.length === 0) {
+                // En modo retry silencioso, simplemente retornar sin mostrar error
+                if (silentRetry) return;
+                
                 content.innerHTML = `
                     <div class="error">
                         ⚠️ No hay envíos FLEX para ${label}<br><br>
@@ -1730,14 +2068,18 @@
             document.getElementById('statsSection').classList.remove('hidden');
             document.getElementById('sortSection').classList.remove('hidden');
             document.getElementById('btnMapa').classList.remove('hidden');
+            
+            // En modo retry silencioso, no renderizar si no hay órdenes activas
+            if (silentRetry) {
+                const activas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado');
+                if (activas.length === 0) return;
+            }
+            
             displayOrders('all');
         }
 
         async function cargarOrdenesDeCuenta(cuenta, token, targetDate) {
             let tempOrders = [];
-            
-            const allOrderPromises = [];
-            const totalPages = 20;
 
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
@@ -1760,9 +2102,9 @@
                 return [];
             }
 
-            // Calcular rango de fechas: desde 3 días antes hasta 1 día después de la fecha objetivo
+            // Rango ampliado: 7 días antes hasta 1 día después (cubre órdenes creadas con anticipación)
             const dateFrom = new Date(targetDate);
-            dateFrom.setDate(dateFrom.getDate() - 3);
+            dateFrom.setDate(dateFrom.getDate() - 7);
             const dateTo = new Date(targetDate);
             dateTo.setDate(dateTo.getDate() + 1);
             dateTo.setHours(23, 59, 59, 0);
@@ -1771,17 +2113,38 @@
             const dateToStr = dateTo.toISOString().split('.')[0] + '.000-00:00';
             const dateFilter = `&order.date_created.from=${encodeURIComponent(dateFromStr)}&order.date_created.to=${encodeURIComponent(dateToStr)}`;
 
-            for (let page = 0; page < totalPages; page++) {
-                allOrderPromises.push(
-                    fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc${dateFilter}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }).then(r => r.json())
-                );
+            // PASO 1: Pedir primera página para saber el total real
+            let allOrders = [];
+            try {
+                const firstPageResp = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${dateFilter}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const firstPageData = await firstPageResp.json();
+                const firstResults = firstPageData.results || [];
+                allOrders.push(...firstResults);
+                
+                const total = firstPageData.paging?.total || 0;
+                
+                // PASO 2: Solo pedir las páginas restantes necesarias (máx 1000 órdenes)
+                if (total > 50) {
+                    const remainingPages = Math.min(Math.ceil(total / 50) - 1, 19); // máx 20 páginas total
+                    const extraPromises = [];
+                    for (let page = 1; page <= remainingPages; page++) {
+                        extraPromises.push(
+                            fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc${dateFilter}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            }).then(r => r.json()).catch(() => ({ results: [] }))
+                        );
+                    }
+                    const extraData = await Promise.all(extraPromises);
+                    extraData.forEach(data => allOrders.push(...(data.results || [])));
+                }
+            } catch (error) {
+                console.error(`Error cargando órdenes de ${cuenta.nombre}:`, error);
+                return [];
             }
 
-            const allPagesData = await Promise.all(allOrderPromises);
-            const allOrders = allPagesData.flatMap(data => data.results || []);
-
+            // PASO 3: Consultar shipping de todas las órdenes en paralelo (sin batching)
             const shippingPromises = allOrders.map(async (order) => {
                 try {
                     const shippingId = order.shipping?.id;
@@ -2310,8 +2673,12 @@
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
+                    const hasCoords = shipping.receiver_address?.latitude && shipping.receiver_address?.longitude;
+                    const isRouteSelected = selectedForRoute.has(shipping.id);
+
                     html += `
                         <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
+                            ${hasCoords && state !== 'cancelado' ? `<div class="route-check ${isRouteSelected ? 'selected' : ''}" id="route-check-${shipping.id}" onclick="event.stopPropagation(); toggleRouteSelection(${shipping.id})">${isRouteSelected ? '✓' : ''}</div>` : ''}
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
                                 <div class="simple-estado ${state}">${estadoTexto}</div>
@@ -2514,6 +2881,161 @@
         let leafletMap = null;
         let markersLayer = null;
 
+        // RUTA - Selección de envíos para Google Maps
+        let selectedForRoute = new Set(); // shipping IDs seleccionados
+
+        function toggleRouteSelection(shippingId) {
+            if (selectedForRoute.has(shippingId)) {
+                selectedForRoute.delete(shippingId);
+            } else {
+                if (selectedForRoute.size >= 25) {
+                    alert('Google Maps permite máximo 25 paradas');
+                    return;
+                }
+                selectedForRoute.add(shippingId);
+            }
+            actualizarRouteUI();
+            actualizarMapa();
+            // Actualizar check en card si existe
+            const check = document.getElementById(`route-check-${shippingId}`);
+            if (check) {
+                check.classList.toggle('selected', selectedForRoute.has(shippingId));
+                check.textContent = selectedForRoute.has(shippingId) ? '✓' : '';
+            }
+        }
+
+        function seleccionarParaRuta(tipo) {
+            selectedForRoute.clear();
+            
+            const ordenesFiltradas = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
+                const state = getOrderState(shipping);
+                if (state === 'cancelado' || state === 'entregado') return false;
+                
+                const lat = shipping.receiver_address?.latitude;
+                const lng = shipping.receiver_address?.longitude;
+                if (!lat || !lng) return false;
+
+                // Filtro de cuenta actual
+                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return false;
+                
+                if (tipo === 'caba') {
+                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                    return esCABA(zona);
+                }
+                
+                if (tipo === 'pendientes') {
+                    return state === 'pendiente' || state === 'en-camino';
+                }
+                
+                if (tipo === 'visibles') {
+                    // Respetar filtros del mapa
+                    if (state === 'pendiente' || state === 'en-camino') return mapShowEnCamino;
+                    if (state === 'reprogramado') return mapShowReprogramados;
+                    return false;
+                }
+                
+                return true;
+            });
+
+            ordenesFiltradas.forEach(({ shipping }) => {
+                if (selectedForRoute.size < 25) {
+                    selectedForRoute.add(shipping.id);
+                }
+            });
+
+            actualizarRouteUI();
+            actualizarMapa();
+        }
+
+        function limpiarSeleccionRuta() {
+            selectedForRoute.clear();
+            actualizarRouteUI();
+            actualizarMapa();
+            // Limpiar checks en cards
+            document.querySelectorAll('.route-check').forEach(el => {
+                el.classList.remove('selected');
+                el.textContent = '';
+            });
+        }
+
+        function actualizarRouteUI() {
+            const count = selectedForRoute.size;
+            const btnAbrir = document.getElementById('btnAbrirRuta');
+            const btnLimpiar = document.getElementById('btnLimpiarRuta');
+            const spanCount = document.getElementById('rutaCount');
+            
+            if (btnAbrir) {
+                btnAbrir.style.display = count > 0 ? 'inline-flex' : 'none';
+                spanCount.textContent = count;
+            }
+            if (btnLimpiar) {
+                btnLimpiar.style.display = count > 0 ? 'inline-flex' : 'none';
+            }
+
+            // Actualizar barra de ruta fuera del mapa
+            const routeBarEl = document.getElementById('routeBarOutside');
+            if (count > 0) {
+                if (!routeBarEl) {
+                    const bar = document.createElement('div');
+                    bar.id = 'routeBarOutside';
+                    bar.className = 'route-bar';
+                    bar.innerHTML = `
+                        <div class="route-bar-info">🛣️ <span id="routeBarCount">${count}</span> paradas seleccionadas</div>
+                        <div class="route-bar-actions">
+                            <button onclick="abrirRutaGoogleMaps()" class="btn-go">🗺️ Abrir en Google Maps</button>
+                            <button onclick="limpiarSeleccionRuta()">✕ Limpiar</button>
+                        </div>
+                    `;
+                    const contentEl = document.getElementById('content');
+                    contentEl.parentNode.insertBefore(bar, contentEl);
+                } else {
+                    document.getElementById('routeBarCount').textContent = count;
+                }
+            } else if (routeBarEl) {
+                routeBarEl.remove();
+            }
+        }
+
+        function abrirRutaGoogleMaps() {
+            if (selectedForRoute.size === 0) return;
+            
+            // Obtener coordenadas de los envíos seleccionados
+            const waypoints = [];
+            allFlexOrders.forEach(({ shipping }) => {
+                if (selectedForRoute.has(shipping.id)) {
+                    const lat = shipping.receiver_address?.latitude;
+                    const lng = shipping.receiver_address?.longitude;
+                    if (lat && lng) {
+                        waypoints.push({ lat, lng, id: shipping.id });
+                    }
+                }
+            });
+
+            if (waypoints.length === 0) return;
+
+            if (waypoints.length === 1) {
+                // Solo 1 punto → abrir navegación directa
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${waypoints[0].lat},${waypoints[0].lng}&travelmode=driving`, '_blank');
+                return;
+            }
+
+            // Múltiples puntos → ruta con paradas
+            // Usar primer punto como origin y último como destination, intermedios como waypoints
+            const origin = `${waypoints[0].lat},${waypoints[0].lng}`;
+            const destination = `${waypoints[waypoints.length - 1].lat},${waypoints[waypoints.length - 1].lng}`;
+            const middlePoints = waypoints.slice(1, -1).map(w => `${w.lat},${w.lng}`).join('|');
+
+            let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+            if (middlePoints) {
+                url += `&waypoints=${encodeURIComponent(middlePoints)}`;
+            }
+
+            window.open(url, '_blank');
+        }
+
         function toggleMapFilter(tipo) {
             if (tipo === 'en-camino') {
                 mapShowEnCamino = !mapShowEnCamino;
@@ -2683,9 +3205,12 @@
                 }
 
                 // Crear icono personalizado
+                const isSelected = selectedForRoute.has(shipping.id);
+                const selectedBorder = isSelected ? '3px solid #3fb950' : '3px solid white';
+                const selectedShadow = isSelected ? '0 0 10px rgba(63,185,80,0.5)' : '0 2px 8px rgba(0,0,0,0.3)';
                 const customIcon = L.divIcon({
                     className: 'custom-marker',
-                    html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${estadoEmoji}</div>`,
+                    html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:${selectedBorder}; box-shadow:${selectedShadow}; position:relative;">${estadoEmoji}${isSelected ? '<div style="position:absolute;top:-8px;right:-8px;background:#238636;color:white;width:18px;height:18px;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;">✓</div>' : ''}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -2700,6 +3225,12 @@
                     cuentaBadgeHtml = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟠 Chaya</span>';
                 }
 
+                const isInRoute = selectedForRoute.has(shipping.id);
+                const routeBtnStyle = isInRoute 
+                    ? 'background:#238636; color:white; border:1px solid #3fb950;' 
+                    : 'background:#21262d; color:#8b949e; border:1px solid #30363d;';
+                const routeBtnText = isInRoute ? '✓ En la ruta' : '+ Agregar a ruta';
+                
                 const popupContent = `
                     <div style="min-width:200px;">
                         <div style="margin-bottom:8px;">
@@ -2708,13 +3239,18 @@
                         </div>
                         <div style="margin-bottom:6px;"><strong>📍 ${zona}</strong></div>
                         <div style="margin-bottom:6px;">👤 ${comprador}</div>
-                        <div style="margin-bottom:8px; font-size:12px; color:#aaa;">
-                            <a href="${orderUrl}" target="_blank" style="color:#3483FA; text-decoration:none;">#${orderId}</a>
+                        <div style="margin-bottom:8px; font-size:12px; color:#8b949e;">
+                            <a href="${orderUrl}" target="_blank" style="color:#58a6ff; text-decoration:none;">#${orderId}</a>
                         </div>
-                        <a href="${googleMapsUrl}" target="_blank" style="color:#3483FA; text-decoration:none; font-size:13px; display:block; margin-top:8px; padding:6px; background:#1a1a1a; border-radius:6px; text-align:center;">
-                            🗺️ Abrir en Google Maps<br>
-                            <small style="color:#888;">${direccionCompleta}</small>
-                        </a>
+                        <div style="display:flex; gap:6px; flex-direction:column;">
+                            <button onclick="toggleRouteSelection(${shipping.id}); actualizarMapa();" style="${routeBtnStyle} padding:8px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center; min-height:36px;">
+                                🛣️ ${routeBtnText}
+                            </button>
+                            <a href="${googleMapsUrl}" target="_blank" style="color:#58a6ff; text-decoration:none; font-size:12px; display:block; padding:8px; background:#0d1117; border-radius:8px; text-align:center; border:1px solid #21262d;">
+                                🗺️ Ver en Google Maps<br>
+                                <small style="color:#484f58;">${direccionCompleta}</small>
+                            </a>
+                        </div>
                     </div>
                 `;
 
@@ -2734,13 +3270,13 @@
             const hoy = new Date();
             const diaSemana = hoy.getDay(); // 0=Dom, 6=Sáb
             
-            // Si es sábado (6), cargar viernes
+            // Si es sábado (6), cargar lunes (+2 días)
             if (diaSemana === 6) {
-                hoy.setDate(hoy.getDate() - 1);
+                hoy.setDate(hoy.getDate() + 2);
             }
-            // Si es domingo (0), cargar viernes
+            // Si es domingo (0), cargar lunes (+1 día)
             else if (diaSemana === 0) {
-                hoy.setDate(hoy.getDate() - 2);
+                hoy.setDate(hoy.getDate() + 1);
             }
             
             hoy.setHours(0, 0, 0, 0);
@@ -2749,7 +3285,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             actualizarLabelDiaAnterior();
-            cargarFlexHoy(); // Ya maneja si es fin de semana internamente
+            cargarFlexHoy(); // Ya maneja feriados con retry automático
         });
     </script>
     
