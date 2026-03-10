@@ -28,7 +28,7 @@
             font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: #0d1117;
             color: #e6edf3;
-            padding: 12px;
+            padding: 8px;
             padding-bottom: env(safe-area-inset-bottom, 12px);
             overflow-x: hidden;
         }
@@ -276,6 +276,7 @@
             padding: 14px;
             margin-bottom: 12px;
             border: 1px solid #21262d;
+            overflow: visible;
         }
 
         .stats-grid {
@@ -1093,67 +1094,228 @@
         ::-webkit-scrollbar-track { background: #0d1117; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+        /* ── Navegación de días ── */
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 14px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+        }
+        .date-nav-arrow {
+            background: #21262d;
+            border: none;
+            border-radius: 8px;
+            color: #e6edf3;
+            font-size: 16px;
+            padding: 0;
+            width: 36px;
+            height: 36px;
+            min-height: unset;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+        .date-nav-arrow:hover { background: #30363d; filter: none; transform: none; }
+        .date-nav-arrow:active { background: #FFE600; color: #000; transform: scale(0.94); }
+        .date-nav-days {
+            display: flex;
+            gap: 5px;
+            flex: 1;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            justify-content: center;
+        }
+        .date-nav-days::-webkit-scrollbar { display: none; }
+        .date-nav-day {
+            flex-shrink: 0;
+            background: transparent;
+            border: 1.5px solid #30363d;
+            border-radius: 10px;
+            color: #8b949e;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: inherit;
+            padding: 5px 10px;
+            min-height: unset;
+            height: 36px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+            touch-action: manipulation;
+        }
+        .date-nav-day:hover { border-color: #484f58; color: #e6edf3; background: #21262d; filter: none; transform: none; }
+        .date-nav-day.active { background: #FFE600; border-color: #FFE600; color: #000; box-shadow: 0 2px 10px rgba(255,230,0,0.25); }
+        .date-nav-day .day-name { font-size: 10px; font-weight: 700; }
+        .date-nav-day .day-date { font-size: 9px; opacity: 0.7; }
+        .date-nav-input-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+        .date-nav-input-btn {
+            background: #21262d;
+            border: 1.5px solid #30363d;
+            border-radius: 8px;
+            color: #8b949e;
+            font-size: 16px;
+            width: 36px;
+            height: 36px;
+            min-height: unset;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .date-nav-input-btn:hover { border-color: #484f58; color: #e6edf3; filter: none; transform: none; }
+        .date-nav-input-hidden {
+            position: absolute;
+            top: 0; left: 0;
+            width: 36px; height: 36px;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* ── Cards rediseñadas ── */
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .card-meta-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .card-address-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 8px 12px;
+            background: #0d1117;
+            border-radius: 10px;
+            border: 1px solid #21262d;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .card-address-row a { color: #58a6ff; text-decoration: none; }
+        .card-address-row a:hover { color: #FFE600; }
+        .card-sep { color: #30363d; flex-shrink: 0; user-select: none; }
+        .card-comprador { color: #8b949e; }
+        .card-comprador strong { color: #e6edf3; }
+
+        /* Timeline unificado */
+        .unified-timeline { display: flex; flex-direction: column; }
+        .utl-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 4px 0;
+            position: relative;
+            font-size: 12px;
+        }
+        .utl-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 6px; top: 18px;
+            width: 2px; bottom: -4px;
+            background: #21262d;
+        }
+        .utl-dot {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0; margin-top: 1px; z-index: 1;
+        }
+        .utl-dot.c-green  { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.35); }
+        .utl-dot.c-blue   { background: #00d9ff; box-shadow: 0 0 6px rgba(0,217,255,0.35); }
+        .utl-dot.c-yellow { background: #FFE600; box-shadow: 0 0 6px rgba(255,230,0,0.35); }
+        .utl-dot.c-red    { background: #f85149; box-shadow: 0 0 6px rgba(248,81,73,0.35); }
+        .utl-dot.c-orange { background: #FF9800; box-shadow: 0 0 6px rgba(255,152,0,0.35); }
+        .utl-dot.c-gray   { background: #484f58; }
+        .utl-dot.c-pending { background: #21262d; border: 2px solid #30363d; }
+        .utl-time { font-weight: 700; font-size: 11px; min-width: 52px; white-space: nowrap; }
+        .utl-time.t-green  { color: #00ff88; }
+        .utl-time.t-blue   { color: #00d9ff; }
+        .utl-time.t-yellow { color: #FFE600; }
+        .utl-time.t-red    { color: #f85149; }
+        .utl-time.t-orange { color: #FF9800; }
+        .utl-time.t-muted  { color: #484f58; font-weight: 400; }
+        .utl-label { color: #8b949e; flex: 1; line-height: 1.4; }
+        .utl-label strong { color: #e6edf3; font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header compacto: título + badges + mapa + settings en una sola zona -->
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-            <h1 style="margin:0; font-size:18px; letter-spacing:-0.5px;">🏍️ FLEX <span class="version-badge">v3.0</span></h1>
-            <div class="info-badges" id="infoBadges" style="display:none; margin:0; gap:5px;">
-                <span class="info-badge fecha" id="badgeFecha" style="padding:4px 10px; font-size:11px;">📅 HOY</span>
-                <span class="info-badge caba" id="badgeCaba" style="padding:4px 10px; font-size:11px;">🏙️ CABA: 0</span>
-                <span class="info-badge provincia" id="badgeProvincia" style="padding:4px 10px; font-size:11px;">🗺️ Prov: 0</span>
+        <!-- Fila única: badges + acciones -->
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+            <span class="version-badge" style="flex-shrink:0;">v3.2</span>
+            <!-- badges CABA/Prov siempre visibles -->
+            <div id="infoBadges" style="display:flex; gap:5px; align-items:center; flex:1;">
+                <span class="info-badge caba" id="badgeCaba" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🏙️ CABA: 0</span>
+                <span class="info-badge provincia" id="badgeProvincia" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🗺️ Prov: 0</span>
             </div>
-            <div style="display:flex; gap:6px; align-items:center;">
-                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:8px 14px; font-size:13px; margin:0; min-height:40px;">🗺️ Mapa</button>
-                <button onclick="toggleTools()" id="toolsToggle" style="background:#161b22; border:1.5px solid #30363d; padding:8px 12px; font-size:16px; margin:0; min-height:40px;" title="Herramientas">⚙️</button>
+            <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
+                <button onclick="toggleTools()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">⚙️</button>
+            </div>
+        </div>
+        <span id="toggleVistaBtn" style="display:none;"></span>
+
+        <!-- Barra de navegación de días -->
+        <div class="date-nav" style="padding:6px 8px; margin-bottom:8px;">
+            <button class="date-nav-arrow" onclick="navDia(-1)">‹</button>
+            <div class="date-nav-days" id="dateNavDays"></div>
+            <button class="date-nav-arrow" onclick="navDia(+1)">›</button>
+            <div class="date-nav-input-wrap" title="Ir a fecha">
+                <button class="date-nav-input-btn">📅</button>
+                <input type="date" id="fechaCustom" class="date-nav-input-hidden" onchange="cargarFechaCustom()">
             </div>
         </div>
 
-        <!-- Panel herramientas desplegable -->
+        <!-- Panel filtros (desplegable por ⚙️) -->
         <div class="tools-panel" id="toolsPanel">
-            <div style="background:#161b22; border-radius:14px; padding:14px; margin-bottom:10px; border:1px solid #21262d;">
-                <div style="font-size:11px; color:#484f58; margin-bottom:10px; text-align:center; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Herramientas</div>
-                <div class="top-buttons" style="margin-bottom:12px;">
-                    <button onclick="toggleVista()" id="toggleVistaBtn" style="font-size:12px; padding:8px 14px;">📊 Vista Completa</button>
-                    <button onclick="cargarFlexDiaAnterior()" id="loadAyerBtn" class="btn-warning" style="font-size:12px; padding:8px 14px;">📅 Ver <span id="diaAnteriorLabel"></span></button>
-                    <div style="display:flex; gap:4px; align-items:center;">
-                        <input type="date" id="fechaCustom" style="padding:8px 10px; background:#0d1117; border:1.5px solid #30363d; border-radius:10px; color:#e6edf3; font-size:12px; font-family:inherit; cursor:pointer; min-height:40px;">
-                        <button onclick="cargarFechaCustom()" style="background:linear-gradient(135deg,#9C27B0,#7b1fa2); font-size:12px; padding:8px 14px;">📅 Buscar</button>
-                    </div>
-                </div>
-                <div style="font-size:11px; color:#484f58; margin-bottom:10px; text-align:center; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Filtros</div>
-                <div id="cuentaFilterInTools" class="cuenta-filter" style="margin-bottom:0;">
-                    <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')" style="padding:6px 12px; font-size:11px;">📦 Todas <span class="cuenta-count" id="allCount">0</span></button>
-                    <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')" style="padding:6px 12px; font-size:11px;">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
-                    <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:6px 12px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
-                    <span class="cuenta-separator">│</span>
-                    <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:6px 12px; font-size:11px;">❌ Canceladas <span id="canceladasCount">0</span></button>
+            <div style="background:#161b22; border-radius:12px; padding:10px; margin-bottom:8px; border:1px solid #21262d;">
+                <div class="cuenta-filter" style="margin:0; gap:5px;">
+                    <button class="cuenta-btn all active" onclick="filtrarPorCuenta('all')" style="padding:5px 10px; font-size:11px;">Todas <span class="cuenta-count" id="allCount">0</span></button>
+                    <button class="cuenta-btn mikra-btn" onclick="filtrarPorCuenta('Mikra')" style="padding:5px 10px; font-size:11px;">🟣 Mikra <span class="cuenta-count" id="mikraCount">0</span></button>
+                    <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:5px 10px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
+                    <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:5px 10px; font-size:11px; display:none;">❌ <span id="canceladasCount">0</span></button>
                 </div>
             </div>
         </div>
+        <span id="badgeFecha" style="display:none;"></span>
+        <span id="diaAnteriorLabel" style="display:none;"></span>
 
-        <div id="filterSection" class="filter-section hidden" style="padding:12px; margin-bottom:10px;">
-            <div class="filter-row">
-                <label>📍 Zona:</label>
-                <div class="search-select-wrapper">
-                    <div class="search-input-select" onclick="toggleDropdown()">
-                        <span id="selectedZone">Todas las zonas</span>
+        <!-- filterSection: zona ahora está integrado en statsSection como chip inline -->
+        <div id="filterSection" style="display:none;"></div>
+
+        <div id="statsSection" class="stats-bar hidden" style="padding:10px; margin-bottom:8px;">
+            <!-- Chip de zona inline -->
+            <div style="position:relative; margin-bottom:8px;" id="zonaChipWrap">
+                <button onclick="toggleDropdown()" style="display:flex; align-items:center; gap:6px; background:#0d1117; border:1.5px solid #30363d; border-radius:20px; padding:5px 12px; font-size:12px; font-family:inherit; color:#e6edf3; min-height:unset; height:30px; cursor:pointer; width:100%;" id="zonaChipBtn">
+                    <span style="color:#FFE600; font-size:11px; font-weight:700; flex-shrink:0;">📍</span>
+                    <span id="selectedZone" style="flex:1; text-align:left; font-size:12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">Todas las zonas</span>
+                    <span style="color:#484f58; font-size:10px; flex-shrink:0;" id="zonaChipArrow">▼</span>
+                </button>
+                <div id="dropdownMenu" class="dropdown-menu" style="z-index:200;">
+                    <div class="dropdown-search">
+                        <input type="text" id="dropdownSearch" placeholder="🔍 Buscar zona..." oninput="filtrarDropdown()">
                     </div>
-                    <span class="dropdown-icon">▼</span>
-                    <div id="dropdownMenu" class="dropdown-menu">
-                        <div class="dropdown-search">
-                            <input type="text" id="dropdownSearch" placeholder="🔍 Buscar zona..." oninput="filtrarDropdown()">
-                        </div>
-                        <div id="dropdownItems"></div>
-                    </div>
+                    <div id="dropdownItems"></div>
                 </div>
             </div>
-        </div>
-
-        <div id="statsSection" class="stats-bar hidden" style="padding:12px; margin-bottom:10px;">
-            <div class="stats-grid" style="margin-bottom:10px;">
+            <div class="stats-grid" style="margin-bottom:8px;">
                 <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all" style="padding:6px;">
                     <div class="stat-number" style="color:#FFE600; font-size:20px;">0</div>
                     <div class="stat-label" style="font-size:9px;">TODOS</div>
@@ -1180,13 +1342,12 @@
             </div>
         </div>
 
-        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:10px; padding:8px;">
-            <label style="color: #FFE600; font-weight: 700; font-size:11px; letter-spacing:0.5px;">📊 Ordenar:</label>
-            <button class="sort-btn active" onclick="ordenarPor('zona')" style="font-size:11px; padding:6px 10px;">🌍 Zona</button>
-            <button class="sort-btn" onclick="ordenarPor('fecha-entrega')" style="font-size:11px; padding:6px 10px;">📅 Fecha</button>
-            <button class="sort-btn" onclick="ordenarPor('hora-entrega')" style="font-size:11px; padding:6px 10px;">🕐 Hora</button>
-            <button class="sort-btn" onclick="ordenarPor('estado')" style="font-size:11px; padding:6px 10px;">📋 Estado</button>
-            <button class="sort-btn" onclick="ordenarPor('recientes')" style="font-size:11px; padding:6px 10px;">🆕 Recientes</button>
+        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:8px; padding:6px 8px;">
+            <button class="sort-btn active" onclick="ordenarPor('zona', this)" style="font-size:11px; padding:5px 9px;">🌍 Zona</button>
+            <button class="sort-btn" onclick="ordenarPor('fecha-entrega', this)" style="font-size:11px; padding:5px 9px;">📅 Fecha</button>
+            <button class="sort-btn" onclick="ordenarPor('hora-entrega', this)" style="font-size:11px; padding:5px 9px;">🕐 Hora</button>
+            <button class="sort-btn" onclick="ordenarPor('estado', this)" style="font-size:11px; padding:5px 9px;">📋 Estado</button>
+            <button class="sort-btn" onclick="ordenarPor('recientes', this)" style="font-size:11px; padding:5px 9px;">🆕 Nuevo</button>
         </div>
 
         <div id="content"></div>
@@ -1238,7 +1399,12 @@
         let mostrarCanceladas = false;
         let currentSort = 'zona';
         let dropdownOpen = false;
-        let vistaSimple = true; // ACTIVADA POR DEFECTO
+        const vistaSimple = true; // Vista simple siempre
+
+        // Evita que dos cargas simultáneas mezclen resultados
+        let loadGeneration = 0;
+        // Cache de tokens en memoria (4 min) para no hacer fetch doble
+        const tokenCache = {};
 
         const BARRIOS_CABA = [
             'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
@@ -1320,11 +1486,14 @@
         function toggleDropdown() {
             dropdownOpen = !dropdownOpen;
             const menu = document.getElementById('dropdownMenu');
+            const arrow = document.getElementById('zonaChipArrow');
             if (dropdownOpen) {
                 menu.classList.add('active');
+                if (arrow) arrow.textContent = '▲';
                 document.getElementById('dropdownSearch').focus();
             } else {
                 menu.classList.remove('active');
+                if (arrow) arrow.textContent = '▼';
             }
         }
 
@@ -1341,6 +1510,9 @@
             currentZoneFilter = zona;
             const displayText = zona === 'all' ? 'Todas las zonas' : zona.split('(')[0].trim();
             document.getElementById('selectedZone').textContent = displayText;
+            // Resaltar chip si hay filtro activo
+            const btn = document.getElementById('zonaChipBtn');
+            if (btn) btn.style.borderColor = (zona === 'all') ? '#30363d' : '#FFE600';
             toggleDropdown();
             aplicarFiltros();
         }
@@ -1397,21 +1569,17 @@
         }
 
         async function obtenerTokenCuenta(cuenta) {
+            const cached = tokenCache[cuenta.nombre];
+            if (cached && Date.now() < cached.expires) return cached.token;
             try {
                 const response = await fetch(`${cuenta.proxy}/get-token`);
                 const data = await response.json();
-
                 if (data.access_token) {
-                    if (data.user_id && !sessionStorage.getItem(`${cuenta.nombre.toLowerCase()}_user_id`)) {
-                        sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
-                    }
+                    tokenCache[cuenta.nombre] = { token: data.access_token, expires: Date.now() + 4 * 60 * 1000 };
+                    if (data.user_id) sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
                     return data.access_token;
                 }
-
-                if (data.error === 'no_token') {
-                    console.error(`Token no configurado para ${cuenta.nombre}`);
-                }
-
+                if (data.error === 'no_token') console.error(`Token no configurado para ${cuenta.nombre}`);
                 return null;
             } catch (error) {
                 console.error(`Error obteniendo token de ${cuenta.nombre}:`, error);
@@ -1486,6 +1654,7 @@
         }
 
         async function cargarFlexHoy() {
+            const myGen = ++loadGeneration;
             // Resetear filtros
             currentStateFilter = 'all';
             currentZoneFilter = 'all';
@@ -1508,6 +1677,7 @@
             const content = document.getElementById('content');
             
             for (let intento = 0; intento < 10; intento++) { // 10 días calendario = ~7 hábiles
+                if (loadGeneration !== myGen) return; // otra carga arrancó, abortar
                 // Saltar fines de semana
                 while (fechaActual.getDay() === 0 || fechaActual.getDay() === 6) {
                     fechaActual.setDate(fechaActual.getDate() + 1);
@@ -1521,10 +1691,15 @@
                 }
                 
                 allFlexOrders = [];
-                await cargarFlexPorFecha(fechaActual, label, true);
+                await cargarFlexPorFecha(fechaActual, label, true, myGen);
+                if (loadGeneration !== myGen) return;
                 
                 const activas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado');
-                if (activas.length > 0) return; // Encontró envíos, listo
+                if (activas.length > 0) {
+                    currentNavDate = new Date(fechaActual); currentNavDate.setHours(0,0,0,0);
+                    buildDateNav();
+                    return;
+                }
                 
                 // Avanzar al siguiente día
                 fechaActual.setDate(fechaActual.getDate() + 1);
@@ -1541,8 +1716,8 @@
             `;
         }
 
-        // PUNTO 2: Nueva función para día anterior (reemplaza cargarFlexAyer)
         async function cargarFlexDiaAnterior() {
+            const myGen = ++loadGeneration;
             // Resetear filtros
             currentStateFilter = 'all';
             currentZoneFilter = 'all';
@@ -1553,15 +1728,13 @@
             const diaAnterior = getDiaAnteriorLaborable();
             const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const nombreDia = dias[diaAnterior.getDay()].toUpperCase();
-            await cargarFlexPorFecha(diaAnterior, nombreDia);
+            await cargarFlexPorFecha(diaAnterior, nombreDia, false, myGen);
         }
 
         async function cargarFechaCustom() {
             const input = document.getElementById('fechaCustom');
-            if (!input.value) {
-                alert('Seleccioná una fecha primero');
-                return;
-            }
+            if (!input.value) { alert('Seleccioná una fecha primero'); return; }
+            const myGen = ++loadGeneration;
             currentStateFilter = 'all';
             currentZoneFilter = 'all';
             currentCuentaFilter = 'all';
@@ -1575,7 +1748,7 @@
             const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const label = `${dias[fecha.getDay()]} ${fecha.getDate()} ${meses[fecha.getMonth()]}`;
-            await cargarFlexPorFecha(fecha, label);
+            await cargarFlexPorFecha(fecha, label, false, myGen);
         }
 
         async function cargarReprogramados() {
@@ -1583,7 +1756,6 @@
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🔄 Buscando reprogramados de los últimos 15 días...</div>`;
             
             // Ocultar secciones normales
-            document.getElementById('filterSection').classList.add('hidden');
             document.getElementById('statsSection').classList.add('hidden');
             document.getElementById('sortSection').classList.add('hidden');
             document.getElementById('btnMapa').classList.add('hidden');
@@ -1704,7 +1876,7 @@
             document.getElementById('badgeFecha').textContent = `🔄 REPROGRAMADOS (15 días)`;
             document.getElementById('badgeCaba').textContent = `📦 Total: ${todosReprogramados.length}`;
             document.getElementById('badgeProvincia').textContent = '';
-            document.getElementById('infoBadges').style.display = 'flex';
+            // infoBadges siempre visible
 
             if (todosReprogramados.length === 0) {
                 content.innerHTML = '<div class="no-results" style="padding:40px; text-align:center; font-size:18px;">✅ No hay envíos reprogramados en los últimos 15 días</div>';
@@ -1811,7 +1983,7 @@
             content.innerHTML = html;
         }
 
-        async function cargarFlexPorFecha(targetDate, label, silentRetry = false) {
+        async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null) {
             const content = document.getElementById('content');
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
             
@@ -1826,7 +1998,7 @@
                         console.error(`No hay token para ${cuenta.nombre}`);
                         return [];
                     }
-                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate);
+                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen);
                     return orders.map(item => ({
                         ...item,
                         cuentaNombre: cuenta.nombre,
@@ -1837,6 +2009,9 @@
                     return [];
                 }
             }));
+
+            // Guard: si arrancó otra carga, no renderizar
+            if (loadGen !== null && loadGeneration !== loadGen) return;
 
             cuentaResults.flat().forEach(item => {
                 const shippingId = item.shipping.id;
@@ -1865,50 +2040,39 @@
 
             // FILTRAR CANCELADAS: Solo mostrar canceladas si son para HOY (targetDate)
             allFlexOrders = allOrdersFromAllAccounts.filter(({ shipping }) => {
-                const state = getOrderState(shipping);
-                
-                // Si es cancelada, verificar que sea para la fecha objetivo
+                // Usar _state cacheado; si aún no está (shipment de otra cuenta), calcularlo
+                const state = shipping._state || getOrderState(shipping);
                 if (state === 'cancelado') {
                     return esEntregaParaFecha(shipping, targetDate);
                 }
-                
-                // Todas las demás pasan
                 return true;
             });
 
-            logShippingStates();
+            // logShippingStates(); // Solo para debug
 
-            // Calcular zonas sin canceladas
+            // Calcular zonas usando _zona cacheada — sin recalcular nada
             const zonaCounts = new Map();
             let cabaCount = 0;
             let provinciaCount = 0;
             
             allFlexOrders.forEach(({ shipping }) => {
-                const state = getOrderState(shipping);
-                if (state === 'cancelado') return;
-                
-                const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const ciudad = shipping.receiver_address?.city?.name || '';
-                const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                if (shipping._state === 'cancelado') return;
+                const zona = shipping._zona;
                 zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
-                
-                // Contar CABA vs Provincia
-                if (esCABA(zona)) {
-                    cabaCount++;
-                } else {
-                    provinciaCount++;
-                }
+                if (esCABA(zona)) cabaCount++;
+                else provinciaCount++;
             });
 
             // Actualizar badges de información
             document.getElementById('badgeFecha').textContent = `📅 ${label}`;
+            // Resaltar día activo en la barra de navegación
+            if (currentNavDate) buildDateNav();
             document.getElementById('badgeCaba').textContent = `🏙️ CABA: ${cabaCount}`;
             document.getElementById('badgeProvincia').textContent = `🗺️ Provincia: ${provinciaCount}`;
             document.getElementById('infoBadges').style.display = 'flex';
 
             const dropdownItems = document.getElementById('dropdownItems');
-            const totalSinCanceladas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado').length;
+            const totalSinCanceladas = allFlexOrders.filter(({shipping}) => shipping._state !== 'cancelado').length;
             dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${totalSinCanceladas})</div>`;
             
             let cabaTotal = 0;
@@ -1923,21 +2087,21 @@
                 dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
             });
 
-            document.getElementById('filterSection').classList.remove('hidden');
+            // filterSection ahora está embebido en statsSection
             document.getElementById('statsSection').classList.remove('hidden');
             document.getElementById('sortSection').classList.remove('hidden');
             document.getElementById('btnMapa').classList.remove('hidden');
             
             // En modo retry silencioso, no renderizar si no hay órdenes activas
             if (silentRetry) {
-                const activas = allFlexOrders.filter(({shipping}) => getOrderState(shipping) !== 'cancelado');
+                const activas = allFlexOrders.filter(({shipping}) => shipping._state !== 'cancelado');
                 if (activas.length === 0) return;
             }
             
             displayOrders('all');
         }
 
-        async function cargarOrdenesDeCuenta(cuenta, token, targetDate) {
+        async function cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen = null) {
             let tempOrders = [];
 
             const cuentaKey = cuenta.nombre.toLowerCase();
@@ -2003,37 +2167,61 @@
                 return [];
             }
 
-            // PASO 3: Consultar shipping de todas las órdenes en paralelo (sin batching)
-            const shippingPromises = allOrders.map(async (order) => {
+            if (loadGen !== null && loadGeneration !== loadGen) return [];
+
+            // PASO 3: Consultar shipping en paralelo con retry automático por cada uno.
+            // Retry individual (no batching): misma velocidad que antes, pero si un request
+            // falla por fluke de red lo reintenta una vez en lugar de silenciarlo.
+            async function fetchShipping(shippingId) {
+                const url = `${cuenta.proxy}/api/shipments/${shippingId}`;
+                const opts = { headers: { 'Authorization': `Bearer ${token}` } };
                 try {
-                    const shippingId = order.shipping?.id;
-                    if (!shippingId) return null;
-
-                    const shipResponse = await fetch(`${cuenta.proxy}/api/shipments/${shippingId}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-
-                    const shipping = await shipResponse.json();
-                    
-                    if (shipping.logistic_type === 'self_service') {
-                        if (esEntregaParaFecha(shipping, targetDate) || 
-                            shipping.status === 'cancelled' || 
-                            shipping.status === 'not_delivered') {
-                            return { order, shipping };
-                        }
-                    }
-                    return null;
-                } catch (e) {
-                    return null;
+                    const r = await fetch(url, opts);
+                    if (r.ok) return r.json();
+                    // Reintento único ante error transitorio
+                    await new Promise(res => setTimeout(res, 400));
+                    const r2 = await fetch(url, opts);
+                    return r2.ok ? r2.json() : null;
+                } catch {
+                    try {
+                        await new Promise(res => setTimeout(res, 400));
+                        const r2 = await fetch(url, opts);
+                        return r2.ok ? r2.json() : null;
+                    } catch { return null; }
                 }
+            }
+
+            const shippingPromises = allOrders.map(async (order) => {
+                const shippingId = order.shipping?.id;
+                if (!shippingId) return null;
+                const shipping = await fetchShipping(shippingId);
+                if (!shipping) return null;
+                if (shipping.logistic_type === 'self_service') {
+                    if (esEntregaParaFecha(shipping, targetDate) || 
+                        shipping.status === 'cancelled' || 
+                        shipping.status === 'not_delivered') {
+                        return { order, shipping };
+                    }
+                }
+                return null;
             });
 
             const results = await Promise.all(shippingPromises);
             tempOrders = results.filter(item => item !== null);
 
+            if (loadGen !== null && loadGeneration !== loadGen) return [];
+
             // Enriquecer datos con tracking detallado (síncrono, datos ya en shipping)
             tempOrders.forEach(({ order, shipping }) => {
                 enrichShippingData(null, null, shipping, order.id);
+                // Cachear estado y zona: se calculan UNA sola vez aquí,
+                // y se reusan en todos los filtros/sorts/renders posteriores.
+                shipping._state = getOrderState(shipping);
+                shipping._zona = getZonaDetallada(
+                    shipping.receiver_address?.neighborhood?.name || '',
+                    shipping.receiver_address?.city?.name || '',
+                    shipping.receiver_address?.zip_code || ''
+                );
             });
 
             const uniqueShippings = new Map();
@@ -2056,6 +2244,7 @@
 
         function toggleVista() {
             vistaSimple = !vistaSimple;
+            localStorage.setItem('flex_vistaSimple', vistaSimple);
             const btn = document.getElementById('toggleVistaBtn');
             btn.textContent = vistaSimple ? '📊 Vista Completa' : '📋 Vista Simple';
             aplicarFiltros();
@@ -2336,12 +2525,10 @@
             aplicarFiltros();
         }
 
-        function ordenarPor(tipo) {
+        function ordenarPor(tipo, btn) {
             currentSort = tipo;
-            
             document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
-            event.target.classList.add('active');
-            
+            if (btn) btn.classList.add('active');
             aplicarFiltros();
         }
 
@@ -2352,82 +2539,54 @@
                 filtered = filtered.filter(({ cuentaNombre }) => cuentaNombre === currentCuentaFilter);
             }
 
-            // PUNTO 5: Canceladas no aparecen en listado por defecto
+            // Usar _state cacheado en lugar de recalcular
             if (currentStateFilter === 'cancelado') {
-                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === 'cancelado');
+                filtered = filtered.filter(({ shipping }) => shipping._state === 'cancelado');
             } else if (currentStateFilter === 'all') {
-                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) !== 'cancelado');
+                filtered = filtered.filter(({ shipping }) => shipping._state !== 'cancelado');
             } else {
-                filtered = filtered.filter(({ shipping }) => getOrderState(shipping) === currentStateFilter);
+                filtered = filtered.filter(({ shipping }) => shipping._state === currentStateFilter);
             }
 
+            // Usar _zona cacheada
             if (currentZoneFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    
-                    if (currentZoneFilter === 'CABA') {
-                        return esCABA(zona);
-                    }
-                    
-                    return zona === currentZoneFilter;
+                    if (currentZoneFilter === 'CABA') return esCABA(shipping._zona);
+                    return shipping._zona === currentZoneFilter;
                 });
             }
 
-            // PUNTO 7: Ordenamiento por hora de entrega corregido
+            // Sorts con Schwartzian transform: extraer la clave UNA vez por elemento,
+            // no dentro del comparador (que se ejecuta O(n log n) veces).
             if (currentSort === 'zona') {
-                filtered.sort((a, b) => {
-                    const zonaA = getZonaDetallada(
-                        a.shipping.receiver_address?.neighborhood?.name || '',
-                        a.shipping.receiver_address?.city?.name || '',
-                        a.shipping.receiver_address?.zip_code || ''
-                    );
-                    const zonaB = getZonaDetallada(
-                        b.shipping.receiver_address?.neighborhood?.name || '',
-                        b.shipping.receiver_address?.city?.name || '',
-                        b.shipping.receiver_address?.zip_code || ''
-                    );
-                    return zonaA.localeCompare(zonaB);
-                });
+                filtered = filtered
+                    .map(item => ({ item, key: item.shipping._zona }))
+                    .sort((a, b) => a.key.localeCompare(b.key))
+                    .map(({ item }) => item);
             } else if (currentSort === 'fecha-entrega') {
-                filtered.sort((a, b) => {
-                    const fechaA = a.shipping.shipping_option?.estimated_delivery_time?.date || 
-                                  a.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                    const fechaB = b.shipping.shipping_option?.estimated_delivery_time?.date || 
-                                  b.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                    return fechaA.localeCompare(fechaB);
-                });
+                filtered = filtered
+                    .map(item => ({ item, key: item.shipping.shipping_option?.estimated_delivery_time?.date || item.shipping.shipping_option?.estimated_delivery_final?.date || '' }))
+                    .sort((a, b) => a.key.localeCompare(b.key))
+                    .map(({ item }) => item);
             } else if (currentSort === 'hora-entrega') {
-                // FIX: Ordenar por timestamp completo en lugar de strings
-                filtered.sort((a, b) => {
-                    const horaA = a.shipping.status_history?.date_delivered || 
-                                 a.shipping.status_history?.date_shipped || 
-                                 a.shipping.date_created || '';
-                    const horaB = b.shipping.status_history?.date_delivered || 
-                                 b.shipping.status_history?.date_shipped || 
-                                 b.shipping.date_created || '';
-                    
-                    // Convertir a timestamp para comparación numérica
-                    const timeA = horaA ? new Date(horaA).getTime() : 0;
-                    const timeB = horaB ? new Date(horaB).getTime() : 0;
-                    
-                    return timeB - timeA; // Más reciente primero
-                });
+                filtered = filtered
+                    .map(item => {
+                        const h = item.shipping.status_history?.date_delivered || item.shipping.status_history?.date_shipped || item.shipping.date_created || '';
+                        return { item, key: h ? new Date(h).getTime() : 0 };
+                    })
+                    .sort((a, b) => b.key - a.key)
+                    .map(({ item }) => item);
             } else if (currentSort === 'estado') {
-                const ordenEstados = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'en-camino': 3, 'entregado': 4 };
-                filtered.sort((a, b) => {
-                    const estadoA = ordenEstados[getOrderState(a.shipping)];
-                    const estadoB = ordenEstados[getOrderState(b.shipping)];
-                    return estadoA - estadoB;
-                });
+                const ord = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'en-camino': 3, 'entregado': 4 };
+                filtered = filtered
+                    .map(item => ({ item, key: ord[item.shipping._state] ?? 99 }))
+                    .sort((a, b) => a.key - b.key)
+                    .map(({ item }) => item);
             } else if (currentSort === 'recientes') {
-                filtered.sort((a, b) => {
-                    const fechaA = a.shipping.date_created || '';
-                    const fechaB = b.shipping.date_created || '';
-                    return fechaB.localeCompare(fechaA);
-                });
+                filtered = filtered
+                    .map(item => ({ item, key: item.shipping.date_created || '' }))
+                    .sort((a, b) => b.key.localeCompare(a.key))
+                    .map(({ item }) => item);
             }
 
             displayOrders(currentStateFilter, filtered);
@@ -2441,29 +2600,30 @@
                 ordersForStats = ordersForStats.filter(({ cuentaNombre }) => cuentaNombre === currentCuentaFilter);
             }
 
-            const stats = {
-                pendiente: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'pendiente').length,
-                enCamino: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'en-camino').length,
-                entregado: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'entregado').length,
-                cancelado: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'cancelado').length,
-                reprogramado: ordersForStats.filter(({ shipping }) => getOrderState(shipping) === 'reprogramado').length
-            };
+            // Stats en una sola pasada con reduce (antes eran 5 filter separados)
+            const stats = ordersForStats.reduce((acc, { shipping, cuentaNombre }) => {
+                const s = shipping._state;
+                if (s === 'pendiente')    acc.pendiente++;
+                else if (s === 'en-camino')    acc.enCamino++;
+                else if (s === 'entregado')    acc.entregado++;
+                else if (s === 'cancelado')    acc.cancelado++;
+                else if (s === 'reprogramado') acc.reprogramado++;
+                return acc;
+            }, { pendiente: 0, enCamino: 0, entregado: 0, cancelado: 0, reprogramado: 0 });
             stats.total = stats.pendiente + stats.enCamino + stats.entregado + stats.reprogramado;
 
-            // PUNTO 6: Actualizar contadores por cuenta
-            const mikraOrders = allFlexOrders.filter(({ cuentaNombre, shipping }) => 
-                cuentaNombre === 'Mikra' && getOrderState(shipping) !== 'cancelado'
-            ).length;
-            const chayaOrders = allFlexOrders.filter(({ cuentaNombre, shipping }) => 
-                cuentaNombre === 'Chaya' && getOrderState(shipping) !== 'cancelado'
-            ).length;
-            const totalOrders = allFlexOrders.filter(({ shipping }) => 
-                getOrderState(shipping) !== 'cancelado'
-            ).length;
+            // Contadores por cuenta en una pasada
+            const cuentaStats = allFlexOrders.reduce((acc, { cuentaNombre, shipping }) => {
+                if (shipping._state === 'cancelado') return acc;
+                acc.total++;
+                if (cuentaNombre === 'Mikra') acc.mikra++;
+                else if (cuentaNombre === 'Chaya') acc.chaya++;
+                return acc;
+            }, { total: 0, mikra: 0, chaya: 0 });
 
-            document.getElementById('allCount').textContent = totalOrders;
-            document.getElementById('mikraCount').textContent = mikraOrders;
-            document.getElementById('chayaCount').textContent = chayaOrders;
+            document.getElementById('allCount').textContent = cuentaStats.total;
+            document.getElementById('mikraCount').textContent = cuentaStats.mikra;
+            document.getElementById('chayaCount').textContent = cuentaStats.chaya;
 
             document.querySelector('#stat-all .stat-number').textContent = stats.total;
             document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
@@ -2495,228 +2655,89 @@
 
             if (orders.length === 0) {
                 html = '<div class="no-results">No hay envíos con estos filtros</div>';
-            } else if (vistaSimple) {
-                // PUNTO 8: Vista simple mejorada - Solo CABA/Barrio + estado, expandible
+            } else {
                 orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }, index) => {
                     const state = getOrderState(shipping);
                     const barrio = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad = shipping.receiver_address?.city?.name || '';
                     const zipCode = shipping.receiver_address?.zip_code || '';
                     const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    
                     const calle = shipping.receiver_address?.street_name || '';
                     const numero = shipping.receiver_address?.street_number || '';
                     const provincia = shipping.receiver_address?.state?.name || '';
                     const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
                     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
-                    
-                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
                                         shipping.shipping_option?.estimated_delivery_final?.date;
                     const fechaFormateada = formatearFecha(fechaEntrega);
                     const esHoy = fechaFormateada === 'Hoy';
-                    
                     const history = shipping.status_history || {};
                     const fechaCreacion = shipping.date_created;
-                    
-                    const estadoLabel = {
-                        'pendiente': '⏳ Pendiente',
-                        'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado',
-                        'cancelado': '❌ Cancelada',
-                        'reprogramado': '🔄 Reprogramado'
-                    };
-                    const estadoTexto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : estadoLabel[state];
-
                     const cantidadItems = orderList.length;
                     const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                    html += `
+                    const estadoLabels = {
+                        'pendiente': '⏳ Pendiente', 'en-camino': '🚚 En camino',
+                        'entregado': '✅ Entregado', 'cancelado': '❌ Cancelada',
+                        'reprogramado': '🔄 Reprogramado'
+                    };
+                    const estadoTexto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : estadoLabels[state];
+
+                    // ── Timeline unificado: une timeline + historial de rastreo ──
+                    const utlItems = buildUnifiedTimeline(shipping, fechaEntrega);
+
+                    if (vistaSimple) {
+                        html += `
                         <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
                                 <div class="simple-estado ${state}">${estadoTexto}</div>
                             </div>
-                            
                             <div class="simple-details" id="simple-details-${index}">
-                                <div class="envio-header" style="margin-top: 12px;">
-                                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                        ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
-                                        <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
-                                    </div>
-                                    <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()">
-                                        #${orderId}
-                                    </a>
-                                </div>
-                                
-                                <div class="envio-info">
-                                    <div class="info-item">
-                                        <div class="info-label">📍 Dirección</div>
-                                        <div class="info-value">
-                                            <a href="${googleMapsUrl}" target="_blank" class="direccion-link" onclick="event.stopPropagation()">
-                                                ${calle} ${numero}, ${ciudad}
-                                            </a>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="info-item">
-                                        <div class="info-label">👤 Comprador</div>
-                                        <div class="info-value">${comprador}</div>
-                                    </div>
-                                    
-                                    <div class="info-item">
-                                        <div class="info-label">📅 Entrega</div>
-                                        <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline">
-                                    <div class="timeline-item">
-                                        <div class="timeline-dot done"></div>
-                                        <div class="timeline-content">
-                                            <div class="timeline-label">📦 Recibida</div>
-                                            <div class="timeline-time">${formatearSoloHora(fechaCreacion, fechaEntrega) || 'N/A'}</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="timeline-item">
-                                        <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
-                                        <div class="timeline-content">
-                                            <div class="timeline-label">🚚 Enviado</div>
-                                            <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped, fechaEntrega) || 'Pendiente'}</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="timeline-item">
-                                        <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
-                                        <div class="timeline-content">
-                                            <div class="timeline-label">✅ Entregado</div>
-                                            <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered, fechaEntrega) || 'Pendiente'}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                ${renderTrackingDetail(shipping)}
-                                
-                                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-                                    ${renderReputationBadge(shipping)}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            } else {
-                // Vista completa (original)
-                orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }) => {
-                    const state = getOrderState(shipping);
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
-                    const provincia = shipping.receiver_address?.state?.name || '';
-                    
-                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
-                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
-                    
-                    const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
-                                        shipping.shipping_option?.estimated_delivery_final?.date;
-                    
-                    const fechaFormateada = formatearFecha(fechaEntrega);
-                    const esHoy = fechaFormateada === 'Hoy';
-                    
-                    const history = shipping.status_history || {};
-                    const fechaCreacion = shipping.date_created;
-                    
-                    const estadoLabel = {
-                        'pendiente': '📋 Pendiente',
-                        'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado',
-                        'cancelado': '❌ Cancelada - No despaches',
-                        'reprogramado': '🔄 Reprogramado'
-                    };
-                    const estadoTextoCompleto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : estadoLabel[state];
-
-                    const cantidadItems = orderList.length;
-                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
-                    const orderId = orderList[0]?.id || '';
-                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-
-                    html += `
-                        <div class="envio-card ${state}">
-                            <div class="envio-header">
-                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                    <span class="estado-badge ${state}">${estadoTextoCompleto}</span>
+                                <div class="card-meta" style="margin-top:10px;">
                                     ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
                                     <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
-                                </div>
-                                <a href="${orderUrl}" target="_blank" class="order-link">
-                                    #${orderId}
-                                </a>
-                            </div>
-                            
-                            <div class="envio-info">
-                                <div class="info-item">
-                                    <div class="info-label">🌍 Zona</div>
-                                    <div class="info-value zona-highlight">${zona}</div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📍 Dirección</div>
-                                    <div class="info-value">
-                                        <a href="${googleMapsUrl}" target="_blank" class="direccion-link">
-                                            ${calle} ${numero}, ${ciudad}
-                                        </a>
+                                    <div class="card-meta-right">
+                                        <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:12px;">#${orderId}</a>
                                     </div>
                                 </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">👤 Comprador</div>
-                                    <div class="info-value">${comprador}</div>
+                                <div class="card-address-row" onclick="event.stopPropagation()">
+                                    <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                                    <span class="card-sep">·</span>
+                                    <span class="card-comprador">👤 <strong>${comprador}</strong></span>
+                                    ${fechaEntrega ? `<span class="card-sep">·</span><span class="${esHoy ? 'fecha-hoy' : ''}" style="font-size:12px;">📅 ${fechaFormateada}</span>` : ''}
                                 </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">📅 Entrega</div>
-                                    <div class="info-value ${esHoy ? 'fecha-hoy' : ''}">${fechaFormateada}</div>
+                                <div class="unified-timeline">${utlItems}</div>
+                                ${renderReputationBadge(shipping) ? `<div style="margin-top:8px;">${renderReputationBadge(shipping)}</div>` : ''}
+                            </div>
+                        </div>`;
+                    } else {
+                        html += `
+                        <div class="envio-card ${state}">
+                            <div class="card-meta">
+                                <span class="estado-badge ${state}">${estadoTexto}</span>
+                                ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
+                                <span class="cuenta-badge ${cuentaColor}">${cuentaNombre}</span>
+                                <div class="card-meta-right">
+                                    <a href="${orderUrl}" target="_blank" class="order-link">#${orderId}</a>
                                 </div>
                             </div>
-                            
-                            <div class="timeline">
-                                <div class="timeline-item">
-                                    <div class="timeline-dot done"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">📦 Recibida</div>
-                                        <div class="timeline-time">${formatearSoloHora(fechaCreacion, fechaEntrega) || 'N/A'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_shipped ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">🚚 Enviado</div>
-                                        <div class="timeline-time ${history.date_shipped ? '' : 'pending'}">${formatearSoloHora(history.date_shipped, fechaEntrega) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-dot ${history.date_delivered ? 'done' : 'pending'}"></div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-label">✅ Entregado</div>
-                                        <div class="timeline-time ${history.date_delivered ? '' : 'pending'}">${formatearSoloHora(history.date_delivered, fechaEntrega) || 'Pendiente'}</div>
-                                    </div>
-                                </div>
+                            <div class="card-address-row">
+                                <span class="zona-highlight" style="font-size:13px;">🌍 ${zona}</span>
+                                <span class="card-sep">·</span>
+                                <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                                <span class="card-sep">·</span>
+                                <span class="card-comprador">👤 <strong>${comprador}</strong></span>
+                                ${fechaEntrega ? `<span class="card-sep">·</span><span class="${esHoy ? 'fecha-hoy' : ''}" style="font-size:12px;">📅 ${fechaFormateada}</span>` : ''}
                             </div>
-                            
-                            ${renderTrackingDetail(shipping)}
-                            
-                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-                                ${renderReputationBadge(shipping)}
+                            <div class="timeline" style="padding:10px 12px;">
+                                <div class="unified-timeline">${utlItems}</div>
                             </div>
-                        </div>
-                    `;
+                            ${renderReputationBadge(shipping) ? `<div style="margin-top:8px;">${renderReputationBadge(shipping)}</div>` : ''}
+                        </div>`;
+                    }
                 });
             }
 
@@ -2724,7 +2745,7 @@
         }
 
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.search-select-wrapper') && dropdownOpen) {
+            if (!e.target.closest('#zonaChipWrap') && dropdownOpen) {
                 toggleDropdown();
             }
         });
@@ -2969,9 +2990,231 @@
             return hoy;
         }
 
+        // ── Auto-refresh ─────────────────────────────────────────────────
+        let autoRefreshTimer = null;
+        const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+
+        function toggleAutoRefresh(btn) {
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+                btn.style.background = '#161b22';
+                btn.style.borderColor = '#30363d';
+                btn.style.color = '#8b949e';
+                btn.textContent = '🔄 Auto 5min';
+            } else {
+                autoRefreshTimer = setInterval(() => cargarFlexHoy(), AUTO_REFRESH_MS);
+                btn.style.background = 'linear-gradient(135deg,#00897B,#00695c)';
+                btn.style.borderColor = 'transparent';
+                btn.style.color = 'white';
+                btn.textContent = '🟢 Auto ON';
+            }
+        }
+
+        // ── Pull-to-refresh (mobile) ──────────────────────────────────────
+        // Swipe hacia abajo desde el tope → recarga datos
+        (() => {
+            let startY = 0;
+            let pulling = false;
+            const THRESHOLD = 80; // px mínimos para disparar el refresh
+
+            document.addEventListener('touchstart', e => {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', e => {
+                if (!pulling) return;
+                const endY = e.changedTouches[0].clientY;
+                if (endY - startY > THRESHOLD) {
+                    cargarFlexHoy();
+                }
+                pulling = false;
+            }, { passive: true });
+        })();
+
+
+        // ═══════════════════════════════════════════════
+        //  Navegación de días
+        // ═══════════════════════════════════════════════
+        // Fecha actualmente cargada (Date, medianoche)
+        let currentNavDate = null;
+
+        function buildDateNav() {
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+            const container = document.getElementById('dateNavDays');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // Slots: hasta 3 días hábiles pasados + HOY + mañana hábil
+            const slots = [];
+
+            // Días hábiles pasados (hasta 3, salteando finde)
+            let d = new Date(hoy);
+            let back = 0;
+            while (back < 3) {
+                d = new Date(d); d.setDate(d.getDate() - 1);
+                if (d.getDay() !== 0 && d.getDay() !== 6) {
+                    slots.unshift(new Date(d));
+                    back++;
+                }
+            }
+
+            // Hoy
+            slots.push(new Date(hoy));
+
+            // Mañana hábil (solo 1)
+            let manana = new Date(hoy);
+            do { manana.setDate(manana.getDate() + 1); } while (manana.getDay() === 0 || manana.getDay() === 6);
+            slots.push(manana);
+
+            slots.forEach(fecha => {
+                const btn = document.createElement('button');
+                btn.className = 'date-nav-day';
+                const isHoy = fecha.toDateString() === hoy.toDateString();
+                const isActive = currentNavDate && fecha.toDateString() === currentNavDate.toDateString();
+                if (isActive) btn.classList.add('active');
+
+                const nombre = isHoy ? 'HOY' : dias[fecha.getDay()];
+                const numDia = `${fecha.getDate()}/${fecha.getMonth()+1}`;
+                btn.innerHTML = `<span class="day-name">${nombre}</span><span class="day-date">${numDia}</span>`;
+                btn.onclick = () => cargarDia(fecha);
+                container.appendChild(btn);
+            });
+        }
+
+        async function cargarDia(fecha) {
+            currentNavDate = new Date(fecha); currentNavDate.setHours(0,0,0,0);
+            buildDateNav(); // actualizar highlights
+            const myGen = ++loadGeneration;
+            currentStateFilter = 'all'; currentZoneFilter = 'all';
+            currentCuentaFilter = 'all'; mostrarCanceladas = false; allFlexOrders = [];
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+            const esHoy = fecha.toDateString() === hoy.toDateString();
+            const label = esHoy ? 'HOY' : `${dias[fecha.getDay()]} ${fecha.getDate()}/${fecha.getMonth()+1}`;
+            await cargarFlexPorFecha(fecha, label, false, myGen);
+        }
+
+        function navDia(delta) {
+            // Si no hay fecha cargada aún, ignorar
+            if (!currentNavDate) return;
+            const base = new Date(currentNavDate);
+            let nueva = new Date(base);
+            const step = delta > 0 ? 1 : -1;
+            let pasos = Math.abs(delta);
+            while (pasos > 0) {
+                nueva.setDate(nueva.getDate() + step);
+                // Saltar fines de semana
+                if (nueva.getDay() !== 0 && nueva.getDay() !== 6) pasos--;
+            }
+            cargarDia(nueva);
+        }
+
+        // ═══════════════════════════════════════════════
+        //  Timeline unificado (reemplaza timeline + historial)
+        // ═══════════════════════════════════════════════
+        function buildUnifiedTimeline(shipping, fechaEntrega) {
+            const history = shipping.status_history || {};
+            const subHistory = shipping.substatus_history || [];
+
+            // Mapeo de substatus → { texto, dotClass, timeClass }
+            const subMap = {
+                'shipment_paid':         { t: 'Preparando envío',                  d: 'c-gray',   tc: 't-muted' },
+                'ready_to_ship':         { t: 'Listo para enviar',                 d: 'c-gray',   tc: 't-muted' },
+                'picked_up':             { t: 'Retirado por transportista',         d: 'c-blue',   tc: 't-blue' },
+                'in_hub':                { t: 'En centro de distribución',          d: 'c-blue',   tc: 't-blue' },
+                'in_transit':            { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
+                'out_for_delivery':      { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
+                'nearby':                { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
+                'almost_there':          { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
+                'receiver_absent':       { t: '🚫 Comprador ausente',               d: 'c-red',    tc: 't-red' },
+                'waiting_for_withdrawal':{ t: '📦 Esperando retiro',                d: 'c-orange', tc: 't-orange' },
+                'delivered':             { t: '✅ Entregado',                        d: 'c-green',  tc: 't-green' },
+                'returning_to_sender':   { t: '↩️ Devolviendo al vendedor',          d: 'c-red',    tc: 't-red' },
+                'not_delivered_and_returning':{ t: '↩️ En devolución',              d: 'c-red',    tc: 't-red' },
+                'rescheduled':           { t: '🔄 En camino nuevamente',             d: 'c-orange', tc: 't-orange' },
+                'rescheduled_by_buyer':  { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
+                'buyer_rescheduled':     { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
+                'delayed':               { t: '⏰ Demorado',                         d: 'c-orange', tc: 't-orange' },
+                'out_of_delivery_area':  { t: '📍 Fuera de zona',                   d: 'c-red',    tc: 't-red' },
+                'delivery_failed':       { t: '❌ Entrega fallida',                  d: 'c-red',    tc: 't-red' },
+                'cancelled':             { t: 'Cancelado',                           d: 'c-red',    tc: 't-red' },
+                'buyer_cancelled':       { t: 'Cancelado por comprador',             d: 'c-red',    tc: 't-red' },
+            };
+
+            // Ignorar substatuses "ruidosos" que no aportan info
+            const SKIP = new Set(['shipment_paid', 'ready_to_ship']);
+
+            // Construir lista de eventos con fecha+hora real
+            let events = [];
+            const seen = new Set();
+
+            subHistory.forEach(entry => {
+                const sub = entry.substatus || '';
+                if (SKIP.has(sub)) return;
+                const key = sub + '|' + (entry.date || '');
+                if (seen.has(key)) return;
+                seen.add(key);
+                const meta = subMap[sub] || { t: sub, d: 'c-gray', tc: 't-muted' };
+                events.push({ date: entry.date, label: meta.t, dot: meta.d, tc: meta.tc });
+            });
+
+            // Agregar milestones del status_history si no están cubiertos
+            if (history.date_shipped && !events.some(e => e.label.includes('camino'))) {
+                events.push({ date: history.date_shipped, label: '🚚 En camino', dot: 'c-blue', tc: 't-blue' });
+            }
+            if (history.date_delivered && !events.some(e => e.dot === 'c-green')) {
+                events.push({ date: history.date_delivered, label: '✅ Entregado', dot: 'c-green', tc: 't-green' });
+            }
+
+            // Ordenar cronológico
+            events.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+
+            // Si no hay nada, al menos mostrar Recibido
+            if (events.length === 0 && shipping.date_created) {
+                events.push({ date: shipping.date_created, label: '📦 Recibida', dot: 'c-gray', tc: 't-muted' });
+            }
+
+            // Estado final pendiente si no entregado/cancelado
+            const finalState = getOrderState(shipping);
+            const needsPending = finalState === 'pendiente' || finalState === 'en-camino';
+
+            let html = '';
+            events.forEach(ev => {
+                const hora = ev.date ? formatearSoloHora(ev.date, fechaEntrega) : null;
+                html += `<div class="utl-item">
+                    <div class="utl-dot ${ev.dot}"></div>
+                    <span class="utl-time ${ev.tc}">${hora || ''}</span>
+                    <span class="utl-label">${ev.label}</span>
+                </div>`;
+            });
+
+            if (needsPending) {
+                html += `<div class="utl-item">
+                    <div class="utl-dot c-pending"></div>
+                    <span class="utl-time t-muted"></span>
+                    <span class="utl-label" style="color:#484f58;">Entrega pendiente</span>
+                </div>`;
+            }
+
+            return html;
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
+            // Sincronizar label del botón de vista
+            // vistaSimple siempre activa
+            // Construir barra de días (sin fecha activa todavía)
+            buildDateNav();
             actualizarLabelDiaAnterior();
-            cargarFlexHoy(); // Ya maneja feriados con retry automático
+            // Cargar HOY y marcar la fecha
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            currentNavDate = hoy;
+            buildDateNav();
+            cargarFlexHoy();
         });
     </script>
     
