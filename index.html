@@ -750,6 +750,31 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Barra de progreso de carga */
+        .load-progress-wrap {
+            margin: 16px auto 0;
+            max-width: 320px;
+        }
+        .load-progress-track {
+            background: #21262d;
+            border-radius: 20px;
+            height: 10px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .load-progress-fill {
+            height: 100%;
+            border-radius: 20px;
+            background: linear-gradient(90deg, #FFE600, #ff9800);
+            transition: width 0.15s ease-out;
+            width: 0%;
+        }
+        .load-progress-text {
+            font-size: 12px;
+            color: #8b949e;
+            font-weight: 400;
+        }
+
         .error {
             background: linear-gradient(135deg, #f85149, #da3633);
             color: white;
@@ -1259,7 +1284,7 @@
     <div class="container">
         <!-- Fila única: badges + acciones -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-            <span class="version-badge" style="flex-shrink:0;">v3.2</span>
+            <span class="version-badge" style="flex-shrink:0;">v3.7</span>
             <!-- badges CABA/Prov siempre visibles -->
             <div id="infoBadges" style="display:flex; gap:5px; align-items:center; flex:1;">
                 <span class="info-badge caba" id="badgeCaba" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🏙️ CABA: 0</span>
@@ -1267,6 +1292,7 @@
             </div>
             <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
                 <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
+                <button onclick="cargarNoEntregados()" id="btnNoEntregados" style="background:linear-gradient(135deg,#f85149,#da3633); padding:6px 10px; font-size:12px; margin:0; min-height:34px;" title="Viajes fallidos últimos 7 días">🚫 7d</button>
                 <button onclick="toggleTools()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">⚙️</button>
             </div>
         </div>
@@ -1653,6 +1679,73 @@
             return entrega.getTime() === targetDate.getTime();
         }
 
+        // ══════════════════════════════════════════════════════
+        //  CACHE POR DÍA (sessionStorage)
+        //  - Días pasados: 60 min TTL
+        //  - Hoy: 5 min TTL (se refresca en background)
+        // ══════════════════════════════════════════════════════
+        const CACHE_PREFIX = 'flex_v1_';
+        const CACHE_TTL_TODAY   = 5  * 60 * 1000;
+        const CACHE_TTL_PAST    = 60 * 60 * 1000;
+
+        function _cacheKey(date) {
+            return CACHE_PREFIX + date.toISOString().split('T')[0];
+        }
+
+        function loadFromCache(date) {
+            try {
+                const raw = sessionStorage.getItem(_cacheKey(date));
+                if (!raw) return null;
+                const { ts, orders } = JSON.parse(raw);
+                const hoy = new Date(); hoy.setHours(0,0,0,0);
+                const isToday = date.toDateString() === hoy.toDateString();
+                const ttl = isToday ? CACHE_TTL_TODAY : CACHE_TTL_PAST;
+                if (Date.now() - ts > ttl) { sessionStorage.removeItem(_cacheKey(date)); return null; }
+                return orders;
+            } catch { return null; }
+        }
+
+        function saveToCache(date, orders) {
+            try {
+                // Guardar solo los campos necesarios para renderizar (no el objeto entero)
+                sessionStorage.setItem(_cacheKey(date), JSON.stringify({ ts: Date.now(), orders }));
+            } catch (e) {
+                // sessionStorage lleno → limpiar caches viejos
+                try {
+                    const keys = Object.keys(sessionStorage).filter(k => k.startsWith(CACHE_PREFIX));
+                    keys.slice(0, Math.ceil(keys.length / 2)).forEach(k => sessionStorage.removeItem(k));
+                    sessionStorage.setItem(_cacheKey(date), JSON.stringify({ ts: Date.now(), orders }));
+                } catch {}
+            }
+        }
+
+        function invalidateCache(date) {
+            try { sessionStorage.removeItem(_cacheKey(date)); } catch {}
+        }
+
+        // ── Rango de fechas inteligente ─────────────────────────────
+        // Va hacia atrás hasta encontrar el viernes laboral anterior
+        // desde la targetDate (no desde hoy), con mínimo de 3 días
+        // y máximo de 8 días de calendario. Así cubre:
+        //   lunes normal → viernes (3 días)
+        //   martes después de feriado lunes → viernes (4 días)
+        //   martes después de fin de semana largo → viernes (4-5 días)
+        function calcularDateFrom(targetDate) {
+            const base = new Date(targetDate);
+            base.setHours(0,0,0,0);
+            // Retroceder hasta el viernes anterior desde targetDate, mínimo 3 días calendario
+            let d = new Date(base);
+            let calDays = 0;
+            while (true) {
+                d.setDate(d.getDate() - 1);
+                calDays++;
+                if (calDays >= 3 && d.getDay() === 5) break; // encontramos viernes, mín 3 días
+                if (calDays >= 8) break; // tope de seguridad
+            }
+            return d;
+        }
+
+
         async function cargarFlexHoy() {
             const myGen = ++loadGeneration;
             // Resetear filtros
@@ -1749,6 +1842,216 @@
             const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const label = `${dias[fecha.getDay()]} ${fecha.getDate()} ${meses[fecha.getMonth()]}`;
             await cargarFlexPorFecha(fecha, label, false, myGen);
+        }
+
+        async function cargarNoEntregados() {
+            const myGen = ++loadGeneration;
+            const content = document.getElementById('content');
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes fallidos de los últimos 7 días...</div>`;
+
+            document.getElementById('statsSection').classList.add('hidden');
+            document.getElementById('sortSection').classList.add('hidden');
+            document.getElementById('btnMapa').classList.add('hidden');
+
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const dateFrom = new Date(hoy); dateFrom.setDate(dateFrom.getDate() - 7);
+            const dateTo = new Date(hoy); dateTo.setDate(dateTo.getDate() + 1); dateTo.setHours(23,59,59,0);
+            const fromStr = dateFrom.toISOString().split('.')[0] + '.000-00:00';
+            const toStr   = dateTo.toISOString().split('.')[0] + '.000-00:00';
+
+            // Query directa: shipping.status=not_delivered, ambas cuentas en paralelo
+            const shippingIdsVistos = new Set();
+            const CONC = 20;
+
+            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta) => {
+                try {
+                    const token = await obtenerTokenCuenta(cuenta);
+                    if (!token) return [];
+                    const cuentaKey = cuenta.nombre.toLowerCase();
+                    let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
+                    if (!sellerId) {
+                        const td = await (await fetch(`${cuenta.proxy}/get-token`)).json();
+                        if (td.user_id) { sellerId = td.user_id; sessionStorage.setItem(`${cuentaKey}_user_id`, sellerId); }
+                    }
+                    if (!sellerId) return [];
+
+                    // Una sola query filtrando por shipping.status=not_delivered + rango de fecha
+                    const filter = `&order.date_created.from=${encodeURIComponent(fromStr)}&order.date_created.to=${encodeURIComponent(toStr)}&shipping.status=not_delivered&order.status=paid`;
+                    let allOrders = [];
+                    const first = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${filter}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } });
+                    const firstData = await first.json();
+                    allOrders.push(...(firstData.results || []));
+                    const total = firstData.paging?.total || 0;
+                    if (total > 50) {
+                        const pages = Math.min(Math.ceil(total / 50) - 1, 9);
+                        const extra = await Promise.all(
+                            Array.from({ length: pages }, (_, i) =>
+                                fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
+                                    { headers: { 'Authorization': `Bearer ${token}` } })
+                                .then(r => r.json()).catch(() => ({ results: [] }))
+                            )
+                        );
+                        extra.forEach(d => allOrders.push(...(d.results || [])));
+                    }
+
+                    // Fetch shipments en pool
+                    const ordersConShip = allOrders.filter(o => o.shipping?.id && o.status !== 'cancelled');
+                    const results = new Array(ordersConShip.length).fill(null);
+                    let idx = 0;
+                    async function worker() {
+                        while (idx < ordersConShip.length) {
+                            const i = idx++;
+                            const order = ordersConShip[i];
+                            const sid = order.shipping.id;
+                            try {
+                                const r = await fetch(`${cuenta.proxy}/api/shipments/${sid}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                                if (!r.ok) continue;
+                                const shipping = await r.json();
+                                if (shipping.logistic_type !== 'self_service') continue;
+                                // CLAVE: solo los que estuvieron en camino (date_shipped existe)
+                                // Excluye pendientes que nunca salieron
+                                if (!shipping.status_history?.date_shipped) continue;
+                                const state = getOrderState(shipping);
+                                if (state === 'reprogramado') {
+                                    results[i] = { order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color };
+                                }
+                            } catch {}
+                        }
+                    }
+                    await Promise.all(Array.from({ length: CONC }, worker));
+                    return results.filter(Boolean);
+                } catch (e) {
+                    console.error(`Error cargarNoEntregados ${cuenta.nombre}:`, e);
+                    return [];
+                }
+            }));
+
+            if (loadGeneration !== myGen) return;
+
+            // Deduplicar y ordenar: más viejo primero (más urgente)
+            const todos = [];
+            cuentaResults.flat().forEach(item => {
+                const sid = item.shipping.id;
+                if (shippingIdsVistos.has(sid)) return;
+                shippingIdsVistos.add(sid);
+                todos.push(item);
+            });
+
+            todos.sort((a, b) => {
+                const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
+                const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
+                return fa.localeCompare(fb);
+            });
+
+            document.getElementById('badgeFecha').textContent = `🚫 NO ENTREGADOS (7 días)`;
+            document.getElementById('badgeCaba').textContent = `📦 ${todos.length} viaje${todos.length !== 1 ? 's' : ''}`;
+            document.getElementById('badgeProvincia').textContent = '';
+            document.getElementById('infoBadges').style.display = 'flex';
+
+            if (todos.length === 0) {
+                content.innerHTML = `<div class="no-results" style="padding:40px; text-align:center;">
+                    <div style="font-size:40px; margin-bottom:12px;">✅</div>
+                    Todos los viajes de los últimos 7 días se entregaron correctamente
+                    <br><br>
+                    <button onclick="cargarFlexHoy()">🔙 Volver a HOY</button>
+                </div>`;
+                return;
+            }
+
+            // Agrupar por tipo de problema
+            const grupos = {};
+            const grupoLabels = {
+                'receiver_absent':            { label: '🚫 Comprador ausente',       color: '#f85149' },
+                'rescheduled_by_buyer':        { label: '📅 Reprogramado por comprador', color: '#FF9800' },
+                'buyer_rescheduled':           { label: '📅 Reprogramado por comprador', color: '#FF9800' },
+                'rescheduled':                 { label: '🔄 Reprogramado',             color: '#FF9800' },
+                'delayed':                     { label: '⏰ Demorado',                  color: '#FF9800' },
+                'returning_to_sender':         { label: '↩️ Devolviendo al vendedor',   color: '#f85149' },
+                'not_delivered_and_returning': { label: '↩️ En devolución',             color: '#f85149' },
+                'out_of_delivery_area':        { label: '📍 Fuera de zona',             color: '#f85149' },
+                'delivery_failed':             { label: '❌ Entrega fallida',            color: '#f85149' },
+                'waiting_for_withdrawal':      { label: '📦 Esperando retiro',           color: '#FF9800' },
+            };
+            const colorDefault = '#8b949e';
+
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+            let html = `<div style="background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:12px 18px;border-radius:10px;text-align:center;font-weight:700;font-size:15px;margin-bottom:16px;">
+                🚫 ${todos.length} viaje${todos.length !== 1 ? 's' : ''} fallido${todos.length !== 1 ? 's' : ''} en los últimos 7 días
+            </div>`;
+
+            todos.forEach(({ shipping, order, cuentaNombre, cuentaColor }) => {
+                const sub = (shipping.substatus || '').toLowerCase();
+                const grupoInfo = grupoLabels[sub] || { label: `🔄 ${sub || 'Reprogramado'}`, color: colorDefault };
+                const detail = getReprogramadoDetail(shipping);
+
+                const barrio = shipping.receiver_address?.neighborhood?.name || '';
+                const ciudad = shipping.receiver_address?.city?.name || '';
+                const zipCode = shipping.receiver_address?.zip_code || '';
+                const zona = getZonaDetallada(barrio, ciudad, zipCode);
+                const calle = shipping.receiver_address?.street_name || '';
+                const numero = shipping.receiver_address?.street_number || '';
+                const provincia = shipping.receiver_address?.state?.name || '';
+                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
+
+                const comprador = order.buyer?.nickname || 'N/A';
+                const orderId = order.id || '';
+                const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+
+                const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
+                                     shipping.shipping_option?.estimated_delivery_final?.date;
+                let fechaLabel = '', diasAtraso = '', urgenciaColor = '#FF9800';
+                if (fechaEntrega) {
+                    const entrega = new Date(fechaEntrega); entrega.setHours(0,0,0,0);
+                    const diffDias = Math.round((hoy.getTime() - entrega.getTime()) / 86400000);
+                    fechaLabel = `${dias[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                    if (diffDias > 0) {
+                        diasAtraso = `hace ${diffDias} día${diffDias > 1 ? 's' : ''}`;
+                        urgenciaColor = diffDias >= 5 ? '#f44336' : diffDias >= 3 ? '#FF6B00' : '#FF9800';
+                    } else if (diffDias === 0) {
+                        diasAtraso = 'HOY'; urgenciaColor = '#FFE600';
+                    } else {
+                        diasAtraso = `en ${Math.abs(diffDias)}d`; urgenciaColor = '#00d9ff';
+                    }
+                }
+
+                // Hora del último evento problemático
+                const subHistory = shipping.substatus_history || [];
+                const lastEvent = [...subHistory].reverse().find(e => e.substatus === sub);
+                const horaEvento = lastEvent?.date ? formatearSoloHora(lastEvent.date) : null;
+
+                const cuentaBadge = cuentaNombre === 'Mikra'
+                    ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
+                    : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
+
+                html += `<div class="envio-card reprogramado" style="border-left-color:${grupoInfo.color};">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                            <span style="background:${grupoInfo.color};color:white;padding:4px 12px;border-radius:16px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ` · ${horaEvento}` : ''}</span>
+                            ${cuentaBadge}
+                        </div>
+                        <a href="${orderUrl}" target="_blank" class="order-link" style="font-size:12px;">#${orderId}</a>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+                        ${fechaLabel ? `<div style="background:${urgenciaColor};color:#000;padding:6px 12px;border-radius:8px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;">
+                            📅 ${fechaLabel} <span style="background:rgba(0,0,0,0.2);padding:2px 7px;border-radius:6px;font-size:11px;">${diasAtraso}</span>
+                        </div>` : ''}
+                        <span style="color:#FFE600;font-weight:700;font-size:13px;">📍 ${zona}</span>
+                    </div>
+                    <div class="card-address-row" style="margin-bottom:0;">
+                        <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                        <span class="card-sep">·</span>
+                        <span class="card-comprador">👤 <strong>${comprador}</strong></span>
+                    </div>
+                </div>`;
+            });
+
+            html += `<div style="text-align:center;margin-top:20px;">
+                <button onclick="cargarFlexHoy()" style="background:#3483FA;padding:12px 30px;font-size:15px;">🔙 Volver a HOY</button>
+            </div>`;
+
+            content.innerHTML = html;
         }
 
         async function cargarReprogramados() {
@@ -1983,12 +2286,39 @@
             content.innerHTML = html;
         }
 
-        async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null) {
+        // ── Progress de carga ─────────────────────────────────────────
+        let _progRafPending = false;
+        function updateLoadingProgressDOM(done, total) {
+            const fill = document.getElementById('loadProgressFill');
+            const text = document.getElementById('loadProgressText');
+            const wrap = document.getElementById('loadProgressWrap');
+            if (!fill || !text || !wrap) return;
+            if (total <= 0) return;
+            wrap.style.display = 'block';
+            const pct = Math.min(100, Math.round((done / total) * 100));
+            fill.style.width = pct + '%';
+            text.textContent = `${done} de ${total} envíos`;
+        }
+
+        async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null, backgroundRefresh = false) {
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...</div>`;
+            if (!backgroundRefresh) {
+                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...<div class="load-progress-wrap" id="loadProgressWrap" style="display:none;"><div class="load-progress-track"><div class="load-progress-fill" id="loadProgressFill"></div></div><div class="load-progress-text" id="loadProgressText"></div></div></div>`;
+            }
             
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
+
+            // Objeto de progreso compartido por ambas cuentas
+            const progress = { done: 0, total: 0 };
+            function notifyProgress() {
+                if (_progRafPending) return;
+                _progRafPending = true;
+                requestAnimationFrame(() => {
+                    _progRafPending = false;
+                    updateLoadingProgressDOM(progress.done, progress.total);
+                });
+            }
 
             // Cargar AMBAS cuentas en PARALELO (2x más rápido)
             const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta) => {
@@ -1998,7 +2328,7 @@
                         console.error(`No hay token para ${cuenta.nombre}`);
                         return [];
                     }
-                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen);
+                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen, progress, notifyProgress);
                     return orders.map(item => ({
                         ...item,
                         cuentaNombre: cuenta.nombre,
@@ -2039,8 +2369,7 @@
             }
 
             // FILTRAR CANCELADAS: Solo mostrar canceladas si son para HOY (targetDate)
-            allFlexOrders = allOrdersFromAllAccounts.filter(({ shipping }) => {
-                // Usar _state cacheado; si aún no está (shipment de otra cuenta), calcularlo
+            const processed = allOrdersFromAllAccounts.filter(({ shipping }) => {
                 const state = shipping._state || getOrderState(shipping);
                 if (state === 'cancelado') {
                     return esEntregaParaFecha(shipping, targetDate);
@@ -2048,60 +2377,27 @@
                 return true;
             });
 
-            // logShippingStates(); // Solo para debug
-
-            // Calcular zonas usando _zona cacheada — sin recalcular nada
-            const zonaCounts = new Map();
-            let cabaCount = 0;
-            let provinciaCount = 0;
-            
-            allFlexOrders.forEach(({ shipping }) => {
-                if (shipping._state === 'cancelado') return;
-                const zona = shipping._zona;
-                zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
-                if (esCABA(zona)) cabaCount++;
-                else provinciaCount++;
-            });
-
-            // Actualizar badges de información
-            document.getElementById('badgeFecha').textContent = `📅 ${label}`;
-            // Resaltar día activo en la barra de navegación
-            if (currentNavDate) buildDateNav();
-            document.getElementById('badgeCaba').textContent = `🏙️ CABA: ${cabaCount}`;
-            document.getElementById('badgeProvincia').textContent = `🗺️ Provincia: ${provinciaCount}`;
-            document.getElementById('infoBadges').style.display = 'flex';
-
-            const dropdownItems = document.getElementById('dropdownItems');
-            const totalSinCanceladas = allFlexOrders.filter(({shipping}) => shipping._state !== 'cancelado').length;
-            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${totalSinCanceladas})</div>`;
-            
-            let cabaTotal = 0;
-            Array.from(zonaCounts.entries()).forEach(([zona, count]) => {
-                if (esCABA(zona)) cabaTotal += count;
-            });
-            if (cabaTotal > 0) {
-                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('CABA')">🏙️ CABA - Todos (${cabaTotal})</div>`;
+            // Si es background refresh, devolver los datos sin tocar la UI
+            if (backgroundRefresh) {
+                saveToCache(targetDate, processed);
+                return processed;
             }
-            
-            Array.from(zonaCounts.entries()).sort().forEach(([zona, count]) => {
-                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
-            });
 
-            // filterSection ahora está embebido en statsSection
-            document.getElementById('statsSection').classList.remove('hidden');
-            document.getElementById('sortSection').classList.remove('hidden');
-            document.getElementById('btnMapa').classList.remove('hidden');
-            
+            allFlexOrders = processed;
+
+            // Guardar en cache
+            saveToCache(targetDate, allFlexOrders);
+
             // En modo retry silencioso, no renderizar si no hay órdenes activas
             if (silentRetry) {
                 const activas = allFlexOrders.filter(({shipping}) => shipping._state !== 'cancelado');
                 if (activas.length === 0) return;
             }
-            
-            displayOrders('all');
+
+            renderCargaCompletada(label, targetDate);
         }
 
-        async function cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen = null) {
+        async function cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen = null, progress = null, notify = null) {
             let tempOrders = [];
 
             const cuentaKey = cuenta.nombre.toLowerCase();
@@ -2125,88 +2421,151 @@
                 return [];
             }
 
-            // Rango ampliado: 7 días antes hasta 1 día después (cubre órdenes creadas con anticipación)
-            const dateFrom = new Date(targetDate);
-            dateFrom.setDate(dateFrom.getDate() - 7);
-            const dateTo = new Date(targetDate);
-            dateTo.setDate(dateTo.getDate() + 1);
-            dateTo.setHours(23, 59, 59, 0);
-            
-            const dateFromStr = dateFrom.toISOString().split('.')[0] + '.000-00:00';
-            const dateToStr = dateTo.toISOString().split('.')[0] + '.000-00:00';
-            const dateFilter = `&order.date_created.from=${encodeURIComponent(dateFromStr)}&order.date_created.to=${encodeURIComponent(dateToStr)}`;
+            // ── ESTRATEGIA DUAL: dos queries pequeñas en paralelo ───────────
+            //
+            // ANTES: query por date_created (3-8 días) → 200-400 órdenes →
+            //        fetchear cada shipment para ver si la fecha de entrega coincide.
+            //        80% se descartan DESPUÉS de hacer el request.
+            //
+            // AHORA:
+            //  Query A — filter por shipping.estimated_delivery_time = targetDate
+            //            → ML devuelve SOLO las órdenes con entrega ese día (~30-60)
+            //  Query B — filter por shipping.status=not_delivered (reprogramados recientes)
+            //            → órdenes que no se entregaron y siguen pendientes (~10-20)
+            //  Ambas corren en paralelo. Total: 40-80 órdenes en lugar de 400.
+            // ────────────────────────────────────────────────────────────────
 
-            // PASO 1: Pedir primera página para saber el total real
-            let allOrders = [];
-            try {
-                const firstPageResp = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${dateFilter}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const firstPageData = await firstPageResp.json();
-                const firstResults = firstPageData.results || [];
-                allOrders.push(...firstResults);
-                
-                const total = firstPageData.paging?.total || 0;
-                
-                // PASO 2: Solo pedir las páginas restantes necesarias (máx 1000 órdenes)
-                if (total > 50) {
-                    const remainingPages = Math.min(Math.ceil(total / 50) - 1, 19); // máx 20 páginas total
-                    const extraPromises = [];
-                    for (let page = 1; page <= remainingPages; page++) {
-                        extraPromises.push(
-                            fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${page * 50}&limit=50&sort=date_desc${dateFilter}`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            }).then(r => r.json()).catch(() => ({ results: [] }))
+            // Timezone Buenos Aires para el filtro de fecha
+            const pad = n => String(n).padStart(2,'0');
+            const td = targetDate;
+            const targetDateStr = `${td.getFullYear()}-${pad(td.getMonth()+1)}-${pad(td.getDate())}`;
+            const deliveryFrom = encodeURIComponent(`${targetDateStr}T00:00:00.000-03:00`);
+            const deliveryTo   = encodeURIComponent(`${targetDateStr}T23:59:59.000-03:00`);
+
+            // Rango para reprogramados: desde el viernes anterior
+            const reprogFrom = calcularDateFrom(targetDate);
+            const reprogFromStr = reprogFrom.toISOString().split('.')[0] + '.000-00:00';
+
+            const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
+            const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&shipping.status=not_delivered&order.status=paid`;
+
+            async function fetchAllPages(filter) {
+                let orders = [];
+                try {
+                    const first = await fetch(
+                        `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${filter}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    const firstData = await first.json();
+                    orders.push(...(firstData.results || []));
+                    const total = firstData.paging?.total || 0;
+                    if (total > 50) {
+                        const pages = Math.min(Math.ceil(total / 50) - 1, 9); // máx 10 páginas = 500
+                        const extra = await Promise.all(
+                            Array.from({ length: pages }, (_, i) =>
+                                fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
+                                    { headers: { 'Authorization': `Bearer ${token}` } })
+                                .then(r => r.json()).catch(() => ({ results: [] }))
+                            )
                         );
+                        extra.forEach(d => orders.push(...(d.results || [])));
                     }
-                    const extraData = await Promise.all(extraPromises);
-                    extraData.forEach(data => allOrders.push(...(data.results || [])));
+                } catch (e) {
+                    console.error(`fetchAllPages error [${cuenta.nombre}]:`, e);
                 }
-            } catch (error) {
-                console.error(`Error cargando órdenes de ${cuenta.nombre}:`, error);
-                return [];
+                return orders;
             }
+
+            // Ambas queries en paralelo
+            const [ordersA, ordersB] = await Promise.all([
+                fetchAllPages(filterA),
+                fetchAllPages(filterB),
+            ]);
+
+            // Si Query A vino vacía (filtro no soportado por ML), fallback al método anterior
+            // con rango por date_created (evita quedarse sin datos)
+            let allOrders;
+            if (ordersA.length === 0 && ordersB.length === 0) {
+                console.warn(`[${cuenta.nombre}] Filtro por delivery date sin resultados, usando fallback por date_created`);
+                const dateFrom = calcularDateFrom(targetDate);
+                const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
+                const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                allOrders = await fetchAllPages(fbFilter);
+            } else {
+                // Merge A + B desduplicando por shipping.id
+                const seen = new Set();
+                allOrders = [];
+                [...ordersA, ...ordersB].forEach(o => {
+                    const sid = o.shipping?.id;
+                    if (!sid || seen.has(sid)) return;
+                    seen.add(sid);
+                    allOrders.push(o);
+                });
+            }
+
+            console.log(`[${cuenta.nombre}] Query A (delivery date): ${ordersA.length} | Query B (not_delivered): ${ordersB.length} | Total único: ${allOrders.length}`);
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
 
-            // PASO 3: Consultar shipping en paralelo con retry automático por cada uno.
-            // Retry individual (no batching): misma velocidad que antes, pero si un request
-            // falla por fluke de red lo reintenta una vez en lugar de silenciarlo.
+            // Filtro client-side: saltear sin shipping o canceladas a nivel orden
+            const ordersConShipping = allOrders.filter(o =>
+                o.shipping?.id &&
+                o.status !== 'cancelled' &&
+                o.order_status !== 'cancelled'
+            );
+
+            if (progress) { progress.total += ordersConShipping.length; if (notify) notify(); }
+
+            // PASO 3: Consultar shipping en paralelo con concurrencia limitada (evita saturar el proxy)
+            // Máximo 20 requests simultáneos en lugar de todos a la vez
             async function fetchShipping(shippingId) {
                 const url = `${cuenta.proxy}/api/shipments/${shippingId}`;
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
                 try {
                     const r = await fetch(url, opts);
                     if (r.ok) return r.json();
-                    // Reintento único ante error transitorio
-                    await new Promise(res => setTimeout(res, 400));
+                    await new Promise(res => setTimeout(res, 200));
                     const r2 = await fetch(url, opts);
                     return r2.ok ? r2.json() : null;
                 } catch {
                     try {
-                        await new Promise(res => setTimeout(res, 400));
+                        await new Promise(res => setTimeout(res, 200));
                         const r2 = await fetch(url, opts);
                         return r2.ok ? r2.json() : null;
                     } catch { return null; }
                 }
             }
 
-            const shippingPromises = allOrders.map(async (order) => {
-                const shippingId = order.shipping?.id;
-                if (!shippingId) return null;
-                const shipping = await fetchShipping(shippingId);
-                if (!shipping) return null;
-                if (shipping.logistic_type === 'self_service') {
-                    if (esEntregaParaFecha(shipping, targetDate) || 
-                        shipping.status === 'cancelled' || 
-                        shipping.status === 'not_delivered') {
-                        return { order, shipping };
+            // Pool de concurrencia limitada: procesa de a CONCURRENCY a la vez
+            // IMPORTANTE: siempre verificar esEntregaParaFecha en el shipment real,
+            // porque los filtros de ML no son 100% exactos y Query B trae de cualquier fecha.
+            const CONCURRENCY = 25;
+            async function pooledFetch(orders) {
+                const results = new Array(orders.length).fill(null);
+                let idx = 0;
+                async function worker() {
+                    while (idx < orders.length) {
+                        const i = idx++;
+                        const order = orders[i];
+                        const shippingId = order.shipping?.id;
+                        const shipping = await fetchShipping(shippingId);
+                        if (progress) { progress.done++; if (notify) notify(); }
+                        if (!shipping) continue;
+                        if (shipping.logistic_type !== 'self_service') continue;
+                        // Filtro de fecha: incluir solo si es para targetDate,
+                        // O si es not_delivered/cancelled (reprogramados que ya fallaron)
+                        if (esEntregaParaFecha(shipping, targetDate) ||
+                            shipping.status === 'not_delivered' ||
+                            shipping.status === 'cancelled') {
+                            results[i] = { order, shipping };
+                        }
                     }
                 }
-                return null;
-            });
+                await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+                return results;
+            }
 
-            const results = await Promise.all(shippingPromises);
+            const results = await pooledFetch(ordersConShipping);
             tempOrders = results.filter(item => item !== null);
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
@@ -2359,10 +2718,12 @@
             if (!problems || problems.length === 0) return '';
             
             return problems.map(p => {
+                const labelType = p.typeLabel || p.type;
+                const timeStr = p.time ? ` · ${p.time} hs` : '';
                 if (p.reputationAffected) {
-                    return `<span class="reputation-warning">⚠️ Reputación afectada (${p.type})</span>`;
+                    return `<span class="reputation-warning">⚠️ Reputación afectada · ${labelType}${timeStr}</span>`;
                 } else {
-                    return `<span class="reputation-ok">✓ Rep. no afectada (${p.type})</span>`;
+                    return `<span class="reputation-ok">✓ Rep. no afectada · ${labelType}${timeStr}</span>`;
                 }
             }).join(' ');
         }
@@ -2443,12 +2804,36 @@
             // Detectar problemas de reputación desde substatus_history
             const problemSubstatuses = ['delayed', 'delivery_failed', 'receiver_absent', 'lost', 'stolen', 'damaged'];
             const problems = [];
+
+            const problemTranslations = {
+                'receiver_absent': 'Comprador ausente',
+                'delivery_failed': 'Entrega fallida',
+                'delayed': 'Demorado',
+                'lost': 'Paquete extraviado',
+                'stolen': 'Paquete robado',
+                'damaged': 'Paquete dañado',
+                'not_delivered': 'No entregado',
+                'returning_to_sender': 'Devolviendo al vendedor',
+                'not_delivered_and_returning': 'En devolución',
+                'out_of_delivery_area': 'Fuera de zona',
+                'waiting_for_withdrawal': 'Esperando retiro',
+                'rescheduled': 'Reprogramado',
+                'rescheduled_by_buyer': 'Reprogramado por comprador',
+                'buyer_rescheduled': 'Reprogramado por comprador',
+                'delivery_attempted': 'Intento de entrega',
+            };
             
             // Si el envío es not_delivered o tiene substatus problemático
             if (shipping.status === 'not_delivered' || problemSubstatuses.includes(shipping.substatus)) {
+                const probSub = shipping.substatus || shipping.status;
+                // Buscar hora del evento en el historial
+                const probEntry = subHistory.find(e => e.substatus === probSub);
+                const probTime = probEntry?.date ? formatearSoloHora(probEntry.date) : null;
                 problems.push({
-                    type: shipping.substatus || shipping.status,
-                    reputationAffected: false // No podemos saber desde la API, asumimos no afectada
+                    type: probSub,
+                    typeLabel: problemTranslations[probSub] || probSub,
+                    reputationAffected: false,
+                    time: probTime
                 });
             }
             
@@ -3044,12 +3429,13 @@
 
         function buildDateNav() {
             const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const esFinDeSemana = hoy.getDay() === 0 || hoy.getDay() === 6;
             const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
             const container = document.getElementById('dateNavDays');
             if (!container) return;
             container.innerHTML = '';
 
-            // Slots: hasta 3 días hábiles pasados + HOY + mañana hábil
+            // Slots: hasta 3 días hábiles pasados + HOY (si es hábil) + mañana hábil
             const slots = [];
 
             // Días hábiles pasados (hasta 3, salteando finde)
@@ -3063,10 +3449,12 @@
                 }
             }
 
-            // Hoy
-            slots.push(new Date(hoy));
+            // HOY: solo agregar si es día hábil
+            if (!esFinDeSemana) {
+                slots.push(new Date(hoy));
+            }
 
-            // Mañana hábil (solo 1)
+            // Mañana hábil (1 solo)
             let manana = new Date(hoy);
             do { manana.setDate(manana.getDate() + 1); } while (manana.getDay() === 0 || manana.getDay() === 6);
             slots.push(manana);
@@ -3074,7 +3462,7 @@
             slots.forEach(fecha => {
                 const btn = document.createElement('button');
                 btn.className = 'date-nav-day';
-                const isHoy = fecha.toDateString() === hoy.toDateString();
+                const isHoy = !esFinDeSemana && fecha.toDateString() === hoy.toDateString();
                 const isActive = currentNavDate && fecha.toDateString() === currentNavDate.toDateString();
                 if (isActive) btn.classList.add('active');
 
@@ -3088,15 +3476,84 @@
 
         async function cargarDia(fecha) {
             currentNavDate = new Date(fecha); currentNavDate.setHours(0,0,0,0);
-            buildDateNav(); // actualizar highlights
+            buildDateNav();
             const myGen = ++loadGeneration;
             currentStateFilter = 'all'; currentZoneFilter = 'all';
-            currentCuentaFilter = 'all'; mostrarCanceladas = false; allFlexOrders = [];
+            currentCuentaFilter = 'all'; mostrarCanceladas = false;
+
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
             const esHoy = fecha.toDateString() === hoy.toDateString();
             const label = esHoy ? 'HOY' : `${dias[fecha.getDay()]} ${fecha.getDate()}/${fecha.getMonth()+1}`;
+
+            // ── Cache hit: mostrar al instante y refrescar en background ──
+            const cached = loadFromCache(currentNavDate);
+            if (cached && cached.length > 0) {
+                allFlexOrders = cached;
+                renderCargaCompletada(label, fecha);
+                // Badge de actualización en background
+                const badge = document.createElement('div');
+                badge.id = 'bgRefreshBadge';
+                badge.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:20px;padding:6px 14px;font-size:11px;z-index:9999;';
+                badge.textContent = '🔄 Actualizando en segundo plano...';
+                document.body.appendChild(badge);
+
+                cargarFlexPorFecha(fecha, label, false, myGen, true).then(freshOrders => {
+                    const bg = document.getElementById('bgRefreshBadge');
+                    if (bg) bg.remove();
+                    if (!freshOrders || loadGeneration !== myGen) return;
+                    // Solo re-renderizar si hubo cambios
+                    const changed = JSON.stringify(freshOrders.map(o => o.shipping.id + o.shipping._state))
+                                 !== JSON.stringify(allFlexOrders.map(o => o.shipping.id + o.shipping._state));
+                    if (changed) {
+                        allFlexOrders = freshOrders;
+                        renderCargaCompletada(label, fecha);
+                        const toastEl = document.createElement('div');
+                        toastEl.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#00897B;color:white;border-radius:20px;padding:6px 14px;font-size:11px;z-index:9999;';
+                        toastEl.textContent = '✓ Datos actualizados';
+                        document.body.appendChild(toastEl);
+                        setTimeout(() => toastEl.remove(), 2500);
+                    }
+                }).catch(() => { const b = document.getElementById('bgRefreshBadge'); if (b) b.remove(); });
+                return;
+            }
+
+            // Sin cache: carga normal
+            allFlexOrders = [];
             await cargarFlexPorFecha(fecha, label, false, myGen);
+        }
+
+        // Extrae el render final de cargarFlexPorFecha para poder llamarlo desde cache
+        function renderCargaCompletada(label, targetDate) {
+            const zonaCounts = new Map();
+            let cabaCount = 0, provinciaCount = 0;
+            allFlexOrders.forEach(({ shipping }) => {
+                if (shipping._state === 'cancelado') return;
+                const zona = shipping._zona;
+                zonaCounts.set(zona, (zonaCounts.get(zona) || 0) + 1);
+                if (esCABA(zona)) cabaCount++; else provinciaCount++;
+            });
+
+            document.getElementById('badgeFecha').textContent = `📅 ${label}`;
+            if (currentNavDate) buildDateNav();
+            document.getElementById('badgeCaba').textContent = `🏙️ CABA: ${cabaCount}`;
+            document.getElementById('badgeProvincia').textContent = `🗺️ Provincia: ${provinciaCount}`;
+            document.getElementById('infoBadges').style.display = 'flex';
+
+            const dropdownItems = document.getElementById('dropdownItems');
+            const totalSinCanceladas = allFlexOrders.filter(({shipping}) => shipping._state !== 'cancelado').length;
+            dropdownItems.innerHTML = `<div class="dropdown-item" onclick="selectZone('all')">Todas las zonas (${totalSinCanceladas})</div>`;
+            let cabaTotal = 0;
+            Array.from(zonaCounts.entries()).forEach(([zona, count]) => { if (esCABA(zona)) cabaTotal += count; });
+            if (cabaTotal > 0) dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('CABA')">🏙️ CABA - Todos (${cabaTotal})</div>`;
+            Array.from(zonaCounts.entries()).sort().forEach(([zona, count]) => {
+                dropdownItems.innerHTML += `<div class="dropdown-item" onclick="selectZone('${zona}')">${zona} (${count})</div>`;
+            });
+
+            document.getElementById('statsSection').classList.remove('hidden');
+            document.getElementById('sortSection').classList.remove('hidden');
+            document.getElementById('btnMapa').classList.remove('hidden');
+            displayOrders('all');
         }
 
         function navDia(delta) {
