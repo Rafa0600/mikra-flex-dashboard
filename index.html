@@ -1432,18 +1432,102 @@
         // Cache de tokens en memoria (4 min) para no hacer fetch doble
         const tokenCache = {};
 
-        const BARRIOS_CABA = [
-            'Agronomía', 'Almagro', 'Balvanera', 'Barracas', 'Belgrano', 'Boedo',
-            'Caballito', 'Chacarita', 'Coghlan', 'Colegiales', 'Constitución',
-            'Flores', 'Floresta', 'La Boca', 'Liniers', 'Mataderos',
-            'Monte Castro', 'Monserrat', 'Nueva Pompeya', 'Núñez', 'Palermo',
-            'Parque Avellaneda', 'Parque Chacabuco', 'Parque Patricios', 'Paternal',
-            'Recoleta', 'Retiro', 'Saavedra', 'San Cristóbal', 'San Nicolás',
-            'San Telmo', 'Velez Sarsfield', 'Versailles', 'Villa Crespo',
-            'Villa Devoto', 'Villa General Mitre', 'Villa Lugano', 'Villa Luro',
-            'Villa Ortúzar', 'Villa Pueyrredon', 'Villa Pueyrredón', 'Villa Real',
-            'Villa Santa Rita', 'Villa Urquiza'
-        ];
+        // ── Constantes a nivel de módulo (no se recrean en cada llamada) ──
+
+        // Set para lookup O(1) de barrios CABA (en lugar de Array.some con normalizar)
+        const BARRIOS_CABA_SET = new Set([
+            'agronomia', 'almagro', 'balvanera', 'barracas', 'belgrano', 'boedo',
+            'caballito', 'chacarita', 'coghlan', 'colegiales', 'constitucion',
+            'flores', 'floresta', 'la boca', 'liniers', 'mataderos',
+            'monte castro', 'monserrat', 'nueva pompeya', 'nunez', 'palermo',
+            'parque avellaneda', 'parque chacabuco', 'parque patricios', 'paternal',
+            'recoleta', 'retiro', 'saavedra', 'san cristobal', 'san nicolas',
+            'san telmo', 'velez sarsfield', 'versailles', 'villa crespo',
+            'villa devoto', 'villa general mitre', 'villa lugano', 'villa luro',
+            'villa ortuzar', 'villa pueyrredon', 'villa real',
+            'villa santa rita', 'villa urquiza'
+        ]);
+
+        const SUBSTATUS_LABELS = {
+            'shipment_paid': 'Preparando envío',
+            'ready_to_ship': 'Listo para enviar',
+            'picked_up': 'Retirado por el transportista',
+            'in_hub': 'En centro de distribución',
+            'in_transit': 'El paquete está en camino.',
+            'out_for_delivery': 'El paquete está en camino.',
+            'nearby': 'El paquete está muy cerca.',
+            'almost_there': 'El paquete está muy cerca.',
+            'receiver_absent': 'Comprador ausente.',
+            'waiting_for_withdrawal': 'Esperando retiro en punto de entrega.',
+            'delivered': 'Entregamos el paquete.',
+            'returning_to_sender': 'Devolviendo al vendedor.',
+            'not_delivered_and_returning': 'No se pudo entregar, en devolución.',
+            'rescheduled': 'El paquete está en camino nuevamente.',
+            'rescheduled_by_buyer': 'Reprogramado por el comprador.',
+            'buyer_rescheduled': 'Reprogramado por el comprador.',
+            'delayed': 'Envío demorado.',
+            'out_of_delivery_area': 'Fuera de zona de entrega.',
+            'delivery_failed': 'Entrega fallida.',
+            'claimed_me': 'Reclamo abierto.',
+            'stolen': 'Paquete robado.',
+            'lost': 'Paquete extraviado.',
+            'damaged': 'Paquete dañado.',
+            'cancelled': 'Envío cancelado.',
+            'buyer_cancelled': 'Cancelado por el comprador.',
+            'cancelled_by_buyer': 'Cancelado por el comprador.',
+        };
+
+        const SUBSTATUS_MAP = {
+            'shipment_paid':         { t: 'Preparando envío',                  d: 'c-gray',   tc: 't-muted' },
+            'ready_to_ship':         { t: 'Listo para enviar',                 d: 'c-gray',   tc: 't-muted' },
+            'picked_up':             { t: 'Retirado por transportista',         d: 'c-blue',   tc: 't-blue' },
+            'in_hub':                { t: 'En centro de distribución',          d: 'c-blue',   tc: 't-blue' },
+            'in_transit':            { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
+            'out_for_delivery':      { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
+            'nearby':                { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
+            'almost_there':          { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
+            'receiver_absent':       { t: '🚫 Comprador ausente',               d: 'c-red',    tc: 't-red' },
+            'waiting_for_withdrawal':{ t: '📦 Esperando retiro',                d: 'c-orange', tc: 't-orange' },
+            'delivered':             { t: '✅ Entregado',                        d: 'c-green',  tc: 't-green' },
+            'returning_to_sender':   { t: '↩️ Devolviendo al vendedor',          d: 'c-red',    tc: 't-red' },
+            'not_delivered_and_returning':{ t: '↩️ En devolución',              d: 'c-red',    tc: 't-red' },
+            'rescheduled':           { t: '🔄 En camino nuevamente',             d: 'c-orange', tc: 't-orange' },
+            'rescheduled_by_buyer':  { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
+            'buyer_rescheduled':     { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
+            'delayed':               { t: '⏰ Demorado',                         d: 'c-orange', tc: 't-orange' },
+            'out_of_delivery_area':  { t: '📍 Fuera de zona',                   d: 'c-red',    tc: 't-red' },
+            'delivery_failed':       { t: '❌ Entrega fallida',                  d: 'c-red',    tc: 't-red' },
+            'cancelled':             { t: 'Cancelado',                           d: 'c-red',    tc: 't-red' },
+            'buyer_cancelled':       { t: 'Cancelado por comprador',             d: 'c-red',    tc: 't-red' },
+        };
+
+        const ESTADO_LABELS = {
+            'pendiente': '⏳ Pendiente', 'en-camino': '🚚 En camino',
+            'entregado': '✅ Entregado', 'cancelado': '❌ Cancelada',
+            'reprogramado': '🔄 Reprogramado'
+        };
+
+        const PROBLEMA_TRANSLATIONS = {
+            'receiver_absent': 'Comprador ausente',
+            'delivery_failed': 'Entrega fallida',
+            'delayed': 'Demorado',
+            'lost': 'Paquete extraviado',
+            'stolen': 'Paquete robado',
+            'damaged': 'Paquete dañado',
+            'not_delivered': 'No entregado',
+            'returning_to_sender': 'Devolviendo al vendedor',
+            'not_delivered_and_returning': 'En devolución',
+            'out_of_delivery_area': 'Fuera de zona',
+            'waiting_for_withdrawal': 'Esperando retiro',
+            'rescheduled': 'Reprogramado',
+            'rescheduled_by_buyer': 'Reprogramado por comprador',
+            'buyer_rescheduled': 'Reprogramado por comprador',
+            'delivery_attempted': 'Intento de entrega',
+        };
+
+        const SKIP_SUBSTATUS = new Set(['shipment_paid', 'ready_to_ship']);
+
+
 
         function normalizar(texto) {
             return texto.toLowerCase().trim()
@@ -1453,8 +1537,7 @@
         }
 
         function esBarrioCABA(nombre) {
-            const nombreNorm = normalizar(nombre);
-            return BARRIOS_CABA.some(barrio => normalizar(barrio) === nombreNorm);
+            return BARRIOS_CABA_SET.has(normalizar(nombre));
         }
 
         function esCABAPorCP(zipCode) {
@@ -1945,31 +2028,50 @@
 
                     prog.total += combined.length; notifyProg();
 
-                    const results = new Array(combined.length).fill(null);
-                    let idx = 0;
-                    async function worker() {
-                        while (idx < combined.length) {
-                            const i = idx++;
-                            const order = combined[i];
+                    // Batch fetch shipments
+                    const BSIZ = 20, BCONC = 8;
+                    const sMap = new Map();
+                    const bats = [];
+                    for (let i = 0; i < combined.length; i += BSIZ) bats.push(combined.slice(i, i+BSIZ));
+                    let bi = 0;
+                    async function bw() {
+                        while (bi < bats.length) {
+                            const bat = bats[bi++];
+                            const ids = bat.map(o => o.shipping.id);
                             try {
-                                const r = await fetch(`${cuenta.proxy}/api/shipments/${order.shipping.id}`,
+                                const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`,
                                     { headers: { 'Authorization': `Bearer ${token}` } });
                                 if (r.ok) {
-                                    const shipping = await r.json();
-                                    if (shipping.logistic_type === 'self_service'
-                                        && shipping.status_history?.date_shipped
-                                        && !shipping.status_history?.date_delivered
-                                        && (shipping.status === 'shipped' || shipping.status === 'not_delivered')
-                                    ) {
-                                        results[i] = { order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color };
-                                    }
+                                    const d = await r.json();
+                                    const arr = Array.isArray(d) ? d : (d.shipments || d.results || []);
+                                    arr.forEach(s => { if (s?.id) sMap.set(s.id, s); });
+                                } else {
+                                    // fallback individual
+                                    await Promise.all(ids.map(id =>
+                                        fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                                            .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
+                                            .then(s => { if (s?.id) sMap.set(s.id, s); })
+                                    ));
                                 }
                             } catch {}
-                            prog.done++; notifyProg();
+                            prog.done += bat.length; notifyProg();
                         }
                     }
-                    await Promise.all(Array.from({ length: CONC }, worker));
-                    return results.filter(Boolean);
+                    await Promise.all(Array.from({ length: BCONC }, bw));
+
+                    const results = [];
+                    combined.forEach(order => {
+                        const shipping = sMap.get(order.shipping.id);
+                        if (shipping
+                            && shipping.logistic_type === 'self_service'
+                            && shipping.status_history?.date_shipped
+                            && !shipping.status_history?.date_delivered
+                            && (shipping.status === 'shipped' || shipping.status === 'not_delivered')
+                        ) {
+                            results.push({ order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color });
+                        }
+                    });
+                    return results;
                 } catch (e) {
                     console.error(`cargarNoEntregados ${cuenta.nombre}:`, e);
                     return [];
@@ -2581,57 +2683,70 @@
 
             if (progress) { progress.total += ordersConShipping.length; if (notify) notify(); }
 
-            // PASO 3: Consultar shipping en paralelo con concurrencia limitada (evita saturar el proxy)
-            // Máximo 20 requests simultáneos en lugar de todos a la vez
-            async function fetchShipping(shippingId) {
-                const url = `${cuenta.proxy}/api/shipments/${shippingId}`;
+            // ── BATCH FETCH de shipments ─────────────────────────────────
+            // En lugar de N requests individuales, agrupamos en batches de 20
+            // y usamos el endpoint /shipments?ids=id1,id2,... (una sola request = 20 shipments)
+            // 80 órdenes → 4 requests en lugar de 80. ~20x menos llamadas.
+            const BATCH_SIZE = 20;
+            const BATCH_CONC = 8; // batches en paralelo simultáneos
+
+            async function fetchShipmentBatch(ids) {
+                const url = `${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`;
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
                 try {
                     const r = await fetch(url, opts);
-                    if (r.ok) return r.json();
-                    await new Promise(res => setTimeout(res, 200));
-                    const r2 = await fetch(url, opts);
-                    return r2.ok ? r2.json() : null;
+                    if (r.ok) {
+                        const data = await r.json();
+                        // ML devuelve array o { shipments: [...] }
+                        return Array.isArray(data) ? data : (data.shipments || data.results || []);
+                    }
+                    // Fallback: si el bulk no funciona, fetch individual en paralelo
+                    const results = await Promise.all(ids.map(id =>
+                        fetch(`${cuenta.proxy}/api/shipments/${id}`, opts)
+                            .then(r2 => r2.ok ? r2.json() : null).catch(() => null)
+                    ));
+                    return results.filter(Boolean);
                 } catch {
-                    try {
-                        await new Promise(res => setTimeout(res, 200));
-                        const r2 = await fetch(url, opts);
-                        return r2.ok ? r2.json() : null;
-                    } catch { return null; }
+                    return [];
                 }
             }
 
-            // Pool de concurrencia limitada: procesa de a CONCURRENCY a la vez
-            // IMPORTANTE: siempre verificar esEntregaParaFecha en el shipment real,
-            // porque los filtros de ML no son 100% exactos y Query B trae de cualquier fecha.
-            const CONCURRENCY = 35;
-            async function pooledFetch(orders) {
-                const results = new Array(orders.length).fill(null);
-                let idx = 0;
-                async function worker() {
-                    while (idx < orders.length) {
-                        const i = idx++;
-                        const order = orders[i];
-                        const shippingId = order.shipping?.id;
-                        const shipping = await fetchShipping(shippingId);
-                        if (progress) { progress.done++; if (notify) notify(); }
-                        if (!shipping) continue;
-                        if (shipping.logistic_type !== 'self_service') continue;
-                        // Filtro de fecha: incluir solo si es para targetDate,
-                        // O si es not_delivered/cancelled (reprogramados que ya fallaron)
-                        if (esEntregaParaFecha(shipping, targetDate) ||
-                            shipping.status === 'not_delivered' ||
-                            shipping.status === 'cancelled') {
-                            results[i] = { order, shipping };
-                        }
+            // Dividir en batches
+            const batches = [];
+            for (let i = 0; i < ordersConShipping.length; i += BATCH_SIZE) {
+                batches.push(ordersConShipping.slice(i, i + BATCH_SIZE));
+            }
+
+            // Procesar batches con concurrencia limitada
+            const shippingMap = new Map(); // shippingId → shipping object
+            let batchIdx = 0;
+            async function batchWorker() {
+                while (batchIdx < batches.length) {
+                    const batch = batches[batchIdx++];
+                    const ids = batch.map(o => o.shipping.id);
+                    const shipments = await fetchShipmentBatch(ids);
+                    shipments.forEach(s => { if (s?.id) shippingMap.set(s.id, s); });
+                    if (progress) {
+                        progress.done += batch.length;
+                        if (notify) notify();
                     }
                 }
-                await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-                return results;
             }
+            await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
 
-            const results = await pooledFetch(ordersConShipping);
-            tempOrders = results.filter(item => item !== null);
+            // Construir tempOrders filtrando por fecha y tipo
+            const tempOrders2 = [];
+            ordersConShipping.forEach(order => {
+                const shipping = shippingMap.get(order.shipping.id);
+                if (!shipping) return;
+                if (shipping.logistic_type !== 'self_service') return;
+                if (esEntregaParaFecha(shipping, targetDate) ||
+                    shipping.status === 'not_delivered' ||
+                    shipping.status === 'cancelled') {
+                    tempOrders2.push({ order, shipping });
+                }
+            });
+            tempOrders = tempOrders2;
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
 
@@ -2793,56 +2908,19 @@
             }).join(' ');
         }
 
-        // Enriquecer datos de shipping con info extra del detalle de ML
         function enrichShippingData(cuenta, token, shipping, orderId) {
-            // El substatus_history ya viene en el shipping object
-            // Lo convertimos a tracking events legibles
             const subHistory = shipping.substatus_history || [];
             const history = shipping.status_history || {};
             let events = [];
 
-            // Mapeo de substatus a textos legibles (como los muestra ML)
-            const substatusLabels = {
-                'shipment_paid': 'Preparando envío',
-                'ready_to_ship': 'Listo para enviar',
-                'picked_up': 'Retirado por el transportista',
-                'in_hub': 'En centro de distribución',
-                'in_transit': 'El paquete está en camino.',
-                'out_for_delivery': 'El paquete está en camino.',
-                'nearby': 'El paquete está muy cerca.',
-                'almost_there': 'El paquete está muy cerca.',
-                'receiver_absent': 'Comprador ausente.',
-                'waiting_for_withdrawal': 'Esperando retiro en punto de entrega.',
-                'delivered': 'Entregamos el paquete.',
-                'returning_to_sender': 'Devolviendo al vendedor.',
-                'not_delivered_and_returning': 'No se pudo entregar, en devolución.',
-                'rescheduled': 'El paquete está en camino nuevamente.',
-                'rescheduled_by_buyer': 'Reprogramado por el comprador.',
-                'buyer_rescheduled': 'Reprogramado por el comprador.',
-                'delayed': 'Envío demorado.',
-                'out_of_delivery_area': 'Fuera de zona de entrega.',
-                'delivery_failed': 'Entrega fallida.',
-                'claimed_me': 'Reclamo abierto.',
-                'stolen': 'Paquete robado.',
-                'lost': 'Paquete extraviado.',
-                'damaged': 'Paquete dañado.',
-                'cancelled': 'Envío cancelado.',
-                'buyer_cancelled': 'Cancelado por el comprador.',
-                'cancelled_by_buyer': 'Cancelado por el comprador.',
-            };
-
-            // Construir eventos desde substatus_history
             if (subHistory.length > 0) {
                 subHistory.forEach(entry => {
                     const dateStr = entry.date ? formatDateShort(entry.date) : '';
-                    const label = substatusLabels[entry.substatus] || entry.substatus || entry.status || '';
-                    if (label) {
-                        events.push({ label: `${dateStr} | ${label}`, substatus: entry.substatus });
-                    }
+                    const label = SUBSTATUS_LABELS[entry.substatus] || entry.substatus || entry.status || '';
+                    if (label) events.push({ label: `${dateStr} | ${label}`, substatus: entry.substatus });
                 });
             }
 
-            // Agregar eventos del status_history que no estén ya cubiertos
             if (history.date_shipped && !events.some(e => e.substatus === 'in_transit' || e.substatus === 'out_for_delivery')) {
                 events.push({ label: `${formatDateShort(history.date_shipped)} | El paquete está en camino.`, substatus: 'shipped' });
             }
@@ -2853,57 +2931,21 @@
                 events.push({ label: `${formatDateShort(history.date_not_delivered)} | No se pudo entregar.`, substatus: 'not_delivered' });
             }
 
-            // Eliminar duplicados y ordenar por fecha
             const seen = new Set();
-            events = events.filter(e => {
-                const key = e.label;
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
+            events = events.filter(e => { if (seen.has(e.label)) return false; seen.add(e.label); return true; });
+            if (events.length > 0) shipping._trackingEvents = events;
 
-            if (events.length > 0) {
-                shipping._trackingEvents = events;
-            }
-
-            // Detectar problemas de reputación desde substatus_history
-            const problemSubstatuses = ['delayed', 'delivery_failed', 'receiver_absent', 'lost', 'stolen', 'damaged'];
-            const problems = [];
-
-            const problemTranslations = {
-                'receiver_absent': 'Comprador ausente',
-                'delivery_failed': 'Entrega fallida',
-                'delayed': 'Demorado',
-                'lost': 'Paquete extraviado',
-                'stolen': 'Paquete robado',
-                'damaged': 'Paquete dañado',
-                'not_delivered': 'No entregado',
-                'returning_to_sender': 'Devolviendo al vendedor',
-                'not_delivered_and_returning': 'En devolución',
-                'out_of_delivery_area': 'Fuera de zona',
-                'waiting_for_withdrawal': 'Esperando retiro',
-                'rescheduled': 'Reprogramado',
-                'rescheduled_by_buyer': 'Reprogramado por comprador',
-                'buyer_rescheduled': 'Reprogramado por comprador',
-                'delivery_attempted': 'Intento de entrega',
-            };
-            
-            // Si el envío es not_delivered o tiene substatus problemático
-            if (shipping.status === 'not_delivered' || problemSubstatuses.includes(shipping.substatus)) {
+            const problemSubstatuses = new Set(['delayed', 'delivery_failed', 'receiver_absent', 'lost', 'stolen', 'damaged']);
+            if (shipping.status === 'not_delivered' || problemSubstatuses.has(shipping.substatus)) {
                 const probSub = shipping.substatus || shipping.status;
-                // Buscar hora del evento en el historial
                 const probEntry = subHistory.find(e => e.substatus === probSub);
                 const probTime = probEntry?.date ? formatearSoloHora(probEntry.date) : null;
-                problems.push({
+                shipping._problems = [{
                     type: probSub,
-                    typeLabel: problemTranslations[probSub] || probSub,
+                    typeLabel: PROBLEMA_TRANSLATIONS[probSub] || probSub,
                     reputationAffected: false,
                     time: probTime
-                });
-            }
-            
-            if (problems.length > 0) {
-                shipping._problems = problems;
+                }];
             }
         }
 
@@ -3101,46 +3143,38 @@
                 ${stats.reprogramado > 0 ? `<div class="progress-segment reprogramado" style="width:${reprogramadoPct}%" onclick="filtrarPorEstado('reprogramado')">${stats.reprogramado}</div>` : ''}
             `;
 
-            let html = '';
+            const parts = [];
 
             if (orders.length === 0) {
-                html = '<div class="no-results">No hay envíos con estos filtros</div>';
+                parts.push('<div class="no-results">No hay envíos con estos filtros</div>');
             } else {
                 orders.forEach(({ orders: orderList, shipping, cuentaNombre, cuentaColor }, index) => {
-                    const state = getOrderState(shipping);
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    const calle = shipping.receiver_address?.street_name || '';
-                    const numero = shipping.receiver_address?.street_number || '';
+                    // Usar valores cacheados — no recalcular
+                    const state    = shipping._state;
+                    const zona     = shipping._zona;
+                    const barrio   = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad   = shipping.receiver_address?.city?.name || '';
+                    const calle    = shipping.receiver_address?.street_name || '';
+                    const numero   = shipping.receiver_address?.street_number || '';
                     const provincia = shipping.receiver_address?.state?.name || '';
-                    const direccionCompleta = `${calle} ${numero}, ${ciudad}, ${provincia}`;
-                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
                     const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
                                         shipping.shipping_option?.estimated_delivery_final?.date;
                     const fechaFormateada = formatearFecha(fechaEntrega);
                     const esHoy = fechaFormateada === 'Hoy';
-                    const history = shipping.status_history || {};
-                    const fechaCreacion = shipping.date_created;
                     const cantidadItems = orderList.length;
                     const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                    const estadoLabels = {
-                        'pendiente': '⏳ Pendiente', 'en-camino': '🚚 En camino',
-                        'entregado': '✅ Entregado', 'cancelado': '❌ Cancelada',
-                        'reprogramado': '🔄 Reprogramado'
-                    };
-                    const estadoTexto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : estadoLabels[state];
+                    const estadoTexto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : (ESTADO_LABELS[state] || state);
 
-                    // ── Timeline unificado: une timeline + historial de rastreo ──
+                    // Timeline y badge — calculados una sola vez por card
                     const utlItems = buildUnifiedTimeline(shipping, fechaEntrega);
+                    const repBadge = renderReputationBadge(shipping);
 
                     if (vistaSimple) {
-                        html += `
-                        <div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
+                        parts.push(`<div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
                                 <div class="simple-estado ${state}">${estadoTexto}</div>
@@ -3160,12 +3194,11 @@
                                     ${fechaEntrega ? `<span class="card-sep">·</span><span class="${esHoy ? 'fecha-hoy' : ''}" style="font-size:12px;">📅 ${fechaFormateada}</span>` : ''}
                                 </div>
                                 <div class="unified-timeline">${utlItems}</div>
-                                ${renderReputationBadge(shipping) ? `<div style="margin-top:8px;">${renderReputationBadge(shipping)}</div>` : ''}
+                                ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
                             </div>
-                        </div>`;
+                        </div>`);
                     } else {
-                        html += `
-                        <div class="envio-card ${state}">
+                        parts.push(`<div class="envio-card ${state}">
                             <div class="card-meta">
                                 <span class="estado-badge ${state}">${estadoTexto}</span>
                                 ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
@@ -3185,13 +3218,13 @@
                             <div class="timeline" style="padding:10px 12px;">
                                 <div class="unified-timeline">${utlItems}</div>
                             </div>
-                            ${renderReputationBadge(shipping) ? `<div style="margin-top:8px;">${renderReputationBadge(shipping)}</div>` : ''}
-                        </div>`;
+                            ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
+                        </div>`);
                     }
                 });
             }
 
-            document.getElementById('content').innerHTML = html;
+            document.getElementById('content').innerHTML = parts.join('');
         }
 
         document.addEventListener('click', (e) => {
@@ -3643,49 +3676,19 @@
             const history = shipping.status_history || {};
             const subHistory = shipping.substatus_history || [];
 
-            // Mapeo de substatus → { texto, dotClass, timeClass }
-            const subMap = {
-                'shipment_paid':         { t: 'Preparando envío',                  d: 'c-gray',   tc: 't-muted' },
-                'ready_to_ship':         { t: 'Listo para enviar',                 d: 'c-gray',   tc: 't-muted' },
-                'picked_up':             { t: 'Retirado por transportista',         d: 'c-blue',   tc: 't-blue' },
-                'in_hub':                { t: 'En centro de distribución',          d: 'c-blue',   tc: 't-blue' },
-                'in_transit':            { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
-                'out_for_delivery':      { t: '🚚 En camino',                       d: 'c-blue',   tc: 't-blue' },
-                'nearby':                { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
-                'almost_there':          { t: '📍 Muy cerca',                       d: 'c-yellow', tc: 't-yellow' },
-                'receiver_absent':       { t: '🚫 Comprador ausente',               d: 'c-red',    tc: 't-red' },
-                'waiting_for_withdrawal':{ t: '📦 Esperando retiro',                d: 'c-orange', tc: 't-orange' },
-                'delivered':             { t: '✅ Entregado',                        d: 'c-green',  tc: 't-green' },
-                'returning_to_sender':   { t: '↩️ Devolviendo al vendedor',          d: 'c-red',    tc: 't-red' },
-                'not_delivered_and_returning':{ t: '↩️ En devolución',              d: 'c-red',    tc: 't-red' },
-                'rescheduled':           { t: '🔄 En camino nuevamente',             d: 'c-orange', tc: 't-orange' },
-                'rescheduled_by_buyer':  { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
-                'buyer_rescheduled':     { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
-                'delayed':               { t: '⏰ Demorado',                         d: 'c-orange', tc: 't-orange' },
-                'out_of_delivery_area':  { t: '📍 Fuera de zona',                   d: 'c-red',    tc: 't-red' },
-                'delivery_failed':       { t: '❌ Entrega fallida',                  d: 'c-red',    tc: 't-red' },
-                'cancelled':             { t: 'Cancelado',                           d: 'c-red',    tc: 't-red' },
-                'buyer_cancelled':       { t: 'Cancelado por comprador',             d: 'c-red',    tc: 't-red' },
-            };
-
-            // Ignorar substatuses "ruidosos" que no aportan info
-            const SKIP = new Set(['shipment_paid', 'ready_to_ship']);
-
-            // Construir lista de eventos con fecha+hora real
             let events = [];
             const seen = new Set();
 
             subHistory.forEach(entry => {
                 const sub = entry.substatus || '';
-                if (SKIP.has(sub)) return;
+                if (SKIP_SUBSTATUS.has(sub)) return;
                 const key = sub + '|' + (entry.date || '');
                 if (seen.has(key)) return;
                 seen.add(key);
-                const meta = subMap[sub] || { t: sub, d: 'c-gray', tc: 't-muted' };
+                const meta = SUBSTATUS_MAP[sub] || { t: sub, d: 'c-gray', tc: 't-muted' };
                 events.push({ date: entry.date, label: meta.t, dot: meta.d, tc: meta.tc });
             });
 
-            // Agregar milestones del status_history si no están cubiertos
             if (history.date_shipped && !events.some(e => e.label.includes('camino'))) {
                 events.push({ date: history.date_shipped, label: '🚚 En camino', dot: 'c-blue', tc: 't-blue' });
             }
@@ -3693,37 +3696,26 @@
                 events.push({ date: history.date_delivered, label: '✅ Entregado', dot: 'c-green', tc: 't-green' });
             }
 
-            // Ordenar cronológico
             events.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
 
-            // Si no hay nada, al menos mostrar Recibido
             if (events.length === 0 && shipping.date_created) {
                 events.push({ date: shipping.date_created, label: '📦 Recibida', dot: 'c-gray', tc: 't-muted' });
             }
 
-            // Estado final pendiente si no entregado/cancelado
             const finalState = getOrderState(shipping);
             const needsPending = finalState === 'pendiente' || finalState === 'en-camino';
 
-            let html = '';
+            const parts = [];
             events.forEach(ev => {
                 const hora = ev.date ? formatearSoloHora(ev.date, fechaEntrega) : null;
-                html += `<div class="utl-item">
-                    <div class="utl-dot ${ev.dot}"></div>
-                    <span class="utl-time ${ev.tc}">${hora || ''}</span>
-                    <span class="utl-label">${ev.label}</span>
-                </div>`;
+                parts.push(`<div class="utl-item"><div class="utl-dot ${ev.dot}"></div><span class="utl-time ${ev.tc}">${hora || ''}</span><span class="utl-label">${ev.label}</span></div>`);
             });
 
             if (needsPending) {
-                html += `<div class="utl-item">
-                    <div class="utl-dot c-pending"></div>
-                    <span class="utl-time t-muted"></span>
-                    <span class="utl-label" style="color:#484f58;">Entrega pendiente</span>
-                </div>`;
+                parts.push(`<div class="utl-item"><div class="utl-dot c-pending"></div><span class="utl-time t-muted"></span><span class="utl-label" style="color:#484f58;">Entrega pendiente</span></div>`);
             }
 
-            return html;
+            return parts.join('');
         }
 
         window.addEventListener('DOMContentLoaded', () => {
