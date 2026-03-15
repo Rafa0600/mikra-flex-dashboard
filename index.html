@@ -1602,7 +1602,10 @@
                 const data = await response.json();
                 if (data.access_token) {
                     tokenCache[cuenta.nombre] = { token: data.access_token, expires: Date.now() + 4 * 60 * 1000 };
-                    if (data.user_id) sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
+                    // Cachear user_id en sessionStorage para evitar fetch doble en cargarOrdenesDeCuenta
+                    if (data.user_id) {
+                        sessionStorage.setItem(`${cuenta.nombre.toLowerCase()}_user_id`, data.user_id);
+                    }
                     return data.access_token;
                 }
                 if (data.error === 'no_token') console.error(`Token no configurado para ${cuenta.nombre}`);
@@ -1847,89 +1850,134 @@
         async function cargarNoEntregados() {
             const myGen = ++loadGeneration;
             const content = document.getElementById('content');
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes fallidos de los últimos 7 días...</div>`;
 
             document.getElementById('statsSection').classList.add('hidden');
             document.getElementById('sortSection').classList.add('hidden');
             document.getElementById('btnMapa').classList.add('hidden');
 
             const hoy = new Date(); hoy.setHours(0,0,0,0);
-            const dateFrom = new Date(hoy); dateFrom.setDate(dateFrom.getDate() - 7);
-            const dateTo = new Date(hoy); dateTo.setDate(dateTo.getDate() + 1); dateTo.setHours(23,59,59,0);
-            const fromStr = dateFrom.toISOString().split('.')[0] + '.000-00:00';
-            const toStr   = dateTo.toISOString().split('.')[0] + '.000-00:00';
+            // Rango de entrega: últimos 7 días (fecha estimada de entrega, no de creación)
+            const pad = n => String(n).padStart(2,'0');
+            const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+            const desde = new Date(hoy); desde.setDate(desde.getDate() - 7);
+            const deliveryFrom = encodeURIComponent(`${fmt(desde)}T00:00:00.000-03:00`);
+            const deliveryTo   = encodeURIComponent(`${fmt(hoy)}T23:59:59.000-03:00`);
 
-            // Query directa: shipping.status=not_delivered, ambas cuentas en paralelo
+            // Progreso compartido
+            const prog = { done: 0, total: 0 };
+            let rafPend = false;
+            function notifyProg() {
+                if (rafPend) return; rafPend = true;
+                requestAnimationFrame(() => {
+                    rafPend = false;
+                    const fill = document.getElementById('neProgressFill');
+                    const wrap = document.getElementById('neProgressWrap');
+                    const txt  = document.getElementById('neProgressText');
+                    if (!fill || !wrap || prog.total <= 0) return;
+                    wrap.style.display = 'block';
+                    fill.style.width = Math.min(100, Math.round(prog.done / prog.total * 100)) + '%';
+                    if (txt) txt.textContent = `${prog.done} de ${prog.total} revisados`;
+                });
+            }
+
+            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
+                <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
+                    <div class="load-progress-track"><div class="load-progress-fill" id="neProgressFill"></div></div>
+                    <div class="load-progress-text" id="neProgressText"></div>
+                </div></div>`;
+
             const shippingIdsVistos = new Set();
-            const CONC = 20;
+            const CONC = 35;
 
-            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta) => {
+            // Pre-fetch tokens en paralelo para ambas cuentas
+            const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
+
+            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta, ci) => {
                 try {
-                    const token = await obtenerTokenCuenta(cuenta);
+                    const token = tokens[ci];
                     if (!token) return [];
                     const cuentaKey = cuenta.nombre.toLowerCase();
                     let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
                     if (!sellerId) {
-                        const td = await (await fetch(`${cuenta.proxy}/get-token`)).json();
+                        const td = await fetch(`${cuenta.proxy}/get-token`).then(r=>r.json()).catch(()=>({}));
                         if (td.user_id) { sellerId = td.user_id; sessionStorage.setItem(`${cuentaKey}_user_id`, sellerId); }
                     }
                     if (!sellerId) return [];
 
-                    // Una sola query filtrando por shipping.status=not_delivered + rango de fecha
-                    const filter = `&order.date_created.from=${encodeURIComponent(fromStr)}&order.date_created.to=${encodeURIComponent(toStr)}&shipping.status=not_delivered&order.status=paid`;
-                    let allOrders = [];
-                    const first = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${filter}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } });
-                    const firstData = await first.json();
-                    allOrders.push(...(firstData.results || []));
-                    const total = firstData.paging?.total || 0;
-                    if (total > 50) {
-                        const pages = Math.min(Math.ceil(total / 50) - 1, 9);
-                        const extra = await Promise.all(
-                            Array.from({ length: pages }, (_, i) =>
+                    // Query A: delivery date range (ML filtra server-side → mucho menos volumen)
+                    // Query B: date_created últimos 10 días para capturar not_delivered que ya fallaron
+                    //          (su estimated_delivery ya pasó hace más de 7 días en algún caso)
+                    const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
+                    const desde10 = new Date(hoy); desde10.setDate(desde10.getDate()-10);
+                    const filterB = `&order.date_created.from=${encodeURIComponent(desde10.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(new Date(hoy.getTime()+86400000).toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+
+                    async function fetchPaged(filter) {
+                        let orders = [];
+                        const fd = await fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${filter}`,
+                            { headers: { 'Authorization': `Bearer ${token}` } }).then(r=>r.json()).catch(()=>({results:[],paging:{}}));
+                        orders.push(...(fd.results||[]));
+                        const total = fd.paging?.total || 0;
+                        if (total > 50) {
+                            const pages = Math.min(Math.ceil(total/50)-1, 9);
+                            const extra = await Promise.all(Array.from({length:pages},(_,i)=>
                                 fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
-                                    { headers: { 'Authorization': `Bearer ${token}` } })
-                                .then(r => r.json()).catch(() => ({ results: [] }))
-                            )
-                        );
-                        extra.forEach(d => allOrders.push(...(d.results || [])));
+                                    {headers:{'Authorization':`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({results:[]}))
+                            ));
+                            extra.forEach(d=>orders.push(...(d.results||[])));
+                        }
+                        return orders;
                     }
 
-                    // Fetch shipments en pool
-                    const ordersConShip = allOrders.filter(o => o.shipping?.id && o.status !== 'cancelled');
-                    const results = new Array(ordersConShip.length).fill(null);
+                    // Ambas queries en paralelo
+                    const [ordersA, ordersB] = await Promise.all([fetchPaged(filterA), fetchPaged(filterB)]);
+
+                    // Deduplicar A+B
+                    const seen = new Set();
+                    const combined = [];
+                    [...ordersA, ...ordersB].forEach(o => {
+                        const sid = o.shipping?.id;
+                        if (!sid || seen.has(sid) || o.status === 'cancelled') return;
+                        seen.add(sid);
+                        combined.push(o);
+                    });
+
+                    console.log(`[${cuenta.nombre}] NE — A:${ordersA.length} B:${ordersB.length} → ${combined.length} únicos`);
+
+                    prog.total += combined.length; notifyProg();
+
+                    const results = new Array(combined.length).fill(null);
                     let idx = 0;
                     async function worker() {
-                        while (idx < ordersConShip.length) {
+                        while (idx < combined.length) {
                             const i = idx++;
-                            const order = ordersConShip[i];
-                            const sid = order.shipping.id;
+                            const order = combined[i];
                             try {
-                                const r = await fetch(`${cuenta.proxy}/api/shipments/${sid}`, { headers: { 'Authorization': `Bearer ${token}` } });
-                                if (!r.ok) continue;
-                                const shipping = await r.json();
-                                if (shipping.logistic_type !== 'self_service') continue;
-                                // CLAVE: solo los que estuvieron en camino (date_shipped existe)
-                                // Excluye pendientes que nunca salieron
-                                if (!shipping.status_history?.date_shipped) continue;
-                                const state = getOrderState(shipping);
-                                if (state === 'reprogramado') {
-                                    results[i] = { order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color };
+                                const r = await fetch(`${cuenta.proxy}/api/shipments/${order.shipping.id}`,
+                                    { headers: { 'Authorization': `Bearer ${token}` } });
+                                if (r.ok) {
+                                    const shipping = await r.json();
+                                    if (shipping.logistic_type === 'self_service'
+                                        && shipping.status_history?.date_shipped
+                                        && !shipping.status_history?.date_delivered
+                                        && (shipping.status === 'shipped' || shipping.status === 'not_delivered')
+                                    ) {
+                                        results[i] = { order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color };
+                                    }
                                 }
                             } catch {}
+                            prog.done++; notifyProg();
                         }
                     }
                     await Promise.all(Array.from({ length: CONC }, worker));
                     return results.filter(Boolean);
                 } catch (e) {
-                    console.error(`Error cargarNoEntregados ${cuenta.nombre}:`, e);
+                    console.error(`cargarNoEntregados ${cuenta.nombre}:`, e);
                     return [];
                 }
             }));
 
             if (loadGeneration !== myGen) return;
 
-            // Deduplicar y ordenar: más viejo primero (más urgente)
             const todos = [];
             cuentaResults.flat().forEach(item => {
                 const sid = item.shipping.id;
@@ -1938,14 +1986,19 @@
                 todos.push(item);
             });
 
+            // Ordenar: shipped (aún en camino) primero por fecha desc, not_delivered al final por fecha asc
             todos.sort((a, b) => {
                 const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
                 const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
+                // shipped sin entregar = más urgente, ponerlos primero
+                const pa = a.shipping.status === 'shipped' ? 0 : 1;
+                const pb = b.shipping.status === 'shipped' ? 0 : 1;
+                if (pa !== pb) return pa - pb;
                 return fa.localeCompare(fb);
             });
 
-            document.getElementById('badgeFecha').textContent = `🚫 NO ENTREGADOS (7 días)`;
-            document.getElementById('badgeCaba').textContent = `📦 ${todos.length} viaje${todos.length !== 1 ? 's' : ''}`;
+            document.getElementById('badgeFecha').textContent = `🚫 SIN ENTREGAR (7 días)`;
+            document.getElementById('badgeCaba').textContent = `📦 ${todos.length} envío${todos.length !== 1 ? 's' : ''}`;
             document.getElementById('badgeProvincia').textContent = '';
             document.getElementById('infoBadges').style.display = 'flex';
 
@@ -1959,87 +2012,87 @@
                 return;
             }
 
-            // Agrupar por tipo de problema
-            const grupos = {};
             const grupoLabels = {
-                'receiver_absent':            { label: '🚫 Comprador ausente',       color: '#f85149' },
-                'rescheduled_by_buyer':        { label: '📅 Reprogramado por comprador', color: '#FF9800' },
-                'buyer_rescheduled':           { label: '📅 Reprogramado por comprador', color: '#FF9800' },
-                'rescheduled':                 { label: '🔄 Reprogramado',             color: '#FF9800' },
-                'delayed':                     { label: '⏰ Demorado',                  color: '#FF9800' },
-                'returning_to_sender':         { label: '↩️ Devolviendo al vendedor',   color: '#f85149' },
-                'not_delivered_and_returning': { label: '↩️ En devolución',             color: '#f85149' },
-                'out_of_delivery_area':        { label: '📍 Fuera de zona',             color: '#f85149' },
-                'delivery_failed':             { label: '❌ Entrega fallida',            color: '#f85149' },
-                'waiting_for_withdrawal':      { label: '📦 Esperando retiro',           color: '#FF9800' },
+                'receiver_absent':            { label: '🚫 Comprador ausente',          color: '#f85149' },
+                'rescheduled_by_buyer':        { label: '📅 Reprog. por comprador',      color: '#FF9800' },
+                'buyer_rescheduled':           { label: '📅 Reprog. por comprador',      color: '#FF9800' },
+                'rescheduled':                 { label: '🔄 Reprogramado',               color: '#FF9800' },
+                'delayed':                     { label: '⏰ Demorado',                    color: '#FF9800' },
+                'returning_to_sender':         { label: '↩️ Devolviendo al vendedor',     color: '#f85149' },
+                'not_delivered_and_returning': { label: '↩️ En devolución',               color: '#f85149' },
+                'out_of_delivery_area':        { label: '📍 Fuera de zona',               color: '#f85149' },
+                'delivery_failed':             { label: '❌ Entrega fallida',              color: '#f85149' },
+                'waiting_for_withdrawal':      { label: '📦 Esperando retiro',             color: '#FF9800' },
+                'out_for_delivery':            { label: '🚚 En camino (sin confirmar)',    color: '#00d9ff' },
+                'in_transit':                  { label: '🚚 En camino',                   color: '#00d9ff' },
             };
-            const colorDefault = '#8b949e';
 
-            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const enCaminoCount = todos.filter(t => t.shipping.status === 'shipped').length;
+            const fallidoCount  = todos.length - enCaminoCount;
 
-            let html = `<div style="background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:12px 18px;border-radius:10px;text-align:center;font-weight:700;font-size:15px;margin-bottom:16px;">
-                🚫 ${todos.length} viaje${todos.length !== 1 ? 's' : ''} fallido${todos.length !== 1 ? 's' : ''} en los últimos 7 días
+            let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                ${enCaminoCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">sin confirmar entrega</span></div>` : ''}
+                ${fallidoCount  > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">intento de entrega fallido</span></div>` : ''}
             </div>`;
 
-            todos.forEach(({ shipping, order, cuentaNombre, cuentaColor }) => {
+            todos.forEach(({ shipping, order, cuentaNombre }) => {
                 const sub = (shipping.substatus || '').toLowerCase();
-                const grupoInfo = grupoLabels[sub] || { label: `🔄 ${sub || 'Reprogramado'}`, color: colorDefault };
-                const detail = getReprogramadoDetail(shipping);
+                const isEnCamino = shipping.status === 'shipped';
+                const grupoInfo = isEnCamino
+                    ? (grupoLabels[sub] || { label: '🚚 En camino (sin confirmar)', color: '#00d9ff' })
+                    : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
 
-                const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const ciudad = shipping.receiver_address?.city?.name || '';
+                const barrio  = shipping.receiver_address?.neighborhood?.name || '';
+                const ciudad  = shipping.receiver_address?.city?.name || '';
                 const zipCode = shipping.receiver_address?.zip_code || '';
-                const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                const calle = shipping.receiver_address?.street_name || '';
-                const numero = shipping.receiver_address?.street_number || '';
+                const zona    = getZonaDetallada(barrio, ciudad, zipCode);
+                const calle   = shipping.receiver_address?.street_name || '';
+                const numero  = shipping.receiver_address?.street_number || '';
                 const provincia = shipping.receiver_address?.state?.name || '';
                 const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
 
                 const comprador = order.buyer?.nickname || 'N/A';
-                const orderId = order.id || '';
-                const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                const orderId   = order.id || '';
+                const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
-                                     shipping.shipping_option?.estimated_delivery_final?.date;
-                let fechaLabel = '', diasAtraso = '', urgenciaColor = '#FF9800';
+                const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || shipping.shipping_option?.estimated_delivery_final?.date;
+                let fechaLabel = '', diasAtraso = '', urgenciaColor = isEnCamino ? '#00d9ff' : '#FF9800';
                 if (fechaEntrega) {
                     const entrega = new Date(fechaEntrega); entrega.setHours(0,0,0,0);
-                    const diffDias = Math.round((hoy.getTime() - entrega.getTime()) / 86400000);
-                    fechaLabel = `${dias[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                    const diffDias = Math.round((hoy - entrega) / 86400000);
+                    fechaLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
                     if (diffDias > 0) {
-                        diasAtraso = `hace ${diffDias} día${diffDias > 1 ? 's' : ''}`;
+                        diasAtraso = `hace ${diffDias}d`;
                         urgenciaColor = diffDias >= 5 ? '#f44336' : diffDias >= 3 ? '#FF6B00' : '#FF9800';
                     } else if (diffDias === 0) {
                         diasAtraso = 'HOY'; urgenciaColor = '#FFE600';
                     } else {
-                        diasAtraso = `en ${Math.abs(diffDias)}d`; urgenciaColor = '#00d9ff';
+                        diasAtraso = `en ${Math.abs(diffDias)}d`;
                     }
                 }
 
-                // Hora del último evento problemático
                 const subHistory = shipping.substatus_history || [];
-                const lastEvent = [...subHistory].reverse().find(e => e.substatus === sub);
-                const horaEvento = lastEvent?.date ? formatearSoloHora(lastEvent.date) : null;
+                const lastProb = [...subHistory].reverse().find(e => e.substatus === sub);
+                const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
 
                 const cuentaBadge = cuentaNombre === 'Mikra'
                     ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
                     : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
 
-                html += `<div class="envio-card reprogramado" style="border-left-color:${grupoInfo.color};">
-                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                            <span style="background:${grupoInfo.color};color:white;padding:4px 12px;border-radius:16px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ` · ${horaEvento}` : ''}</span>
-                            ${cuentaBadge}
+                html += `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color}; margin-bottom:8px;">
+                    <div class="simple-header">
+                        <div style="flex:1;">
+                            <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:4px;">📍 ${zona}</div>
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                <span style="background:${grupoInfo.color};color:${isEnCamino?'#000':'white'};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
+                                ${cuentaBadge}
+                                ${fechaLabel ? `<span style="background:${urgenciaColor};color:#000;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">📅 ${fechaLabel}${diasAtraso ? ' · '+diasAtraso : ''}</span>` : ''}
+                            </div>
                         </div>
-                        <a href="${orderUrl}" target="_blank" class="order-link" style="font-size:12px;">#${orderId}</a>
+                        <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
                     </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
-                        ${fechaLabel ? `<div style="background:${urgenciaColor};color:#000;padding:6px 12px;border-radius:8px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;">
-                            📅 ${fechaLabel} <span style="background:rgba(0,0,0,0.2);padding:2px 7px;border-radius:6px;font-size:11px;">${diasAtraso}</span>
-                        </div>` : ''}
-                        <span style="color:#FFE600;font-weight:700;font-size:13px;">📍 ${zona}</span>
-                    </div>
-                    <div class="card-address-row" style="margin-bottom:0;">
+                    <div class="card-address-row" style="margin-top:8px;">
                         <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
                         <span class="card-sep">·</span>
                         <span class="card-comprador">👤 <strong>${comprador}</strong></span>
@@ -2047,7 +2100,7 @@
                 </div>`;
             });
 
-            html += `<div style="text-align:center;margin-top:20px;">
+            html += `<div style="text-align:center;margin-top:16px;">
                 <button onclick="cargarFlexHoy()" style="background:#3483FA;padding:12px 30px;font-size:15px;">🔙 Volver a HOY</button>
             </div>`;
 
@@ -2310,20 +2363,24 @@
             const shippingIdsVistos = new Set();
 
             // Objeto de progreso compartido por ambas cuentas
+            // En background refresh NO tocamos el DOM (hay contenido cacheado visible)
             const progress = { done: 0, total: 0 };
-            function notifyProgress() {
+            const notifyProgress = backgroundRefresh ? () => {} : () => {
                 if (_progRafPending) return;
                 _progRafPending = true;
                 requestAnimationFrame(() => {
                     _progRafPending = false;
                     updateLoadingProgressDOM(progress.done, progress.total);
                 });
-            }
+            };
+
+            // Pre-fetch tokens de ambas cuentas en paralelo antes de las queries
+            const tokensPreFetch = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
 
             // Cargar AMBAS cuentas en PARALELO (2x más rápido)
-            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta) => {
+            const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta, ci) => {
                 try {
-                    const token = await obtenerTokenCuenta(cuenta);
+                    const token = tokensPreFetch[ci];
                     if (!token) {
                         console.error(`No hay token para ${cuenta.nombre}`);
                         return [];
@@ -2403,6 +2460,8 @@
             const cuentaKey = cuenta.nombre.toLowerCase();
             let sellerId = sessionStorage.getItem(`${cuentaKey}_user_id`);
 
+            // Si no tenemos sellerId todavía, intentar extraerlo del token response
+            // (ya fue fetcheado en obtenerTokenCuenta — evitamos un round-trip extra)
             if (!sellerId) {
                 try {
                     const tokenResponse = await fetch(`${cuenta.proxy}/get-token`);
@@ -2421,34 +2480,7 @@
                 return [];
             }
 
-            // ── ESTRATEGIA DUAL: dos queries pequeñas en paralelo ───────────
-            //
-            // ANTES: query por date_created (3-8 días) → 200-400 órdenes →
-            //        fetchear cada shipment para ver si la fecha de entrega coincide.
-            //        80% se descartan DESPUÉS de hacer el request.
-            //
-            // AHORA:
-            //  Query A — filter por shipping.estimated_delivery_time = targetDate
-            //            → ML devuelve SOLO las órdenes con entrega ese día (~30-60)
-            //  Query B — filter por shipping.status=not_delivered (reprogramados recientes)
-            //            → órdenes que no se entregaron y siguen pendientes (~10-20)
-            //  Ambas corren en paralelo. Total: 40-80 órdenes en lugar de 400.
-            // ────────────────────────────────────────────────────────────────
-
-            // Timezone Buenos Aires para el filtro de fecha
-            const pad = n => String(n).padStart(2,'0');
-            const td = targetDate;
-            const targetDateStr = `${td.getFullYear()}-${pad(td.getMonth()+1)}-${pad(td.getDate())}`;
-            const deliveryFrom = encodeURIComponent(`${targetDateStr}T00:00:00.000-03:00`);
-            const deliveryTo   = encodeURIComponent(`${targetDateStr}T23:59:59.000-03:00`);
-
-            // Rango para reprogramados: desde el viernes anterior
-            const reprogFrom = calcularDateFrom(targetDate);
-            const reprogFromStr = reprogFrom.toISOString().split('.')[0] + '.000-00:00';
-
-            const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
-            const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&shipping.status=not_delivered&order.status=paid`;
-
+            // ── Helper de paginación ──────────────────────────────────────
             async function fetchAllPages(filter) {
                 let orders = [];
                 try {
@@ -2460,7 +2492,7 @@
                     orders.push(...(firstData.results || []));
                     const total = firstData.paging?.total || 0;
                     if (total > 50) {
-                        const pages = Math.min(Math.ceil(total / 50) - 1, 9); // máx 10 páginas = 500
+                        const pages = Math.min(Math.ceil(total / 50) - 1, 9);
                         const extra = await Promise.all(
                             Array.from({ length: pages }, (_, i) =>
                                 fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
@@ -2476,34 +2508,67 @@
                 return orders;
             }
 
-            // Ambas queries en paralelo
-            const [ordersA, ordersB] = await Promise.all([
-                fetchAllPages(filterA),
-                fetchAllPages(filterB),
-            ]);
+            // ── ESTRATEGIA SEGÚN ANTIGÜEDAD DE LA FECHA ────────────────────
+            //
+            // Fechas recientes (≤3 días): estrategia dual con filtro por delivery date
+            //   → Query A: shipping.estimated_delivery_time = targetDate (ML server-side)
+            //   → Query B: not_delivered recientes
+            //
+            // Fechas antiguas (>3 días): siempre date_created range
+            //   → El filtro estimated_delivery_time no es confiable para el pasado
+            //   → ML puede devolver resultados de fechas distintas
+            // ────────────────────────────────────────────────────────────────
 
-            // Si Query A vino vacía (filtro no soportado por ML), fallback al método anterior
-            // con rango por date_created (evita quedarse sin datos)
+            const hoyCheck = new Date(); hoyCheck.setHours(0,0,0,0);
+            const diasAtras = Math.round((hoyCheck - targetDate) / 86400000);
+            const esFechaAntigua = diasAtras > 3;
+
             let allOrders;
-            if (ordersA.length === 0 && ordersB.length === 0) {
-                console.warn(`[${cuenta.nombre}] Filtro por delivery date sin resultados, usando fallback por date_created`);
+
+            if (esFechaAntigua) {
+                // Para fechas históricas: query simple por date_created con rango desde viernes anterior
                 const dateFrom = calcularDateFrom(targetDate);
                 const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
-                const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                allOrders = await fetchAllPages(fbFilter);
+                const historFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                console.log(`[${cuenta.nombre}] Fecha antigua (${diasAtras}d atrás), usando date_created range`);
+                allOrders = await fetchAllPages(historFilter);
             } else {
-                // Merge A + B desduplicando por shipping.id
-                const seen = new Set();
-                allOrders = [];
-                [...ordersA, ...ordersB].forEach(o => {
-                    const sid = o.shipping?.id;
-                    if (!sid || seen.has(sid)) return;
-                    seen.add(sid);
-                    allOrders.push(o);
-                });
-            }
+                // Timezone Buenos Aires para el filtro de fecha
+                const pad = n => String(n).padStart(2,'0');
+                const td = targetDate;
+                const targetDateStr = `${td.getFullYear()}-${pad(td.getMonth()+1)}-${pad(td.getDate())}`;
+                const deliveryFrom = encodeURIComponent(`${targetDateStr}T00:00:00.000-03:00`);
+                const deliveryTo   = encodeURIComponent(`${targetDateStr}T23:59:59.000-03:00`);
+                const reprogFrom   = calcularDateFrom(targetDate);
+                const reprogFromStr = reprogFrom.toISOString().split('.')[0] + '.000-00:00';
 
-            console.log(`[${cuenta.nombre}] Query A (delivery date): ${ordersA.length} | Query B (not_delivered): ${ordersB.length} | Total único: ${allOrders.length}`);
+                const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
+                const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&order.status=paid`;
+
+                const [ordersA, ordersB] = await Promise.all([
+                    fetchAllPages(filterA),
+                    fetchAllPages(filterB),
+                ]);
+
+                if (ordersA.length === 0 && ordersB.length === 0) {
+                    // Fallback por date_created si ambas vacías
+                    console.warn(`[${cuenta.nombre}] Dual query sin resultados, fallback date_created`);
+                    const dateFrom = calcularDateFrom(targetDate);
+                    const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
+                    const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                    allOrders = await fetchAllPages(fbFilter);
+                } else {
+                    const seen = new Set();
+                    allOrders = [];
+                    [...ordersA, ...ordersB].forEach(o => {
+                        const sid = o.shipping?.id;
+                        if (!sid || seen.has(sid)) return;
+                        seen.add(sid);
+                        allOrders.push(o);
+                    });
+                }
+                console.log(`[${cuenta.nombre}] Query A: ${ordersA?.length??0} | Query B: ${ordersB?.length??0} | Total: ${allOrders.length}`);
+            }
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
 
@@ -2539,7 +2604,7 @@
             // Pool de concurrencia limitada: procesa de a CONCURRENCY a la vez
             // IMPORTANTE: siempre verificar esEntregaParaFecha en el shipment real,
             // porque los filtros de ML no son 100% exactos y Query B trae de cualquier fecha.
-            const CONCURRENCY = 25;
+            const CONCURRENCY = 35;
             async function pooledFetch(orders) {
                 const results = new Array(orders.length).fill(null);
                 let idx = 0;
