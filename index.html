@@ -1296,7 +1296,7 @@
     <div class="container">
         <!-- Fila única: badges + acciones -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-            <span class="version-badge" style="flex-shrink:0;">v3.8</span>
+            <span class="version-badge" style="flex-shrink:0;">v3.9</span>
             <!-- badges CABA/Prov siempre visibles -->
             <div id="infoBadges" style="display:flex; gap:5px; align-items:center; flex:1;">
                 <span class="info-badge caba" id="badgeCaba" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🏙️ CABA: 0</span>
@@ -1736,33 +1736,15 @@
         function formatearSoloHora(fechaISO, fechaEsperada = null) {
             if (!fechaISO) return null;
             const fecha = new Date(fechaISO);
-            
-            // Si hay fecha esperada y no coincide, mostrar día también
             if (fechaEsperada) {
-                const esperada = new Date(fechaEsperada);
-                esperada.setHours(0, 0, 0, 0);
-                const actual = new Date(fechaISO);
-                actual.setHours(0, 0, 0, 0);
-                
+                const esperada = new Date(fechaEsperada); esperada.setHours(0,0,0,0);
+                const actual = new Date(fechaISO); actual.setHours(0,0,0,0);
                 if (esperada.getTime() !== actual.getTime()) {
                     const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                    const dia = dias[fecha.getDay()];
-                    const hora = fecha.toLocaleString('es-AR', { 
-                        timeZone: 'America/Argentina/Buenos_Aires',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                    });
-                    return `${hora} (${dia})`;
+                    return `${_fmtHora.format(fecha)} (${dias[fecha.getDay()]})`;
                 }
             }
-            
-            return fecha.toLocaleString('es-AR', { 
-                timeZone: 'America/Argentina/Buenos_Aires',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
+            return _fmtHora.format(fecha);
         }
 
         function esEntregaParaFecha(shipping, targetDate) {
@@ -1785,6 +1767,19 @@
         const CACHE_PREFIX = 'flex_v1_';
         const CACHE_TTL_TODAY   = 5  * 60 * 1000;
         const CACHE_TTL_PAST    = 60 * 60 * 1000;
+        const CACHE_TTL_OLD     =  8 * 60 * 60 * 1000; // días con >24h de antigüedad no cambian
+
+        // ── Formatters de fecha/hora reutilizables (evita recrearlos N veces) ──
+        const _fmtHora = new Intl.DateTimeFormat('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        });
+        const _fmtFechaCorta = new Intl.DateTimeFormat('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+        });
+        const _fmtDia = new Intl.DateTimeFormat('es-AR', { weekday: 'short' });
+        const _fmtDiaMes = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' });
 
         function _cacheKey(date) {
             return CACHE_PREFIX + date.toISOString().split('T')[0];
@@ -1797,8 +1792,10 @@
                 const { ts, orders } = JSON.parse(raw);
                 const hoy = new Date(); hoy.setHours(0,0,0,0);
                 const isToday = date.toDateString() === hoy.toDateString();
-                const ttl = isToday ? CACHE_TTL_TODAY : CACHE_TTL_PAST;
-                if (Date.now() - ts > ttl) { sessionStorage.removeItem(_cacheKey(date)); return null; }
+                const ageMs = Date.now() - ts;
+                const isOld = !isToday && (hoy - date) > 86400000; // más de 1 día atrás
+                const ttl = isToday ? CACHE_TTL_TODAY : isOld ? CACHE_TTL_OLD : CACHE_TTL_PAST;
+                if (ageMs > ttl) { sessionStorage.removeItem(_cacheKey(date)); return null; }
                 return orders;
             } catch { return null; }
         }
@@ -3030,11 +3027,7 @@
 
         function formatDateShort(dateStr) {
             if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return d.toLocaleString('es-AR', {
-                timeZone: 'America/Argentina/Buenos_Aires',
-                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false
-            });
+            return _fmtFechaCorta.format(new Date(dateStr));
         }
 
         function logShippingStates() {
@@ -3337,21 +3330,9 @@
         }
 
         function mostrarMapa() {
-            // Contar en camino, reprogramados y entregados
-            let enCamino = allFlexOrders.filter(({ shipping }) => {
-                const state = getOrderState(shipping);
-                return state === 'pendiente' || state === 'en-camino';
-            });
-
-            let reprogramados = allFlexOrders.filter(({ shipping }) => {
-                const state = getOrderState(shipping);
-                return state === 'reprogramado';
-            });
-
-            let entregados = allFlexOrders.filter(({ shipping }) => {
-                const state = getOrderState(shipping);
-                return state === 'entregado';
-            });
+            const enCamino      = allFlexOrders.filter(({ shipping }) => shipping._state === 'pendiente' || shipping._state === 'en-camino');
+            const reprogramados = allFlexOrders.filter(({ shipping }) => shipping._state === 'reprogramado');
+            const entregados    = allFlexOrders.filter(({ shipping }) => shipping._state === 'entregado');
 
             document.getElementById('mapCountEnCamino').textContent = enCamino.length;
             document.getElementById('mapCountReprogramado').textContent = reprogramados.length;
@@ -3405,42 +3386,19 @@
             markersLayer.clearLayers();
 
             let ordersParaMapa = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
-                const state = getOrderState(shipping);
-                
-                // Excluir canceladas siempre
+                const state = shipping._state;
                 if (state === 'cancelado') return false;
-                
-                // Filtrar por estado según toggles
                 let estadoPasa = false;
-                if (state === 'pendiente' || state === 'en-camino') {
-                    estadoPasa = mapShowEnCamino;
-                } else if (state === 'reprogramado') {
-                    estadoPasa = mapShowReprogramados;
-                } else if (state === 'entregado') {
-                    estadoPasa = mapShowEntregados;
-                }
-                
+                if (state === 'pendiente' || state === 'en-camino') estadoPasa = mapShowEnCamino;
+                else if (state === 'reprogramado') estadoPasa = mapShowReprogramados;
+                else if (state === 'entregado') estadoPasa = mapShowEntregados;
                 if (!estadoPasa) return false;
-                
-                // APLICAR FILTRO DE CUENTA
-                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) {
-                    return false;
-                }
-                
-                // APLICAR FILTRO DE ZONA
+                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return false;
                 if (currentZoneFilter !== 'all') {
-                    const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                    const ciudad = shipping.receiver_address?.city?.name || '';
-                    const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona = getZonaDetallada(barrio, ciudad, zipCode);
-                    
-                    if (currentZoneFilter === 'CABA') {
-                        if (!esCABA(zona)) return false;
-                    } else {
-                        if (zona !== currentZoneFilter) return false;
-                    }
+                    const zona = shipping._zona;
+                    if (currentZoneFilter === 'CABA') { if (!esCABA(zona)) return false; }
+                    else { if (zona !== currentZoneFilter) return false; }
                 }
-                
                 return true;
             });
 
@@ -3453,15 +3411,13 @@
             ordersParaMapa.forEach(({ shipping, orders: orderList, cuentaNombre, cuentaColor }) => {
                 const lat = shipping.receiver_address?.latitude;
                 const lng = shipping.receiver_address?.longitude;
-                
                 if (!lat || !lng) return;
 
-                const state = getOrderState(shipping);
+                const state = shipping._state;
+                const zona  = shipping._zona;
                 const calle = shipping.receiver_address?.street_name || '';
                 const numero = shipping.receiver_address?.street_number || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
-                const barrio = shipping.receiver_address?.neighborhood?.name || '';
-                const zona = getZonaDetallada(barrio, ciudad, shipping.receiver_address?.zip_code || '');
                 const comprador = orderList[0]?.buyer?.nickname || 'N/A';
                 const orderId = orderList[0]?.id || '';
                 const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
@@ -3731,6 +3687,8 @@
             document.getElementById('sortSection').classList.remove('hidden');
             document.getElementById('btnMapa').classList.remove('hidden');
             displayOrders('all');
+            // Pre-cargar días vecinos en background para clicks instantáneos
+            if (currentNavDate) precargarDiasAdyacentes(currentNavDate);
         }
 
         function navDia(delta) {
@@ -3781,7 +3739,7 @@
                 events.push({ date: shipping.date_created, label: '📦 Recibida', dot: 'c-gray', tc: 't-muted' });
             }
 
-            const finalState = getOrderState(shipping);
+            const finalState = shipping._state || getOrderState(shipping);
             const needsPending = finalState === 'pendiente' || finalState === 'en-camino';
 
             const parts = [];
@@ -3798,17 +3756,37 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            // Sincronizar label del botón de vista
-            // vistaSimple siempre activa
-            // Construir barra de días (sin fecha activa todavía)
             buildDateNav();
             actualizarLabelDiaAnterior();
-            // Cargar HOY y marcar la fecha
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             currentNavDate = hoy;
             buildDateNav();
+            // Pre-calentar tokens de ambas cuentas en paralelo antes del primer fetch de datos
+            Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
             cargarFlexHoy();
         });
+
+        // Pre-carga especulativa: tras renderizar un día, cargar en background
+        // los días laboral anterior y siguiente para que el nav sea instantáneo
+        function precargarDiasAdyacentes(fechaBase) {
+            const adyacentes = [];
+            // día anterior hábil
+            let prev = new Date(fechaBase);
+            do { prev.setDate(prev.getDate() - 1); } while (prev.getDay() === 0 || prev.getDay() === 6);
+            // día siguiente hábil
+            let next = new Date(fechaBase);
+            do { next.setDate(next.getDate() + 1); } while (next.getDay() === 0 || next.getDay() === 6);
+
+            [prev, next].forEach(fecha => {
+                fecha.setHours(0,0,0,0);
+                if (!loadFromCache(fecha)) {
+                    // Cargar en background sin tocar el DOM
+                    setTimeout(() => {
+                        cargarFlexPorFecha(fecha, '', true, null, true).catch(() => {});
+                    }, 1500); // esperar que termine la carga principal
+                }
+            });
+        }
     </script>
     
     <!-- Leaflet JS -->
