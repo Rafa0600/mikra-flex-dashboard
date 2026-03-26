@@ -758,20 +758,32 @@
         .load-progress-track {
             background: #21262d;
             border-radius: 20px;
-            height: 10px;
+            height: 22px;
             overflow: hidden;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
+            position: relative;
         }
         .load-progress-fill {
             height: 100%;
             border-radius: 20px;
             background: linear-gradient(90deg, #FFE600, #ff9800);
-            transition: width 0.15s ease-out;
+            transition: width 0.2s ease-out;
             width: 0%;
         }
+        .load-progress-pct {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            font-weight: 700;
+            color: #e6edf3;
+            pointer-events: none;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+            white-space: nowrap;
+        }
         .load-progress-text {
-            font-size: 12px;
-            color: #8b949e;
+            font-size: 11px;
+            color: #484f58;
             font-weight: 400;
         }
 
@@ -1284,7 +1296,7 @@
     <div class="container">
         <!-- Fila única: badges + acciones -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-            <span class="version-badge" style="flex-shrink:0;">v3.7</span>
+            <span class="version-badge" style="flex-shrink:0;">v3.8</span>
             <!-- badges CABA/Prov siempre visibles -->
             <div id="infoBadges" style="display:flex; gap:5px; align-items:center; flex:1;">
                 <span class="info-badge caba" id="badgeCaba" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🏙️ CABA: 0</span>
@@ -1958,15 +1970,19 @@
                     const txt  = document.getElementById('neProgressText');
                     if (!fill || !wrap || prog.total <= 0) return;
                     wrap.style.display = 'block';
-                    fill.style.width = Math.min(100, Math.round(prog.done / prog.total * 100)) + '%';
-                    if (txt) txt.textContent = `${prog.done} de ${prog.total} revisados`;
+                    const pct = Math.min(100, Math.round(prog.done / prog.total * 100));
+                    fill.style.width = pct + '%';
+                    if (txt) txt.textContent = `${pct}%`;
                 });
             }
 
             content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
                 <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
-                    <div class="load-progress-track"><div class="load-progress-fill" id="neProgressFill"></div></div>
-                    <div class="load-progress-text" id="neProgressText"></div>
+                    <div class="load-progress-track">
+                        <div class="load-progress-fill" id="neProgressFill"></div>
+                        <div class="load-progress-pct" id="neProgressText">0%</div>
+                    </div>
+                    <div class="load-progress-text" id="neProgressSub"></div>
                 </div></div>`;
 
             const shippingIdsVistos = new Set();
@@ -2085,21 +2101,24 @@
                 const sid = item.shipping.id;
                 if (shippingIdsVistos.has(sid)) return;
                 shippingIdsVistos.add(sid);
+                // Excluir paquetes con fecha estimada HOY (aún en camino, no son "atrasados")
+                const fechaEntItem = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                  || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                if (fechaEntItem) {
+                    const entItem = new Date(fechaEntItem); entItem.setHours(0,0,0,0);
+                    if (entItem.getTime() === hoy.getTime()) return;
+                }
                 todos.push(item);
             });
 
-            // Ordenar: shipped (aún en camino) primero por fecha desc, not_delivered al final por fecha asc
+            // Ordenar de más viejo a más nuevo (fecha estimada ascendente)
             todos.sort((a, b) => {
                 const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
                 const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                // shipped sin entregar = más urgente, ponerlos primero
-                const pa = a.shipping.status === 'shipped' ? 0 : 1;
-                const pb = b.shipping.status === 'shipped' ? 0 : 1;
-                if (pa !== pb) return pa - pb;
                 return fa.localeCompare(fb);
             });
 
-            document.getElementById('badgeFecha').textContent = `🚫 SIN ENTREGAR (7 días)`;
+            document.getElementById('badgeFecha').textContent = `🚫 ATRASADOS (7 días)`;
             document.getElementById('badgeCaba').textContent = `📦 ${todos.length} envío${todos.length !== 1 ? 's' : ''}`;
             document.getElementById('badgeProvincia').textContent = '';
             document.getElementById('infoBadges').style.display = 'flex';
@@ -2107,7 +2126,7 @@
             if (todos.length === 0) {
                 content.innerHTML = `<div class="no-results" style="padding:40px; text-align:center;">
                     <div style="font-size:40px; margin-bottom:12px;">✅</div>
-                    Todos los viajes de los últimos 7 días se entregaron correctamente
+                    No hay viajes atrasados en los últimos 7 días
                     <br><br>
                     <button onclick="cargarFlexHoy()">🔙 Volver a HOY</button>
                 </div>`;
@@ -2130,83 +2149,143 @@
             };
 
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            const enCaminoCount = todos.filter(t => t.shipping.status === 'shipped').length;
-            const fallidoCount  = todos.length - enCaminoCount;
+            const fallidoCount  = todos.filter(t => t.shipping.status === 'not_delivered').length;
+            const enCaminoCount = todos.length - fallidoCount;
 
-            let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                ${enCaminoCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">sin confirmar entrega</span></div>` : ''}
-                ${fallidoCount  > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">intento de entrega fallido</span></div>` : ''}
-            </div>`;
-
-            todos.forEach(({ shipping, order, cuentaNombre }) => {
-                const sub = (shipping.substatus || '').toLowerCase();
-                const isEnCamino = shipping.status === 'shipped';
-                const grupoInfo = isEnCamino
-                    ? (grupoLabels[sub] || { label: '🚚 En camino (sin confirmar)', color: '#00d9ff' })
-                    : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
-
-                const barrio  = shipping.receiver_address?.neighborhood?.name || '';
-                const ciudad  = shipping.receiver_address?.city?.name || '';
-                const zipCode = shipping.receiver_address?.zip_code || '';
-                const zona    = getZonaDetallada(barrio, ciudad, zipCode);
-                const calle   = shipping.receiver_address?.street_name || '';
-                const numero  = shipping.receiver_address?.street_number || '';
-                const provincia = shipping.receiver_address?.state?.name || '';
-                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
-
-                const comprador = order.buyer?.nickname || 'N/A';
-                const orderId   = order.id || '';
-                const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-
-                const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || shipping.shipping_option?.estimated_delivery_final?.date;
-                let fechaLabel = '', diasAtraso = '', urgenciaColor = isEnCamino ? '#00d9ff' : '#FF9800';
-                if (fechaEntrega) {
-                    const entrega = new Date(fechaEntrega); entrega.setHours(0,0,0,0);
+            // Construir map de grupos (clave = YYYY-MM-DD)
+            const groups = new Map();
+            todos.forEach(item => {
+                const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                               || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                let gKey = 'sin-fecha', gLabel = 'Sin fecha', gAtraso = '', gColor = '#484f58';
+                if (fechaEnt) {
+                    const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
                     const diffDias = Math.round((hoy - entrega) / 86400000);
-                    fechaLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                    gKey = fechaEnt.split('T')[0];
+                    gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
                     if (diffDias > 0) {
-                        diasAtraso = `hace ${diffDias}d`;
-                        urgenciaColor = diffDias >= 5 ? '#f44336' : diffDias >= 3 ? '#FF6B00' : '#FF9800';
+                        gAtraso = `hace ${diffDias}d`;
+                        gColor = diffDias >= 5 ? '#f44336' : diffDias >= 3 ? '#FF6B00' : '#FF9800';
                     } else if (diffDias === 0) {
-                        diasAtraso = 'HOY'; urgenciaColor = '#FFE600';
+                        gAtraso = 'HOY'; gColor = '#FFE600';
                     } else {
-                        diasAtraso = `en ${Math.abs(diffDias)}d`;
+                        gAtraso = `en ${Math.abs(diffDias)}d`; gColor = '#00d9ff';
                     }
                 }
-
-                const subHistory = shipping.substatus_history || [];
-                const lastProb = [...subHistory].reverse().find(e => e.substatus === sub);
-                const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
-
-                const cuentaBadge = cuentaNombre === 'Mikra'
-                    ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
-                    : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
-
-                html += `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color}; margin-bottom:8px;">
-                    <div class="simple-header">
-                        <div style="flex:1;">
-                            <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:4px;">📍 ${zona}</div>
-                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                                <span style="background:${grupoInfo.color};color:${isEnCamino?'#000':'white'};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
-                                ${cuentaBadge}
-                                ${fechaLabel ? `<span style="background:${urgenciaColor};color:#000;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">📅 ${fechaLabel}${diasAtraso ? ' · '+diasAtraso : ''}</span>` : ''}
-                            </div>
-                        </div>
-                        <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
-                    </div>
-                    <div class="card-address-row" style="margin-top:8px;">
-                        <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
-                        <span class="card-sep">·</span>
-                        <span class="card-comprador">👤 <strong>${comprador}</strong></span>
-                    </div>
-                </div>`;
+                if (!groups.has(gKey)) groups.set(gKey, { label: gLabel, atraso: gAtraso, color: gColor, items: [] });
+                groups.get(gKey).items.push(item);
             });
 
-            html += `<div style="text-align:center;margin-top:16px;">
+            // ── Función de render con filtro ──────────────────────────────
+            function renderNECards(filterKey) {
+                const container = document.getElementById('neCards');
+                if (!container) return;
+                // Actualizar estado activo de botones
+                document.querySelectorAll('.ne-day-btn').forEach(b => {
+                    b.style.outline = b.dataset.key === filterKey ? '2px solid white' : 'none';
+                    b.style.opacity = b.dataset.key === filterKey ? '1' : '0.6';
+                });
+
+                let html = '';
+                groups.forEach(({ label, atraso, color, items }, gKey) => {
+                    if (filterKey !== 'all' && gKey !== filterKey) return;
+
+                    html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;">
+                        <div style="flex:1;height:1px;background:#21262d;"></div>
+                        <div style="background:${color};color:${color==='#FFE600'?'#000':'white'};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;">
+                            📅 ${label}${atraso ? ' · ' + atraso : ''}
+                            <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${items.length})</span>
+                        </div>
+                        <div style="flex:1;height:1px;background:#21262d;"></div>
+                    </div>`;
+
+                    items.forEach(({ shipping, order, cuentaNombre }) => {
+                        const sub = (shipping.substatus || '').toLowerCase();
+                        const isEnCamino = shipping.status === 'shipped';
+                        const grupoInfo = isEnCamino
+                            ? (grupoLabels[sub] || { label: '🚚 En camino (sin confirmar)', color: '#00d9ff' })
+                            : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
+
+                        const barrio  = shipping.receiver_address?.neighborhood?.name || '';
+                        const ciudad  = shipping.receiver_address?.city?.name || '';
+                        const zipCode = shipping.receiver_address?.zip_code || '';
+                        const zona    = getZonaDetallada(barrio, ciudad, zipCode);
+                        const calle   = shipping.receiver_address?.street_name || '';
+                        const numero  = shipping.receiver_address?.street_number || '';
+                        const provincia = shipping.receiver_address?.state?.name || '';
+                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
+                        const comprador = order.buyer?.nickname || 'N/A';
+                        const orderId   = order.id || '';
+                        const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                        const subHistory = shipping.substatus_history || [];
+                        const lastProb = [...subHistory].reverse().find(e => e.substatus === sub);
+                        const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
+                        const cuentaBadge = cuentaNombre === 'Mikra'
+                            ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
+                            : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
+
+                        html += `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color}; margin-bottom:8px;">
+                            <div class="simple-header">
+                                <div style="flex:1;">
+                                    <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:4px;">📍 ${zona}</div>
+                                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                        <span style="background:${grupoInfo.color};color:${isEnCamino?'#000':'white'};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
+                                        ${cuentaBadge}
+                                    </div>
+                                </div>
+                                <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
+                            </div>
+                            <div class="card-address-row" style="margin-top:8px;">
+                                <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                                <span class="card-sep">·</span>
+                                <span class="card-comprador">👤 <strong>${comprador}</strong></span>
+                            </div>
+                        </div>`;
+                    });
+                });
+
+                if (!html) html = `<div class="no-results" style="padding:30px;text-align:center;">Sin envíos para ese día</div>`;
+                container.innerHTML = html;
+            }
+
+            // ── Armar botones de filtro por día ───────────────────────────
+            let btnHtml = `<button class="ne-day-btn" data-key="all"
+                style="background:#21262d;border:none;border-radius:20px;color:#e6edf3;padding:6px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;min-height:34px;touch-action:manipulation;"
+                onclick="document.querySelectorAll('.ne-day-btn').forEach(b=>{b.style.outline='none';b.style.opacity='0.6'});this.style.outline='2px solid white';this.style.opacity='1';renderNECards('all')">
+                Todos (${todos.length})
+            </button>`;
+
+            groups.forEach(({ label, atraso, color, items }, gKey) => {
+                const txtColor = color === '#FFE600' ? '#000' : 'white';
+                btnHtml += `<button class="ne-day-btn" data-key="${gKey}"
+                    style="background:${color};border:none;border-radius:20px;color:${txtColor};padding:6px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;min-height:34px;touch-action:manipulation;opacity:0.6;"
+                    onclick="document.querySelectorAll('.ne-day-btn').forEach(b=>{b.style.outline='none';b.style.opacity='0.6'});this.style.outline='2px solid white';this.style.opacity='1';renderNECards('${gKey}')">
+                    ${label}${atraso ? ' · '+atraso : ''} (${items.length})
+                </button>`;
+            });
+
+            // Construir el contenedor raíz
+            let html = `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                ${enCaminoCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">sin confirmar entrega</span></div>` : ''}
+                ${fallidoCount  > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">intento de entrega fallido</span></div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:12px;">
+                ${btnHtml}
+            </div>
+            <div id="neCards"></div>
+            <div style="text-align:center;margin-top:16px;">
                 <button onclick="cargarFlexHoy()" style="background:#3483FA;padding:12px 30px;font-size:15px;">🔙 Volver a HOY</button>
             </div>`;
 
             content.innerHTML = html;
+
+            // Exponer renderNECards globalmente y activar "Todos" por defecto
+            window.renderNECards = renderNECards;
+            // Marcar botón "Todos" como activo
+            const allBtn = content.querySelector('.ne-day-btn[data-key="all"]');
+            if (allBtn) { allBtn.style.outline = '2px solid white'; allBtn.style.opacity = '1'; }
+            renderNECards('all');
         }
 
         async function cargarReprogramados() {
@@ -2445,20 +2524,20 @@
         let _progRafPending = false;
         function updateLoadingProgressDOM(done, total) {
             const fill = document.getElementById('loadProgressFill');
-            const text = document.getElementById('loadProgressText');
+            const pct_el = document.getElementById('loadProgressPct');
             const wrap = document.getElementById('loadProgressWrap');
-            if (!fill || !text || !wrap) return;
+            if (!fill || !wrap) return;
             if (total <= 0) return;
             wrap.style.display = 'block';
             const pct = Math.min(100, Math.round((done / total) * 100));
             fill.style.width = pct + '%';
-            text.textContent = `${done} de ${total} envíos`;
+            if (pct_el) pct_el.textContent = `${pct}%`;
         }
 
         async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null, backgroundRefresh = false) {
             const content = document.getElementById('content');
             if (!backgroundRefresh) {
-                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...<div class="load-progress-wrap" id="loadProgressWrap" style="display:none;"><div class="load-progress-track"><div class="load-progress-fill" id="loadProgressFill"></div></div><div class="load-progress-text" id="loadProgressText"></div></div></div>`;
+                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...<div class="load-progress-wrap" id="loadProgressWrap" style="display:none;"><div class="load-progress-track"><div class="load-progress-fill" id="loadProgressFill"></div><div class="load-progress-pct" id="loadProgressPct">0%</div></div></div></div>`;
             }
             
             let allOrdersFromAllAccounts = [];
