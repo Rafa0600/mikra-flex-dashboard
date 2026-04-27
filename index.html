@@ -281,7 +281,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 6px;
             margin-bottom: 12px;
         }
@@ -446,6 +446,7 @@
         }
 
         .progress-segment.pendiente { background: linear-gradient(90deg, #9C27B0, #8e24aa); }
+        .progress-segment.impreso { background: linear-gradient(90deg, #1565C0, #1E88E5); }
         .progress-segment.en-camino { background: linear-gradient(90deg, #00d9ff, #00b8d4); color: #000; }
         .progress-segment.entregado { background: linear-gradient(90deg, #00ff88, #00e676); color: #000; }
         .progress-segment.cancelado { background: linear-gradient(90deg, #f85149, #da3633); }
@@ -495,6 +496,7 @@
         }
 
         .envio-card.pendiente { border-left-color: #9C27B0; }
+        .envio-card.impreso { border-left-color: #1E88E5; }
         .envio-card.en-camino { border-left-color: #00d9ff; }
         .envio-card.entregado { border-left-color: #00ff88; }
         .envio-card.cancelado { border-left-color: #f85149; opacity: 0.7; }
@@ -518,6 +520,7 @@
         }
 
         .estado-badge.pendiente { background: linear-gradient(135deg, #9C27B0, #7b1fa2); }
+        .estado-badge.impreso { background: linear-gradient(135deg, #1E88E5, #1565C0); }
         .estado-badge.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
         .estado-badge.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
         .estado-badge.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
@@ -858,6 +861,7 @@
         }
 
         .envio-card-simple.pendiente { border-left-color: #9C27B0; }
+        .envio-card-simple.impreso { border-left-color: #1E88E5; }
         .envio-card-simple.en-camino { border-left-color: #00d9ff; }
         .envio-card-simple.entregado { border-left-color: #00ff88; }
         .envio-card-simple.cancelado { border-left-color: #f85149; opacity: 0.7; }
@@ -887,6 +891,7 @@
         }
 
         .simple-estado.pendiente { background: linear-gradient(135deg, #9C27B0, #7b1fa2); }
+        .simple-estado.impreso { background: linear-gradient(135deg, #1E88E5, #1565C0); }
         .simple-estado.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
         .simple-estado.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
         .simple-estado.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
@@ -1054,20 +1059,20 @@
             }
 
             .stats-grid {
-                grid-template-columns: repeat(5, 1fr);
-                gap: 4px;
+                grid-template-columns: repeat(6, 1fr);
+                gap: 3px;
             }
             
             .stat-item {
-                padding: 6px 2px;
+                padding: 5px 1px;
             }
 
             .stat-number {
-                font-size: 18px;
+                font-size: 16px;
             }
 
             .stat-label {
-                font-size: 9px;
+                font-size: 8px;
             }
             
             .envio-info {
@@ -1131,6 +1136,88 @@
         ::-webkit-scrollbar-track { background: #0d1117; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+        /* ── Geo-stats inline (top bar) — chips de colores ── */
+        #geoInline {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+        }
+        .geo-chip {
+            flex: 1;
+            text-align: center;
+            padding: 3px 4px 4px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1.2;
+            min-width: 0;
+        }
+        .geo-chip .geo-num {
+            font-size: 15px;
+            font-weight: 700;
+            display: block;
+            line-height: 1;
+            margin-bottom: 1px;
+        }
+        .geo-chip.caba { background: rgba(21,101,192,0.15); border-color: rgba(21,101,192,0.35); color: #64b5f6; }
+        .geo-chip.prov { background: rgba(230,81,0,0.12);  border-color: rgba(230,81,0,0.3);   color: #ffab76; }
+        .geo-chip.lej  { background: rgba(249,168,37,0.12); border-color: rgba(249,168,37,0.3); color: #ffd54f; }
+        .geo-chip.geo-active {
+            box-shadow: 0 0 0 1.5px currentColor;
+            filter: brightness(1.25);
+        }
+        .geo-chip { cursor: pointer; transition: all 0.15s; user-select: none; -webkit-user-select: none; }
+        .geo-chip:active { transform: scale(0.94); }
+
+        /* ── Stat icon row ── */
+        .stat-icon {
+            font-size: 12px;
+            line-height: 1;
+            margin-bottom: 1px;
+            display: block;
+            min-height: 14px;
+        }
+
+        /* ── Sort toggle ── */
+        .sort-toggle-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            color: #484f58;
+            font-size: 11px;
+            font-family: inherit;
+            font-weight: 600;
+            padding: 5px 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: unset;
+            height: 30px;
+            margin-bottom: 6px;
+            transition: all 0.2s;
+            touch-action: manipulation;
+        }
+        .sort-toggle-btn:hover { border-color: #484f58; color: #8b949e; filter: none; transform: none; }
+        .sort-toggle-btn .sort-active-label {
+            font-size: 10px;
+            color: #FFE600;
+            font-weight: 700;
+        }
+
+        /* ── Map filter buttons — radio style ── */
+        .map-filter-btn.active-selected {
+            background: #FFE600 !important;
+            color: #000 !important;
+            border-color: #FFE600 !important;
+            box-shadow: 0 2px 10px rgba(255,230,0,0.3);
+        }
 
         /* ── Navegación de días ── */
         .date-nav {
@@ -1294,21 +1381,21 @@
 </head>
 <body>
     <div class="container">
-        <!-- Fila única: badges + acciones -->
+        <!-- Fila única: versión + geo-stats + acciones -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
             <span class="version-badge" style="flex-shrink:0;">v3.9</span>
-            <!-- badges CABA/Prov siempre visibles -->
-            <div id="infoBadges" style="display:flex; gap:5px; align-items:center; flex:1;">
-                <span class="info-badge caba" id="badgeCaba" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🏙️ CABA: 0</span>
-                <span class="info-badge provincia" id="badgeProvincia" style="padding:3px 8px; font-size:10px; white-space:nowrap;">🗺️ Prov: 0</span>
-            </div>
+            <span id="geoInline">—</span>
             <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
                 <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
                 <button onclick="cargarNoEntregados()" id="btnNoEntregados" style="background:linear-gradient(135deg,#f85149,#da3633); padding:6px 10px; font-size:12px; margin:0; min-height:34px;" title="Viajes fallidos últimos 7 días">🚫 7d</button>
                 <button onclick="toggleTools()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">⚙️</button>
             </div>
         </div>
-        <span id="toggleVistaBtn" style="display:none;"></span>
+        <!-- badges ocultos de fecha/caba/prov para compatibilidad interna -->
+        <span id="badgeFecha" style="display:none;"></span>
+        <span id="badgeCaba" style="display:none;"></span>
+        <span id="badgeProvincia" style="display:none;"></span>
+        <span id="infoBadges" style="display:none;"></span>
 
         <!-- Barra de navegación de días -->
         <div class="date-nav" style="padding:6px 8px; margin-bottom:8px;">
@@ -1354,25 +1441,35 @@
                 </div>
             </div>
             <div class="stats-grid" style="margin-bottom:8px;">
-                <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all" style="padding:6px;">
+                <div class="stat-item active" onclick="filtrarPorEstado('all')" id="stat-all" style="padding:5px 2px;">
+                    <span class="stat-icon"> </span>
                     <div class="stat-number" style="color:#FFE600; font-size:20px;">0</div>
-                    <div class="stat-label" style="font-size:9px;">TODOS</div>
+                    <div class="stat-label" style="font-size:8px;">TODOS</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente" style="padding:6px;">
+                <div class="stat-item" onclick="filtrarPorEstado('pendiente')" id="stat-pendiente" style="padding:5px 2px;">
+                    <span class="stat-icon">⏳</span>
                     <div class="stat-number" style="color:#9C27B0; font-size:20px;">0</div>
-                    <div class="stat-label" style="font-size:9px;">⏳ PEND</div>
+                    <div class="stat-label" style="font-size:8px;">PEND</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino" style="padding:6px;">
+                <div class="stat-item" onclick="filtrarPorEstado('impreso')" id="stat-impreso" style="padding:5px 2px;">
+                    <span class="stat-icon">🖨️</span>
+                    <div class="stat-number" style="color:#1E88E5; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:8px;">IMP</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('en-camino')" id="stat-en-camino" style="padding:5px 2px;">
+                    <span class="stat-icon">🚚</span>
                     <div class="stat-number" style="color:#00d9ff; font-size:20px;">0</div>
-                    <div class="stat-label" style="font-size:9px;">🚚 CAMINO</div>
+                    <div class="stat-label" style="font-size:8px;">CAMINO</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado" style="padding:6px;">
+                <div class="stat-item" onclick="filtrarPorEstado('entregado')" id="stat-entregado" style="padding:5px 2px;">
+                    <span class="stat-icon">✅</span>
                     <div class="stat-number" style="color:#00ff88; font-size:20px;">0</div>
-                    <div class="stat-label" style="font-size:9px;">✅ ENTREG</div>
+                    <div class="stat-label" style="font-size:8px;">ENTREG</div>
                 </div>
-                <div class="stat-item" onclick="filtrarPorEstado('reprogramado')" id="stat-reprogramado" style="padding:6px;">
+                <div class="stat-item" onclick="filtrarPorEstado('reprogramado')" id="stat-reprogramado" style="padding:5px 2px;">
+                    <span class="stat-icon">🔄</span>
                     <div class="stat-number" style="color:#FF9800; font-size:20px;">0</div>
-                    <div class="stat-label" style="font-size:9px;">🔄 REPROG</div>
+                    <div class="stat-label" style="font-size:8px;">REPROG</div>
                 </div>
             </div>
             <div class="progress-bar-container">
@@ -1380,7 +1477,13 @@
             </div>
         </div>
 
-        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:8px; padding:6px 8px;">
+        <div id="sortToggleRow" style="display:none;">
+            <button class="sort-toggle-btn" onclick="toggleSortSection()" id="sortToggleBtn">
+                ⇅ Ordenar <span class="sort-active-label" id="sortActiveLabel">Zona</span> <span id="sortChevron">▼</span>
+            </button>
+        </div>
+
+        <div id="sortSection" class="sort-controls hidden" style="margin-bottom:8px; padding:6px 8px; display:none;">
             <button class="sort-btn active" onclick="ordenarPor('zona', this)" style="font-size:11px; padding:5px 9px;">🌍 Zona</button>
             <button class="sort-btn" onclick="ordenarPor('fecha-entrega', this)" style="font-size:11px; padding:5px 9px;">📅 Fecha</button>
             <button class="sort-btn" onclick="ordenarPor('hora-entrega', this)" style="font-size:11px; padding:5px 9px;">🕐 Hora</button>
@@ -1397,16 +1500,13 @@
                     <h2>🗺️ Mapa de Entregas</h2>
                     <button class="map-close-btn" onclick="cerrarMapa()">✕ Cerrar</button>
                 </div>
-                <div class="map-filters">
-                    <button class="map-filter-btn active-encamino" onclick="toggleMapFilter('en-camino')" id="mapFilterEnCamino">
-                        🚚 En camino (<span id="mapCountEnCamino">0</span>)
-                    </button>
-                    <button class="map-filter-btn active-reprogramado" onclick="toggleMapFilter('reprogramado')" id="mapFilterReprogramado">
-                        🔄 Reprogramados (<span id="mapCountReprogramado">0</span>)
-                    </button>
-                    <button class="map-filter-btn active-entregado" onclick="toggleMapFilter('entregado')" id="mapFilterEntregado">
-                        ✅ Entregados (<span id="mapCountEntregado">0</span>)
-                    </button>
+                <div class="map-filters" style="overflow-x:auto; flex-wrap:nowrap; gap:5px; -webkit-overflow-scrolling:touch;">
+                    <button class="map-filter-btn active-selected" onclick="toggleMapFilter('all')" id="mapFilter-all">Todos</button>
+                    <button class="map-filter-btn" onclick="toggleMapFilter('pendiente')" id="mapFilter-pendiente">⏳ Pend</button>
+                    <button class="map-filter-btn" onclick="toggleMapFilter('impreso')" id="mapFilter-impreso">🖨️ Imp</button>
+                    <button class="map-filter-btn" onclick="toggleMapFilter('en-camino')" id="mapFilter-en-camino">🚚 Camino</button>
+                    <button class="map-filter-btn" onclick="toggleMapFilter('reprogramado')" id="mapFilter-reprogramado">🔄 Reprg</button>
+                    <button class="map-filter-btn" onclick="toggleMapFilter('entregado')" id="mapFilter-entregado">✅ Entrg</button>
                 </div>
                 <div id="mapFrame"></div>
             </div>
@@ -1514,7 +1614,7 @@
         };
 
         const ESTADO_LABELS = {
-            'pendiente': '⏳ Pendiente', 'en-camino': '🚚 En camino',
+            'pendiente': '⏳ Pendiente', 'impreso': '🖨️ Impreso', 'en-camino': '🚚 En camino',
             'entregado': '✅ Entregado', 'cancelado': '❌ Cancelada',
             'reprogramado': '🔄 Reprogramado'
         };
@@ -1538,6 +1638,23 @@
         };
 
         const SKIP_SUBSTATUS = new Set(['shipment_paid', 'ready_to_ship']);
+
+        // Zonas lejanas — mismo criterio que flex_pdf.py
+        const ZONAS_LEJANAS_KW = [
+            'pilar','del viso','fatima','fátima','zelaya','la lonja','villa rosa','manuel alberti',
+            'escobar','ingeniero maschwitz','matheu','maquinista savio','garin','garín',
+            'nordelta','benavidez','benavídez',
+            'lujan','luján','dique lujan','dique luján','open door','general rodriguez','general rodríguez',
+            'campana','zarate','zárate',
+            'derqui',
+            'la plata','villa elisa','ensenada','berisso',
+            'cañuelas','canuelas','san vicente','guernica',
+        ];
+
+        function esLejana(zona) {
+            const z = zona.toLowerCase();
+            return ZONAS_LEJANAS_KW.some(kw => z.includes(kw));
+        }
 
 
 
@@ -1944,7 +2061,8 @@
             const content = document.getElementById('content');
 
             document.getElementById('statsSection').classList.add('hidden');
-            document.getElementById('sortSection').classList.add('hidden');
+            document.getElementById('sortToggleRow').style.display = 'none';
+            document.getElementById('sortSection').style.display = 'none';
             document.getElementById('btnMapa').classList.add('hidden');
 
             const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -2291,7 +2409,8 @@
             
             // Ocultar secciones normales
             document.getElementById('statsSection').classList.add('hidden');
-            document.getElementById('sortSection').classList.add('hidden');
+            document.getElementById('sortToggleRow').style.display = 'none';
+            document.getElementById('sortSection').style.display = 'none';
             document.getElementById('btnMapa').classList.add('hidden');
             
             const hoy = new Date();
@@ -2837,6 +2956,7 @@
                     shipping.receiver_address?.city?.name || '',
                     shipping.receiver_address?.zip_code || ''
                 );
+                shipping._lejana = esLejana(shipping._zona);
             });
 
             const uniqueShippings = new Map();
@@ -2912,6 +3032,11 @@
             
             if (history.date_shipped) {
                 return 'en-camino';
+            }
+            
+            // Paquete impreso pero aún no despachado
+            if (substatus === 'printed' || substatus === 'ready_for_pickup') {
+                return 'impreso';
             }
             
             return 'pendiente';
@@ -3034,7 +3159,7 @@
             console.log('=== ESTADOS DE ENVÍOS ===');
             allFlexOrders.forEach(({ shipping, cuentaNombre }) => {
                 const state = getOrderState(shipping);
-                if (state === 'cancelado' || state === 'reprogramado' || state === 'pendiente') {
+                if (state === 'cancelado' || state === 'reprogramado' || state === 'pendiente' || state === 'impreso') {
                     console.log(`[${cuentaNombre}] ID:${shipping.id} | status:"${shipping.status}" | substatus:"${shipping.substatus}" | tags:${JSON.stringify(shipping.tags)} → ${state}`);
                 }
             });
@@ -3089,10 +3214,45 @@
             aplicarFiltros();
         }
 
+        function filtrarPorGeo(tipo) {
+            // tipo: 'caba' | 'prov' | 'lej'
+            const zoneMap = { 'caba': 'CABA', 'prov': '__PROV__', 'lej': '__LEJANAS__' };
+            const newFilter = zoneMap[tipo];
+            // Toggle: si ya está activo, volver a 'all'
+            currentZoneFilter = (currentZoneFilter === newFilter) ? 'all' : newFilter;
+            // Actualizar chip del dropdown de zona
+            const btn = document.getElementById('zonaChipBtn');
+            const labelEl = document.getElementById('selectedZone');
+            if (btn) btn.style.borderColor = (currentZoneFilter === 'all') ? '#30363d' : '#FFE600';
+            if (labelEl) labelEl.textContent =
+                currentZoneFilter === 'CABA'        ? 'CABA' :
+                currentZoneFilter === '__PROV__'    ? 'Provincia' :
+                currentZoneFilter === '__LEJANAS__' ? 'Lejanas' : 'Todas las zonas';
+            aplicarFiltros();
+        }
+
+        let sortSectionOpen = false;
+        function toggleSortSection() {
+            sortSectionOpen = !sortSectionOpen;
+            const sec = document.getElementById('sortSection');
+            const chev = document.getElementById('sortChevron');
+            if (sortSectionOpen) {
+                sec.style.display = 'flex';
+                if (chev) chev.textContent = '▲';
+            } else {
+                sec.style.display = 'none';
+                if (chev) chev.textContent = '▼';
+            }
+        }
+
         function ordenarPor(tipo, btn) {
             currentSort = tipo;
             document.querySelectorAll('.sort-btn').forEach(el => el.classList.remove('active'));
             if (btn) btn.classList.add('active');
+            // Actualizar label del toggle
+            const labelMap = { 'zona':'Zona', 'fecha-entrega':'Fecha', 'hora-entrega':'Hora', 'estado':'Estado', 'recientes':'Nuevo' };
+            const labelEl = document.getElementById('sortActiveLabel');
+            if (labelEl) labelEl.textContent = labelMap[tipo] || tipo;
             aplicarFiltros();
         }
 
@@ -3115,6 +3275,9 @@
             // Usar _zona cacheada
             if (currentZoneFilter !== 'all') {
                 filtered = filtered.filter(({ shipping }) => {
+                    if (currentZoneFilter === 'CABA')        return esCABA(shipping._zona);
+                    if (currentZoneFilter === '__PROV__')    return !esCABA(shipping._zona);
+                    if (currentZoneFilter === '__LEJANAS__') return shipping._lejana === true;
                     if (currentZoneFilter === 'CABA') return esCABA(shipping._zona);
                     return shipping._zona === currentZoneFilter;
                 });
@@ -3141,7 +3304,7 @@
                     .sort((a, b) => b.key - a.key)
                     .map(({ item }) => item);
             } else if (currentSort === 'estado') {
-                const ord = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'en-camino': 3, 'entregado': 4 };
+                const ord = { 'cancelado': 0, 'reprogramado': 1, 'pendiente': 2, 'impreso': 3, 'en-camino': 4, 'entregado': 5 };
                 filtered = filtered
                     .map(item => ({ item, key: ord[item.shipping._state] ?? 99 }))
                     .sort((a, b) => a.key - b.key)
@@ -3168,13 +3331,14 @@
             const stats = ordersForStats.reduce((acc, { shipping, cuentaNombre }) => {
                 const s = shipping._state;
                 if (s === 'pendiente')    acc.pendiente++;
+                else if (s === 'impreso')      acc.impreso++;
                 else if (s === 'en-camino')    acc.enCamino++;
                 else if (s === 'entregado')    acc.entregado++;
                 else if (s === 'cancelado')    acc.cancelado++;
                 else if (s === 'reprogramado') acc.reprogramado++;
                 return acc;
-            }, { pendiente: 0, enCamino: 0, entregado: 0, cancelado: 0, reprogramado: 0 });
-            stats.total = stats.pendiente + stats.enCamino + stats.entregado + stats.reprogramado;
+            }, { pendiente: 0, impreso: 0, enCamino: 0, entregado: 0, cancelado: 0, reprogramado: 0 });
+            stats.total = stats.pendiente + stats.impreso + stats.enCamino + stats.entregado + stats.reprogramado;
 
             // Contadores por cuenta en una pasada
             const cuentaStats = allFlexOrders.reduce((acc, { cuentaNombre, shipping }) => {
@@ -3191,6 +3355,7 @@
 
             document.querySelector('#stat-all .stat-number').textContent = stats.total;
             document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
+            document.querySelector('#stat-impreso .stat-number').textContent = stats.impreso;
             document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
             document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
             document.querySelector('#stat-reprogramado .stat-number').textContent = stats.reprogramado;
@@ -3203,6 +3368,7 @@
 
             const totalSinCancel = stats.total || 1;
             const pendientePct = (stats.pendiente / totalSinCancel) * 100;
+            const impresoPct = (stats.impreso / totalSinCancel) * 100;
             const enCaminoPct = (stats.enCamino / totalSinCancel) * 100;
             const entregadoPct = (stats.entregado / totalSinCancel) * 100;
             const reprogramadoPct = (stats.reprogramado / totalSinCancel) * 100;
@@ -3210,6 +3376,7 @@
             const progressBar = document.getElementById('progressBar');
             progressBar.innerHTML = `
                 ${stats.pendiente > 0 ? `<div class="progress-segment pendiente" style="width:${pendientePct}%" onclick="filtrarPorEstado('pendiente')">${stats.pendiente}</div>` : ''}
+                ${stats.impreso > 0 ? `<div class="progress-segment impreso" style="width:${impresoPct}%" onclick="filtrarPorEstado('impreso')">${stats.impreso}</div>` : ''}
                 ${stats.enCamino > 0 ? `<div class="progress-segment en-camino" style="width:${enCaminoPct}%" onclick="filtrarPorEstado('en-camino')">${stats.enCamino}</div>` : ''}
                 ${stats.entregado > 0 ? `<div class="progress-segment entregado" style="width:${entregadoPct}%" onclick="filtrarPorEstado('entregado')">${stats.entregado}</div>` : ''}
                 ${stats.reprogramado > 0 ? `<div class="progress-segment reprogramado" style="width:${reprogramadoPct}%" onclick="filtrarPorEstado('reprogramado')">${stats.reprogramado}</div>` : ''}
@@ -3297,6 +3464,26 @@
             }
 
             document.getElementById('content').innerHTML = parts.join('');
+
+            // ── Geo-stats inline en el top bar ──
+            const geoEl = document.getElementById('geoInline');
+            if (orders.length > 0) {
+                let geoCaba = 0, geoProv = 0, geoLej = 0;
+                orders.forEach(({ shipping }) => {
+                    if (esCABA(shipping._zona)) geoCaba++;
+                    else geoProv++;
+                    if (shipping._lejana) geoLej++;
+                });
+                const activeCaba = currentZoneFilter === 'CABA'        ? ' geo-active' : '';
+                const activeProv = currentZoneFilter === '__PROV__'    ? ' geo-active' : '';
+                const activeLej  = currentZoneFilter === '__LEJANAS__' ? ' geo-active' : '';
+                geoEl.innerHTML =
+                    `<div class="geo-chip caba${activeCaba}" onclick="filtrarPorGeo('caba')"><span class="geo-num">${geoCaba}</span>CABA</div>` +
+                    `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProv}</span>PROV</div>` +
+                    `<div class="geo-chip lej${activeLej}"  onclick="filtrarPorGeo('lej')"><span class="geo-num">${geoLej}</span>LEJ~</div>`;
+            } else {
+                geoEl.innerHTML = '';
+            }
         }
 
         document.addEventListener('click', (e) => {
@@ -3306,37 +3493,32 @@
         });
 
         // FUNCIONES DEL MAPA
-        let mapShowEnCamino = true;
-        let mapShowReprogramados = true;
-        let mapShowEntregados = true;
+        let mapStateFilter = 'all';
         let leafletMap = null;
         let markersLayer = null;
 
         function toggleMapFilter(tipo) {
-            if (tipo === 'en-camino') {
-                mapShowEnCamino = !mapShowEnCamino;
-                const btn = document.getElementById('mapFilterEnCamino');
-                btn.classList.toggle('active-encamino', mapShowEnCamino);
-            } else if (tipo === 'reprogramado') {
-                mapShowReprogramados = !mapShowReprogramados;
-                const btn = document.getElementById('mapFilterReprogramado');
-                btn.classList.toggle('active-reprogramado', mapShowReprogramados);
-            } else if (tipo === 'entregado') {
-                mapShowEntregados = !mapShowEntregados;
-                const btn = document.getElementById('mapFilterEntregado');
-                btn.classList.toggle('active-entregado', mapShowEntregados);
-            }
+            mapStateFilter = tipo;
+            // Update button active states (radio: only one active at a time)
+            ['all','pendiente','impreso','en-camino','reprogramado','entregado'].forEach(s => {
+                const btn = document.getElementById('mapFilter-' + s);
+                if (btn) {
+                    btn.classList.toggle('active-selected', s === mapStateFilter);
+                }
+            });
             actualizarMapa();
         }
 
         function mostrarMapa() {
-            const enCamino      = allFlexOrders.filter(({ shipping }) => shipping._state === 'pendiente' || shipping._state === 'en-camino');
-            const reprogramados = allFlexOrders.filter(({ shipping }) => shipping._state === 'reprogramado');
-            const entregados    = allFlexOrders.filter(({ shipping }) => shipping._state === 'entregado');
+            // Pre-aplicar el filtro de estado actual al abrir el mapa
+            mapStateFilter = (currentStateFilter === 'all' || currentStateFilter === 'cancelado')
+                ? 'all' : currentStateFilter;
 
-            document.getElementById('mapCountEnCamino').textContent = enCamino.length;
-            document.getElementById('mapCountReprogramado').textContent = reprogramados.length;
-            document.getElementById('mapCountEntregado').textContent = entregados.length;
+            // Actualizar botones del mapa
+            ['all','pendiente','impreso','en-camino','reprogramado','entregado'].forEach(s => {
+                const btn = document.getElementById('mapFilter-' + s);
+                if (btn) btn.classList.toggle('active-selected', s === mapStateFilter);
+            });
 
             // Mostrar modal
             document.getElementById('mapModal').classList.add('active');
@@ -3344,19 +3526,14 @@
 
             // Inicializar mapa si no existe
             if (!leafletMap) {
-                // Esperar a que el modal esté visible
                 setTimeout(() => {
                     try {
                         leafletMap = L.map('mapFrame').setView([-34.6037, -58.3816], 11);
-                        
                         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                             attribution: '© OpenStreetMap contributors',
                             maxZoom: 19
                         }).addTo(leafletMap);
-                        
                         markersLayer = L.layerGroup().addTo(leafletMap);
-                        
-                        // Forzar recálculo del tamaño del mapa
                         setTimeout(() => {
                             leafletMap.invalidateSize();
                             actualizarMapa();
@@ -3366,7 +3543,6 @@
                     }
                 }, 200);
             } else {
-                // Si ya existe, solo actualizar
                 setTimeout(() => {
                     leafletMap.invalidateSize();
                     actualizarMapa();
@@ -3382,21 +3558,18 @@
         function actualizarMapa() {
             if (!leafletMap || !markersLayer) return;
 
-            // Limpiar marcadores anteriores
             markersLayer.clearLayers();
 
             let ordersParaMapa = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
                 const state = shipping._state;
                 if (state === 'cancelado') return false;
-                let estadoPasa = false;
-                if (state === 'pendiente' || state === 'en-camino') estadoPasa = mapShowEnCamino;
-                else if (state === 'reprogramado') estadoPasa = mapShowReprogramados;
-                else if (state === 'entregado') estadoPasa = mapShowEntregados;
-                if (!estadoPasa) return false;
+                if (mapStateFilter !== 'all' && state !== mapStateFilter) return false;
                 if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return false;
                 if (currentZoneFilter !== 'all') {
                     const zona = shipping._zona;
-                    if (currentZoneFilter === 'CABA') { if (!esCABA(zona)) return false; }
+                    if (currentZoneFilter === 'CABA')        { if (!esCABA(zona)) return false; }
+                    else if (currentZoneFilter === '__PROV__')    { if (esCABA(zona)) return false; }
+                    else if (currentZoneFilter === '__LEJANAS__') { if (!shipping._lejana) return false; }
                     else { if (zona !== currentZoneFilter) return false; }
                 }
                 return true;
@@ -3429,7 +3602,11 @@
                 let estadoEmoji = '⏳';
                 let estadoTexto = 'Pendiente';
                 
-                if (state === 'en-camino') {
+                if (state === 'impreso') {
+                    markerColor = '#1E88E5';
+                    estadoEmoji = '🖨️';
+                    estadoTexto = 'Impreso';
+                } else if (state === 'en-camino') {
                     markerColor = '#00d9ff';
                     estadoEmoji = '🚚';
                     estadoTexto = 'En camino';
@@ -3684,7 +3861,7 @@
             });
 
             document.getElementById('statsSection').classList.remove('hidden');
-            document.getElementById('sortSection').classList.remove('hidden');
+            document.getElementById('sortToggleRow').style.display = 'block';
             document.getElementById('btnMapa').classList.remove('hidden');
             displayOrders('all');
             // Pre-cargar días vecinos en background para clicks instantáneos
