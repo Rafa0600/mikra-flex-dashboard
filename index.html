@@ -2132,7 +2132,8 @@
                         orders.push(...(fd.results||[]));
                         const total = fd.paging?.total || 0;
                         if (total > 50) {
-                            const pages = Math.min(Math.ceil(total/50)-1, 9);
+                            // 19 páginas extra = 1000 órdenes — todas en paralelo
+                            const pages = Math.min(Math.ceil(total/50)-1, 19);
                             const extra = await Promise.all(Array.from({length:pages},(_,i)=>
                                 fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
                                     {headers:{'Authorization':`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({results:[]}))
@@ -2777,8 +2778,11 @@
                 return [];
             }
 
-            // ── Helper de paginación ──────────────────────────────────────
-            async function fetchAllPages(filter) {
+            // ── Helper de paginación — paralelo total como el original ────
+            // maxPages: cap de páginas extra (cada página = 50 órdenes).
+            //   filterA (delivery date) → 19 páginas extra = 1000 órdenes (era 9 = 500)
+            //   filterB (safety net)    → 4 páginas extra  = 250 órdenes (era 9 = 500)
+            async function fetchAllPages(filter, maxPages = 19) {
                 let orders = [];
                 try {
                     const first = await fetch(
@@ -2789,7 +2793,8 @@
                     orders.push(...(firstData.results || []));
                     const total = firstData.paging?.total || 0;
                     if (total > 50) {
-                        const pages = Math.min(Math.ceil(total / 50) - 1, 9);
+                        const pages = Math.min(Math.ceil(total / 50) - 1, maxPages);
+                        // TODAS las páginas en paralelo de una sola vez (como el original)
                         const extra = await Promise.all(
                             Array.from({ length: pages }, (_, i) =>
                                 fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
@@ -2840,20 +2845,24 @@
                 const reprogFromStr = reprogFrom.toISOString().split('.')[0] + '.000-00:00';
 
                 const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
-                const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&order.status=paid`;
+
+                // filterB: safety net para reprogramados — acotado en fecha y en páginas
+                const reprogTo = new Date(targetDate); reprogTo.setDate(reprogTo.getDate() + 2);
+                const reprogToStr = reprogTo.toISOString().split('.')[0] + '.000-00:00';
+                const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&order.date_created.to=${encodeURIComponent(reprogToStr)}&order.status=paid`;
 
                 const [ordersA, ordersB] = await Promise.all([
-                    fetchAllPages(filterA),
-                    fetchAllPages(filterB),
+                    fetchAllPages(filterA, 19),  // hasta 1000 órdenes — más que suficiente para un día
+                    fetchAllPages(filterB, 4),   // hasta 250 órdenes — solo safety net para reprogramados
                 ]);
 
                 if (ordersA.length === 0 && ordersB.length === 0) {
                     // Fallback por date_created si ambas vacías
-                    console.warn(`[${cuenta.nombre}] Dual query sin resultados, fallback date_created`);
+                    console.warn(`[${cuenta.nombre}] Todas las queries sin resultados, fallback date_created`);
                     const dateFrom = calcularDateFrom(targetDate);
                     const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
                     const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                    allOrders = await fetchAllPages(fbFilter);
+                    allOrders = await fetchAllPages(fbFilter, 9);
                 } else {
                     const seen = new Set();
                     allOrders = [];
@@ -2864,7 +2873,7 @@
                         allOrders.push(o);
                     });
                 }
-                console.log(`[${cuenta.nombre}] Query A: ${ordersA?.length??0} | Query B: ${ordersB?.length??0} | Total: ${allOrders.length}`);
+                console.log(`[${cuenta.nombre}] A:${ordersA?.length??0} B:${ordersB?.length??0} → Total único:${allOrders.length}`);
             }
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
