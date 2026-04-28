@@ -2778,31 +2778,45 @@
                 return [];
             }
 
-            // ── Helper de paginación — paralelo total como el original ────
+            // ── Helper de paginación — paralelo total + retry para no perder órdenes ────
             // maxPages: cap de páginas extra (cada página = 50 órdenes).
-            //   filterA (delivery date) → 19 páginas extra = 1000 órdenes (era 9 = 500)
-            //   filterB (safety net)    → 4 páginas extra  = 250 órdenes (era 9 = 500)
+            //   filterA (delivery date) → 19 páginas extra = 1000 órdenes
+            //   filterB (safety net)    → 4 páginas extra  = 250 órdenes
             async function fetchAllPages(filter, maxPages = 19) {
+                // Helper con 1 retry: si falla la primera vez, esperá 200ms y reintentá
+                async function fetchPage(offset) {
+                    const url = `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${offset}&limit=50&sort=date_desc${filter}`;
+                    const opts = { headers: { 'Authorization': `Bearer ${token}` } };
+                    for (let attempt = 0; attempt < 2; attempt++) {
+                        try {
+                            const r = await fetch(url, opts);
+                            if (r.ok) return await r.json();
+                        } catch {}
+                        if (attempt === 0) await new Promise(res => setTimeout(res, 200));
+                    }
+                    console.warn(`[${cuenta.nombre}] página offset=${offset} falló tras 2 intentos`);
+                    return { results: [], _failed: true };
+                }
+
                 let orders = [];
                 try {
-                    const first = await fetch(
-                        `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=0&limit=50&sort=date_desc${filter}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } }
-                    );
-                    const firstData = await first.json();
+                    const firstData = await fetchPage(0);
                     orders.push(...(firstData.results || []));
                     const total = firstData.paging?.total || 0;
+
                     if (total > 50) {
                         const pages = Math.min(Math.ceil(total / 50) - 1, maxPages);
-                        // TODAS las páginas en paralelo de una sola vez (como el original)
+                        // TODAS las páginas en paralelo de una sola vez
                         const extra = await Promise.all(
-                            Array.from({ length: pages }, (_, i) =>
-                                fetch(`${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${(i+1)*50}&limit=50&sort=date_desc${filter}`,
-                                    { headers: { 'Authorization': `Bearer ${token}` } })
-                                .then(r => r.json()).catch(() => ({ results: [] }))
-                            )
+                            Array.from({ length: pages }, (_, i) => fetchPage((i+1) * 50))
                         );
                         extra.forEach(d => orders.push(...(d.results || [])));
+
+                        // Verificación: si tenemos muchas menos órdenes que las esperadas, advertir
+                        const expected = Math.min(total, (pages + 1) * 50);
+                        if (orders.length < expected * 0.85) {
+                            console.warn(`[${cuenta.nombre}] esperaba ${expected}, tengo ${orders.length} — algunas páginas fallaron`);
+                        }
                     }
                 } catch (e) {
                     console.error(`fetchAllPages error [${cuenta.nombre}]:`, e);
@@ -3564,72 +3578,32 @@
             document.body.style.overflow = 'auto';
         }
 
-        function actualizarMapa() {
-            if (!leafletMap || !markersLayer) return;
+        // Cache de markers — se construye una vez por carga y solo se filtra al togglear
+        let mapMarkersCache = null;
+        let mapMarkersCacheKey = null;
 
-            markersLayer.clearLayers();
+        function buildMapMarkersCache() {
+            // Hash simple de los datos para detectar cambios
+            const key = allFlexOrders.map(o => o.shipping.id + ':' + o.shipping._state).join(',');
+            if (mapMarkersCacheKey === key && mapMarkersCache) return; // sin cambios
 
-            let ordersParaMapa = allFlexOrders.filter(({ shipping, cuentaNombre }) => {
-                const state = shipping._state;
-                if (state === 'cancelado') return false;
-                if (mapStateFilter !== 'all' && state !== mapStateFilter) return false;
-                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return false;
-                if (currentZoneFilter !== 'all') {
-                    const zona = shipping._zona;
-                    if (currentZoneFilter === 'CABA')        { if (!esCABA(zona)) return false; }
-                    else if (currentZoneFilter === '__PROV__')    { if (esCABA(zona)) return false; }
-                    else if (currentZoneFilter === '__LEJANAS__') { if (!shipping._lejana) return false; }
-                    else { if (zona !== currentZoneFilter) return false; }
-                }
-                return true;
-            });
-
-            if (ordersParaMapa.length === 0) {
-                return;
-            }
-
-            let bounds = [];
-
-            ordersParaMapa.forEach(({ shipping, orders: orderList, cuentaNombre, cuentaColor }) => {
+            mapMarkersCache = [];
+            allFlexOrders.forEach(({ shipping, orders: orderList, cuentaNombre, cuentaColor }) => {
                 const lat = shipping.receiver_address?.latitude;
                 const lng = shipping.receiver_address?.longitude;
                 if (!lat || !lng) return;
+                if (shipping._state === 'cancelado') return;
 
                 const state = shipping._state;
                 const zona  = shipping._zona;
-                const calle = shipping.receiver_address?.street_name || '';
-                const numero = shipping.receiver_address?.street_number || '';
-                const ciudad = shipping.receiver_address?.city?.name || '';
-                const comprador = orderList[0]?.buyer?.nickname || 'N/A';
-                const orderId = orderList[0]?.id || '';
-                const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-                const direccionCompleta = `${calle} ${numero}, ${ciudad}`;
-                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
 
-                // Color del marcador según estado
-                let markerColor = '#9C27B0'; // pendiente
-                let estadoEmoji = '⏳';
-                let estadoTexto = 'Pendiente';
-                
-                if (state === 'impreso') {
-                    markerColor = '#1E88E5';
-                    estadoEmoji = '🖨️';
-                    estadoTexto = 'Impreso';
-                } else if (state === 'en-camino') {
-                    markerColor = '#00d9ff';
-                    estadoEmoji = '🚚';
-                    estadoTexto = 'En camino';
-                } else if (state === 'entregado') {
-                    markerColor = '#00ff88';
-                    estadoEmoji = '✅';
-                    estadoTexto = 'Entregado';
-                } else if (state === 'reprogramado') {
-                    markerColor = '#FF9800';
-                    estadoEmoji = '🔄';
-                    estadoTexto = getReprogramadoDetail(shipping).short;
-                }
+                // Color/emoji según estado
+                let markerColor = '#9C27B0', estadoEmoji = '⏳', estadoTexto = 'Pendiente';
+                if (state === 'impreso')        { markerColor = '#1E88E5'; estadoEmoji = '🖨️'; estadoTexto = 'Impreso'; }
+                else if (state === 'en-camino') { markerColor = '#00d9ff'; estadoEmoji = '🚚'; estadoTexto = 'En camino'; }
+                else if (state === 'entregado') { markerColor = '#00ff88'; estadoEmoji = '✅'; estadoTexto = 'Entregado'; }
+                else if (state === 'reprogramado') { markerColor = '#FF9800'; estadoEmoji = '🔄'; estadoTexto = getReprogramadoDetail(shipping).short; }
 
-                // Crear icono personalizado
                 const customIcon = L.divIcon({
                     className: 'custom-marker',
                     html: `<div style="background:${markerColor}; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; border:3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${estadoEmoji}</div>`,
@@ -3639,39 +3613,66 @@
 
                 const marker = L.marker([lat, lng], { icon: customIcon });
 
-                // Badge de cuenta
-                let cuentaBadgeHtml = '';
-                if (cuentaNombre === 'Mikra') {
-                    cuentaBadgeHtml = '<span style="background:#9C27B0; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟣 Mikra</span>';
-                } else if (cuentaNombre === 'Chaya') {
-                    cuentaBadgeHtml = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟠 Chaya</span>';
+                // Popup lazy — se construye recién al click (mucho más rápido para 250+ markers)
+                marker.on('click', function() {
+                    if (this._popupBuilt) return;
+                    this._popupBuilt = true;
+                    const calle  = shipping.receiver_address?.street_name || '';
+                    const numero = shipping.receiver_address?.street_number || '';
+                    const ciudad = shipping.receiver_address?.city?.name || '';
+                    const comprador = orderList[0]?.buyer?.nickname || 'N/A';
+                    const orderId = orderList[0]?.id || '';
+                    const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                    const direccionCompleta = `${calle} ${numero}, ${ciudad}`;
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(direccionCompleta)}`;
+                    let cuentaBadgeHtml = '';
+                    if (cuentaNombre === 'Mikra') cuentaBadgeHtml = '<span style="background:#9C27B0; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟣 Mikra</span>';
+                    else if (cuentaNombre === 'Chaya') cuentaBadgeHtml = '<span style="background:#FF6B00; color:white; padding:3px 8px; border-radius:10px; font-size:10px; margin-left:5px;">🟠 Chaya</span>';
+                    const txtColor = (state === 'en-camino' || state === 'entregado' || state === 'reprogramado') ? '#000' : '#fff';
+                    this.bindPopup(`
+                        <div style="min-width:200px;">
+                            <div style="margin-bottom:8px;">
+                                <span style="background:${markerColor}; color:${txtColor}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:bold;">${estadoEmoji} ${estadoTexto}</span>
+                                ${cuentaBadgeHtml}
+                            </div>
+                            <div style="margin-bottom:6px;"><strong>📍 ${zona}</strong></div>
+                            <div style="margin-bottom:6px;">👤 ${comprador}</div>
+                            <div style="margin-bottom:8px; font-size:12px; color:#8b949e;">
+                                <a href="${orderUrl}" target="_blank" style="color:#58a6ff; text-decoration:none;">#${orderId}</a>
+                            </div>
+                            <a href="${googleMapsUrl}" target="_blank" style="color:#58a6ff; text-decoration:none; font-size:13px; display:block; margin-top:8px; padding:8px; background:#0d1117; border-radius:8px; text-align:center; border:1px solid #21262d;">
+                                🗺️ Abrir en Google Maps<br>
+                                <small style="color:#484f58;">${direccionCompleta}</small>
+                            </a>
+                        </div>
+                    `).openPopup();
+                });
+
+                mapMarkersCache.push({ marker, state, zona, lejana: shipping._lejana, cuentaNombre, latlng: [lat, lng] });
+            });
+            mapMarkersCacheKey = key;
+        }
+
+        function actualizarMapa() {
+            if (!leafletMap || !markersLayer) return;
+
+            buildMapMarkersCache();
+            markersLayer.clearLayers();
+
+            const bounds = [];
+            mapMarkersCache.forEach(({ marker, state, zona, lejana, cuentaNombre, latlng }) => {
+                if (mapStateFilter !== 'all' && state !== mapStateFilter) return;
+                if (currentCuentaFilter !== 'all' && cuentaNombre !== currentCuentaFilter) return;
+                if (currentZoneFilter !== 'all') {
+                    if (currentZoneFilter === 'CABA')        { if (!esCABA(zona)) return; }
+                    else if (currentZoneFilter === '__PROV__')    { if (esCABA(zona)) return; }
+                    else if (currentZoneFilter === '__LEJANAS__') { if (!lejana) return; }
+                    else { if (zona !== currentZoneFilter) return; }
                 }
-
-                const popupContent = `
-                    <div style="min-width:200px;">
-                        <div style="margin-bottom:8px;">
-                            <span style="background:${markerColor}; color:${state === 'en-camino' || state === 'entregado' || state === 'reprogramado' ? '#000' : '#fff'}; padding:4px 8px; border-radius:8px; font-size:11px; font-weight:bold;">${estadoEmoji} ${estadoTexto}</span>
-                            ${cuentaBadgeHtml}
-                        </div>
-                        <div style="margin-bottom:6px;"><strong>📍 ${zona}</strong></div>
-                        <div style="margin-bottom:6px;">👤 ${comprador}</div>
-                        <div style="margin-bottom:8px; font-size:12px; color:#8b949e;">
-                            <a href="${orderUrl}" target="_blank" style="color:#58a6ff; text-decoration:none;">#${orderId}</a>
-                        </div>
-                        <a href="${googleMapsUrl}" target="_blank" style="color:#58a6ff; text-decoration:none; font-size:13px; display:block; margin-top:8px; padding:8px; background:#0d1117; border-radius:8px; text-align:center; border:1px solid #21262d;">
-                            🗺️ Abrir en Google Maps<br>
-                            <small style="color:#484f58;">${direccionCompleta}</small>
-                        </a>
-                    </div>
-                `;
-
-                marker.bindPopup(popupContent);
                 marker.addTo(markersLayer);
-                
-                bounds.push([lat, lng]);
+                bounds.push(latlng);
             });
 
-            // Ajustar vista para mostrar todos los marcadores
             if (bounds.length > 0) {
                 leafletMap.fitBounds(bounds, { padding: [50, 50] });
             }
@@ -3717,22 +3718,35 @@
 
         // ── Pull-to-refresh (mobile) ──────────────────────────────────────
         // Swipe hacia abajo desde el tope → recarga datos
+        // (skipea cuando hay un modal abierto, swipe horizontal, o está cargando)
         (() => {
-            let startY = 0;
+            let startY = 0, startX = 0;
             let pulling = false;
             const THRESHOLD = 80; // px mínimos para disparar el refresh
 
+            function isAnyModalOpen() {
+                return document.getElementById('mapModal')?.classList.contains('active') ||
+                       document.querySelector('.dropdown-menu.show, .modal.show, [data-modal-open="true"]');
+            }
+
             document.addEventListener('touchstart', e => {
+                if (isAnyModalOpen()) { pulling = false; return; }
                 if (window.scrollY === 0) {
                     startY = e.touches[0].clientY;
+                    startX = e.touches[0].clientX;
                     pulling = true;
                 }
             }, { passive: true });
 
             document.addEventListener('touchend', e => {
                 if (!pulling) return;
+                if (isAnyModalOpen()) { pulling = false; return; }
                 const endY = e.changedTouches[0].clientY;
-                if (endY - startY > THRESHOLD) {
+                const endX = e.changedTouches[0].clientX;
+                const dy = endY - startY;
+                const dx = Math.abs(endX - startX);
+                // Solo dispara si el swipe vertical fue claro (vertical >> horizontal)
+                if (dy > THRESHOLD && dy > dx * 2) {
                     cargarFlexHoy();
                 }
                 pulling = false;
