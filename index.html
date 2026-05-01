@@ -1515,7 +1515,14 @@
 
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
-        const CUENTAS = [
+        const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbyRZeDZNTQ951jop4E581R03jkjSmci6w4BYLe5f52RGqSpGudQYHUDWaBr5Jn3KVQc/exec';
+
+        async function verEtiqueta(shippingId, event) {
+            event.stopPropagation();
+            window.open(`${GAS_ETIQUETAS}?id=${shippingId}`, '_blank');
+        }
+
+                const CUENTAS = [
             {
                 nombre: 'Mikra',
                 clientId: '6723747350775490',
@@ -3457,6 +3464,9 @@
                                 </div>
                                 <div class="unified-timeline">${utlItems}</div>
                                 ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
+                                <div style="margin-top:8px;text-align:right;">
+                                    <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                                </div>
                             </div>
                         </div>`);
                     } else {
@@ -3481,6 +3491,9 @@
                                 <div class="unified-timeline">${utlItems}</div>
                             </div>
                             ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
+                            <div style="margin-top:8px;text-align:right;">
+                                <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                            </div>
                         </div>`);
                     }
                 });
