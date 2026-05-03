@@ -3519,6 +3519,12 @@
             }
 
             document.getElementById('content').innerHTML = parts.join('');
+            // Mostrar botones de etiqueta si ya tenemos la lista
+            if (etiquetasSet !== null) {
+                document.querySelectorAll('[data-eid]').forEach(btn => {
+                    btn.style.display = etiquetasSet.has(btn.dataset.eid) ? '' : 'none';
+                });
+            }
 
             // ── Geo-stats inline en el top bar ──
             const geoEl = document.getElementById('geoInline');
