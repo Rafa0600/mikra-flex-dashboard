@@ -1515,21 +1515,24 @@
 
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
-        const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbzEKggfhWy51zeE2JbWapqhtd20dQL7exes4yc5OAdnNB3runDcX3uHlgVpeoOUWhHp/exec';
+        const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbx3E52ZuQK23TIvmlNATqGVyKbRc3gISXi7VAIxPakR1GWph0byisD9P2cnNb4WECVe/exec';
 
         let etiquetasSet = null;
 
-        async function cargarEtiquetas() {
-            try {
-                const res  = await fetch(`${GAS_ETIQUETAS}?action=list`);
-                const ids  = await res.json();
+        function cargarEtiquetas() {
+            const callbackName = 'etiquetasCallback_' + Date.now();
+            const script = document.createElement('script');
+            window[callbackName] = function(ids) {
                 etiquetasSet = new Set(ids.map(String));
                 document.querySelectorAll('[data-eid]').forEach(btn => {
                     btn.style.display = etiquetasSet.has(btn.dataset.eid) ? '' : 'none';
                 });
-            } catch(e) {
-                etiquetasSet = null; // si falla, mostrar todos
-            }
+                delete window[callbackName];
+                script.remove();
+            };
+            script.src = `${GAS_ETIQUETAS}?action=list&callback=${callbackName}`;
+            script.onerror = () => { etiquetasSet = null; script.remove(); };
+            document.head.appendChild(script);
         }
 
         async function verEtiqueta(shippingId, event) {
