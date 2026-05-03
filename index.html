@@ -1517,6 +1517,21 @@
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
         const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbzOMG-U43AEI6ocYp1dSSOdjakMsJz79PUQlJ9iUn4_vHuBvBB_MFIe9qhuKwu6Zakw/exec';
 
+        let etiquetasSet = null;
+
+        async function cargarEtiquetas() {
+            try {
+                const res  = await fetch(`${GAS_ETIQUETAS}?action=list`);
+                const ids  = await res.json();
+                etiquetasSet = new Set(ids.map(String));
+                document.querySelectorAll('[data-eid]').forEach(btn => {
+                    btn.style.display = etiquetasSet.has(btn.dataset.eid) ? '' : 'none';
+                });
+            } catch(e) {
+                etiquetasSet = null; // si falla, mostrar todos
+            }
+        }
+
         async function verEtiqueta(shippingId, event) {
             event.stopPropagation();
             window.open(`${GAS_ETIQUETAS}?id=${shippingId}`, '_blank');
@@ -1966,6 +1981,7 @@
 
 
         async function cargarFlexHoy() {
+            cargarEtiquetas();
             const myGen = ++loadGeneration;
             // Resetear filtros
             currentStateFilter = 'all';
@@ -3465,7 +3481,7 @@
                                 <div class="unified-timeline">${utlItems}</div>
                                 ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
                                 <div style="margin-top:8px;text-align:right;">
-                                    <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                                    <button data-eid="${shipping.id}" onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none">🏷️ Ver etiqueta</button>
                                 </div>
                             </div>
                         </div>`);
@@ -3492,7 +3508,7 @@
                             </div>
                             ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
                             <div style="margin-top:8px;text-align:right;">
-                                <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                                <button data-eid="${shipping.id}" onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none">🏷️ Ver etiqueta</button>
                             </div>
                         </div>`);
                     }
