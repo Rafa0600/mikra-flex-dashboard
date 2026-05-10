@@ -1383,11 +1383,12 @@
     <div class="container">
         <!-- Fila única: versión + geo-stats + acciones -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-            <span class="version-badge" style="flex-shrink:0;">v3.9</span>
+            <span class="version-badge" style="flex-shrink:0;">v4.0</span>
             <span id="geoInline">—</span>
             <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
                 <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
                 <button onclick="cargarNoEntregados()" id="btnNoEntregados" style="background:linear-gradient(135deg,#f85149,#da3633); padding:6px 10px; font-size:12px; margin:0; min-height:34px;" title="Viajes fallidos últimos 7 días">🚫 7d</button>
+                <button onclick="forzarRecarga()" title="Borrar cache y recargar desde cero" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">↺</button>
                 <button onclick="toggleTools()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">⚙️</button>
             </div>
         </div>
@@ -2813,14 +2814,15 @@
                 async function fetchPage(offset) {
                     const url = `${cuenta.proxy}/api/orders/search?seller=${sellerId}&offset=${offset}&limit=50&sort=date_desc${filter}`;
                     const opts = { headers: { 'Authorization': `Bearer ${token}` } };
-                    for (let attempt = 0; attempt < 2; attempt++) {
+                    const delays = [200, 600];
+                    for (let attempt = 0; attempt < 3; attempt++) {
                         try {
                             const r = await fetch(url, opts);
                             if (r.ok) return await r.json();
                         } catch {}
-                        if (attempt === 0) await new Promise(res => setTimeout(res, 200));
+                        if (attempt < delays.length) await new Promise(res => setTimeout(res, delays[attempt]));
                     }
-                    console.warn(`[${cuenta.nombre}] página offset=${offset} falló tras 2 intentos`);
+                    console.warn(`[${cuenta.nombre}] página offset=${offset} falló tras 3 intentos`);
                     return { results: [], _failed: true };
                 }
 
@@ -2893,7 +2895,7 @@
 
                 const [ordersA, ordersB] = await Promise.all([
                     fetchAllPages(filterA, 19),  // hasta 1000 órdenes — más que suficiente para un día
-                    fetchAllPages(filterB, 4),   // hasta 250 órdenes — solo safety net para reprogramados
+                    fetchAllPages(filterB, 19),  // hasta 1000 órdenes — safety net completo para reprogramados
                 ]);
 
                 if (ordersA.length === 0 && ordersB.length === 0) {
@@ -2902,7 +2904,7 @@
                     const dateFrom = calcularDateFrom(targetDate);
                     const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
                     const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                    allOrders = await fetchAllPages(fbFilter, 9);
+                    allOrders = await fetchAllPages(fbFilter, 19);
                 } else {
                     const seen = new Set();
                     allOrders = [];
@@ -2977,6 +2979,23 @@
                 }
             }
             await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
+
+            // Detectar y reintentar shipments que no se pudieron cargar en batch
+            const missingIds = ordersConShipping
+                .map(o => o.shipping.id)
+                .filter(id => !shippingMap.has(id));
+            if (missingIds.length > 0) {
+                console.warn(`[${cuenta.nombre}] Reintentando ${missingIds.length} shipments faltantes individualmente...`);
+                await Promise.all(missingIds.map(id =>
+                    fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                        .then(r => r.ok ? r.json() : null).catch(() => null)
+                        .then(s => { if (s?.id) shippingMap.set(s.id, s); })
+                ));
+                const stillMissing = ordersConShipping.filter(o => !shippingMap.has(o.shipping.id)).length;
+                if (stillMissing > 0) {
+                    console.warn(`[${cuenta.nombre}] ${stillMissing} shipments siguen sin cargarse después del reintento`);
+                }
+            }
 
             // Construir tempOrders filtrando por fecha y tipo
             const tempOrders2 = [];
@@ -3716,26 +3735,20 @@
             }
         }
 
-        function getDiaHabilActual() {
-            const hoy = new Date();
-            const diaSemana = hoy.getDay(); // 0=Dom, 6=Sáb
-            
-            // Si es sábado (6), cargar lunes (+2 días)
-            if (diaSemana === 6) {
-                hoy.setDate(hoy.getDate() + 2);
-            }
-            // Si es domingo (0), cargar lunes (+1 día)
-            else if (diaSemana === 0) {
-                hoy.setDate(hoy.getDate() + 1);
-            }
-            
-            hoy.setHours(0, 0, 0, 0);
-            return hoy;
-        }
-
         // ── Auto-refresh ─────────────────────────────────────────────────
         let autoRefreshTimer = null;
         const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+
+        function forzarRecarga() {
+            // Borra el cache de la fecha actualmente cargada y recarga desde cero
+            if (currentNavDate) {
+                invalidateCache(currentNavDate);
+            }
+            // Limpiar también el cache del día de hoy por si acaso
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            invalidateCache(hoy);
+            cargarFlexHoy();
+        }
 
         function toggleAutoRefresh(btn) {
             if (autoRefreshTimer) {
