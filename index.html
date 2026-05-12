@@ -450,6 +450,7 @@
         .progress-segment.en-camino { background: linear-gradient(90deg, #00d9ff, #00b8d4); color: #000; }
         .progress-segment.entregado { background: linear-gradient(90deg, #00ff88, #00e676); color: #000; }
         .progress-segment.cancelado { background: linear-gradient(90deg, #f85149, #da3633); }
+
         .progress-segment.reprogramado { background: linear-gradient(90deg, #FF9800, #f57c00); color: #000; }
 
         .sort-controls {
@@ -500,6 +501,7 @@
         .envio-card.en-camino { border-left-color: #00d9ff; }
         .envio-card.entregado { border-left-color: #00ff88; }
         .envio-card.cancelado { border-left-color: #f85149; opacity: 0.7; }
+
         .envio-card.reprogramado { border-left-color: #FF9800; }
 
         .envio-header {
@@ -524,6 +526,7 @@
         .estado-badge.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
         .estado-badge.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
         .estado-badge.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
+
         .estado-badge.reprogramado { background: linear-gradient(135deg, #FF9800, #f57c00); color: #000; }
 
         .envio-info {
@@ -865,6 +868,7 @@
         .envio-card-simple.en-camino { border-left-color: #00d9ff; }
         .envio-card-simple.entregado { border-left-color: #00ff88; }
         .envio-card-simple.cancelado { border-left-color: #f85149; opacity: 0.7; }
+
         .envio-card-simple.reprogramado { border-left-color: #FF9800; }
 
         .simple-header {
@@ -895,6 +899,7 @@
         .simple-estado.en-camino { background: linear-gradient(135deg, #00d9ff, #00b8d4); color: #000; }
         .simple-estado.entregado { background: linear-gradient(135deg, #00ff88, #00e676); color: #000; }
         .simple-estado.cancelado { background: linear-gradient(135deg, #f85149, #da3633); }
+
         .simple-estado.reprogramado { background: linear-gradient(135deg, #FF9800, #f57c00); color: #000; }
 
         .simple-details {
@@ -1418,6 +1423,9 @@
                     <button class="cuenta-btn chaya-btn" onclick="filtrarPorCuenta('Chaya')" style="padding:5px 10px; font-size:11px;">🟠 Chaya <span class="cuenta-count" id="chayaCount">0</span></button>
                     <button class="cuenta-btn canceladas-toggle" onclick="toggleCanceladas()" id="toggleCanceladasBtn" style="padding:5px 10px; font-size:11px; display:none;">❌ <span id="canceladasCount">0</span></button>
                 </div>
+                <div style="margin-top:8px; border-top:1px solid #21262d; padding-top:8px;">
+                    <button onclick="exportarCSV()" style="background:#1a2a1a; border:1.5px solid #238636; border-radius:20px; color:#3fb950; padding:6px 14px; font-size:11px; font-weight:700; font-family:inherit; cursor:pointer; width:100%;">⬇ Exportar CSV de ventas</button>
+                </div>
             </div>
         </div>
         <span id="badgeFecha" style="display:none;"></span>
@@ -1481,9 +1489,6 @@
         <div id="sortToggleRow" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
             <button class="sort-toggle-btn" onclick="toggleSortSection()" id="sortToggleBtn" style="flex:1; min-width:120px;">
                 ⇅ Ordenar <span class="sort-active-label" id="sortActiveLabel">Zona</span> <span id="sortChevron">▼</span>
-            </button>
-            <button onclick="exportarCSV()" style="background:#1a2a1a; border:1.5px solid #238636; border-radius:20px; color:#3fb950; padding:6px 14px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap;" title="Exportar todas las órdenes cargadas a CSV">
-                ⬇ Exportar CSV
             </button>
         </div>
 
@@ -2753,11 +2758,14 @@
                 return;
             }
 
-            // FILTRAR CANCELADAS: Solo mostrar canceladas si son para HOY (targetDate)
+            // FILTRAR CANCELADAS:
+            // - Si fue despachada (date_shipped) → siempre incluir: es reclamable.
+            // - Si no fue despachada → solo incluir si la fecha estimada es targetDate.
             const processed = allOrdersFromAllAccounts.filter(({ shipping }) => {
                 const state = shipping._state || getOrderState(shipping);
                 if (state === 'cancelado') {
-                    return esEntregaParaFecha(shipping, targetDate);
+                    const fueEnviada = !!shipping.status_history?.date_shipped;
+                    return fueEnviada || esEntregaParaFecha(shipping, targetDate);
                 }
                 return true;
             });
@@ -2881,30 +2889,44 @@
             const filterA = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=paid`;
 
             if (esFechaAntigua) {
-                // Para fechas históricas: usar estimated_delivery_time (server-side, exacto).
-                // La ventana amplia de date_created (hasta el viernes anterior) podía tener miles
-                // de órdenes y superar el cap de 1000 → resultados distintos en cada refresh.
-                console.log(`[${cuenta.nombre}] Fecha antigua (${diasAtras}d atrás), usando estimated_delivery_time`);
-                allOrders = await fetchAllPages(filterA, 19);
+                // filterA: estimated_delivery_time exacto para el día (órdenes activas).
+                // filterC: date_created del mismo día — recupera las delivered que ML quitó del índice.
+                const nextDay2 = new Date(targetDate); nextDay2.setDate(nextDay2.getDate() + 1);
+                const filterCold = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay2.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                console.log(`[${cuenta.nombre}] Fecha antigua (${diasAtras}d atrás), usando A+C`);
+                const [ordA, ordC] = await Promise.all([fetchAllPages(filterA, 19), fetchAllPages(filterCold, 19)]);
+                const seenOld = new Set();
+                allOrders = [];
+                [...ordA, ...ordC].forEach(o => {
+                    const sid = o.shipping?.id;
+                    if (!sid || seenOld.has(sid)) return;
+                    seenOld.add(sid); allOrders.push(o);
+                });
+                console.log(`[${cuenta.nombre}] antigua A:${ordA.length} C:${ordC.length} → ${allOrders.length} únicos`);
             } else {
-                // filterB: cubre SOLO días anteriores a hoy (viernes → ayer).
-                // Propósito: capturar órdenes que ML saca del índice estimated_delivery_time
-                // una vez que pasan a "delivered" — eso hace que filterA las pierda.
-                // Al excluir hoy, la ventana es pequeña (viernes+sábado+domingo ≈ 500-700
-                // órdenes) y nunca supera el cap de 1000. Hoy lo cubre filterA.
+                // filterB: días ANTERIORES al día objetivo (viernes → targetDate exclusive).
+                // Captura not_delivered y reprogramados de días previos.
                 const reprogFrom = calcularDateFrom(targetDate);
                 const reprogFromStr = reprogFrom.toISOString().split('.')[0] + '.000-00:00';
-                // "to" = inicio de hoy (excluye las de hoy, que ya están en filterA)
-                const reprogToStr = targetDate.toISOString().split('.')[0] + '.000-00:00';
+                const reprogToStr  = targetDate.toISOString().split('.')[0] + '.000-00:00';
                 const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&order.date_created.to=${encodeURIComponent(reprogToStr)}&order.status=paid`;
 
-                const [ordersA, ordersB] = await Promise.all([
-                    fetchAllPages(filterA, 19),  // estimated_delivery_time = hoy (órdenes activas)
-                    fetchAllPages(filterB, 19),  // date_created viernes→ayer (captura los delivered)
-                ]);
+                // filterC: SOLO para días históricos (no hoy).
+                // ML quita del índice estimated_delivery_time las órdenes que pasan a "delivered",
+                // así que filterA deja de verlas al día siguiente. filterC las recupera buscando
+                // por date_created dentro del día objetivo (≤ 500 órdenes = nunca supera el cap).
+                const esHoy = targetDate.toDateString() === new Date().toDateString();
+                let filterC = null;
+                if (!esHoy) {
+                    const nextDay = new Date(targetDate); nextDay.setDate(nextDay.getDate() + 1);
+                    filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                }
 
-                if (ordersA.length === 0 && ordersB.length === 0) {
-                    // Fallback por date_created estricto (solo ese día) si ambas queries vacías
+                const queries = [fetchAllPages(filterA, 19), fetchAllPages(filterB, 19)];
+                if (filterC) queries.push(fetchAllPages(filterC, 19));
+                const [ordersA, ordersB, ordersC = []] = await Promise.all(queries);
+
+                if (ordersA.length === 0 && ordersB.length === 0 && ordersC.length === 0) {
                     console.warn(`[${cuenta.nombre}] Todas las queries sin resultados, fallback date_created`);
                     const dateFrom = new Date(targetDate);
                     const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
@@ -2913,24 +2935,36 @@
                 } else {
                     const seen = new Set();
                     allOrders = [];
-                    [...ordersA, ...ordersB].forEach(o => {
+                    [...ordersA, ...ordersB, ...ordersC].forEach(o => {
                         const sid = o.shipping?.id;
                         if (!sid || seen.has(sid)) return;
                         seen.add(sid);
                         allOrders.push(o);
                     });
                 }
-                console.log(`[${cuenta.nombre}] A:${ordersA?.length??0} B:${ordersB?.length??0} → Total único:${allOrders.length}`);
+                console.log(`[${cuenta.nombre}] A:${ordersA?.length??0} B:${ordersB?.length??0} C:${ordersC?.length??0} → Total único:${allOrders.length}`);
+            }
+
+            // Agregar órdenes canceladas del día (order.status=cancelled).
+            // ML no las devuelve en los filtros de arriba (&order.status=paid).
+            // Son las "entregadas pero con orden cancelada" = reclamables.
+            {
+                const filterCancelled = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=cancelled`;
+                const cancelledOrds = await fetchAllPages(filterCancelled, 5);
+                if (cancelledOrds.length > 0) {
+                    const existingShipIds = new Set(allOrders.map(o => o.shipping?.id).filter(Boolean));
+                    cancelledOrds.forEach(o => {
+                        o._orderCancelled = true;
+                        if (!existingShipIds.has(o.shipping?.id)) allOrders.push(o);
+                    });
+                    console.log(`[${cuenta.nombre}] +${cancelledOrds.length} órdenes canceladas del día`);
+                }
             }
 
             if (loadGen !== null && loadGeneration !== loadGen) return [];
 
-            // Filtro client-side: saltear sin shipping o canceladas a nivel orden
-            const ordersConShipping = allOrders.filter(o =>
-                o.shipping?.id &&
-                o.status !== 'cancelled' &&
-                o.order_status !== 'cancelled'
-            );
+            // Incluir todas las órdenes con shipping (también canceladas a nivel orden).
+            const ordersConShipping = allOrders.filter(o => o.shipping?.id);
 
             if (progress) { progress.total += ordersConShipping.length; if (notify) notify(); }
 
@@ -3008,9 +3042,17 @@
                 const shipping = shippingMap.get(order.shipping.id);
                 if (!shipping) return;
                 if (shipping.logistic_type !== 'self_service') return;
+                // Si vino de filterCancelled (orden cancelada), solo incluir si es reclamación genuina:
+                // envío realmente entregado Y fecha estimada coincide con targetDate.
+                const esReclamacion = order._orderCancelled &&
+                    shipping.status === 'delivered' &&
+                    esEntregaParaFecha(shipping, targetDate);
+                if (order._orderCancelled && !esReclamacion) return; // descartar resto de canceladas
                 if (esEntregaParaFecha(shipping, targetDate) ||
                     shipping.status === 'not_delivered' ||
-                    shipping.status === 'cancelled') {
+                    shipping.status === 'cancelled' ||
+                    esReclamacion) {
+                    if (esReclamacion) shipping._orderCancelled = true;
                     tempOrders2.push({ order, shipping });
                 }
             });
@@ -3021,9 +3063,8 @@
             // Enriquecer datos con tracking detallado (síncrono, datos ya en shipping)
             tempOrders.forEach(({ order, shipping }) => {
                 enrichShippingData(null, null, shipping, order.id);
-                // Cachear estado y zona: se calculan UNA sola vez aquí,
-                // y se reusan en todos los filtros/sorts/renders posteriores.
                 shipping._state = getOrderState(shipping);
+                // Orden cancelada pero envío entregado → se cuenta como entregado normalmente
                 shipping._zona = getZonaDetallada(
                     shipping.receiver_address?.neighborhood?.name || '',
                     shipping.receiver_address?.city?.name || '',
@@ -3461,7 +3502,7 @@
             // Stats en una sola pasada con reduce (antes eran 5 filter separados)
             const stats = ordersForStats.reduce((acc, { shipping, cuentaNombre }) => {
                 const s = shipping._state;
-                if (s === 'pendiente')    acc.pendiente++;
+                if (s === 'pendiente')      acc.pendiente++;
                 else if (s === 'impreso')      acc.impreso++;
                 else if (s === 'en-camino')    acc.enCamino++;
                 else if (s === 'entregado')    acc.entregado++;
