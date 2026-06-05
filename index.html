@@ -1393,6 +1393,7 @@
             <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
                 <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
                 <button onclick="cargarNoEntregados()" id="btnNoEntregados" style="background:linear-gradient(135deg,#f85149,#da3633); padding:6px 10px; font-size:12px; margin:0; min-height:34px;" title="Viajes fallidos últimos 7 días">🚫 7d</button>
+                <button onclick="compartirWhatsApp()" id="btnCompartir" class="hidden" title="Compartir resumen del día por WhatsApp" style="background:linear-gradient(135deg,#25D366,#128C7E); padding:6px 10px; font-size:14px; margin:0; min-height:34px;">📤</button>
                 <button onclick="forzarRecarga()" title="Borrar cache y recargar desde cero" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">↺</button>
                 <button onclick="toggleTools()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">⚙️</button>
             </div>
@@ -1682,7 +1683,7 @@
             'campana','zarate','zárate',
             'derqui',
             'la plata','villa elisa','ensenada','berisso',
-            'cañuelas','canuelas','san vicente','guernica','marcos paz',
+            'cañuelas','canuelas','san vicente','guernica',
         ];
 
         function esLejana(zona) {
@@ -3607,7 +3608,7 @@
                                 <div class="unified-timeline">${utlItems}</div>
                                 ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
                                 <div style="margin-top:8px;text-align:right;">
-                                    <button data-eid="${shipping.id}" onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none">🏷️ Ver etiqueta</button>
+                                    <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
                                 </div>
                             </div>
                         </div>`);
@@ -3634,7 +3635,7 @@
                             </div>
                             ${repBadge ? `<div style="margin-top:8px;">${repBadge}</div>` : ''}
                             <div style="margin-top:8px;text-align:right;">
-                                <button data-eid="${shipping.id}" onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:none">🏷️ Ver etiqueta</button>
+                                <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
                             </div>
                         </div>`);
                     }
@@ -3642,15 +3643,10 @@
             }
 
             document.getElementById('content').innerHTML = parts.join('');
-            // Mostrar botones de etiqueta si ya tenemos la lista
-            if (etiquetasSet !== null) {
-                document.querySelectorAll('[data-eid]').forEach(btn => {
-                    btn.style.display = etiquetasSet.has(btn.dataset.eid) ? '' : 'none';
-                });
-            }
 
             // ── Geo-stats inline en el top bar ──
             const geoEl = document.getElementById('geoInline');
+            const btnCompartir = document.getElementById('btnCompartir');
             if (orders.length > 0) {
                 let geoCaba = 0, geoProv = 0, geoLej = 0;
                 orders.forEach(({ shipping }) => {
@@ -3661,13 +3657,38 @@
                 const activeCaba = currentZoneFilter === 'CABA'        ? ' geo-active' : '';
                 const activeProv = currentZoneFilter === '__PROV__'    ? ' geo-active' : '';
                 const activeLej  = currentZoneFilter === '__LEJANAS__' ? ' geo-active' : '';
+                const geoProvSinLej = geoProv - geoLej;
                 geoEl.innerHTML =
                     `<div class="geo-chip caba${activeCaba}" onclick="filtrarPorGeo('caba')"><span class="geo-num">${geoCaba}</span>CABA</div>` +
-                    `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProv}</span>PROV</div>` +
-                    `<div class="geo-chip lej${activeLej}"  onclick="filtrarPorGeo('lej')"><span class="geo-num">${geoLej}</span>LEJ~</div>`;
+                    `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProvSinLej}</span>PROV</div>` +
+                    `<div class="geo-chip lej${activeLej}"  onclick="filtrarPorGeo('lej')"><span class="geo-num">${geoLej}</span>LEJ</div>`;
+                // Guardar datos para compartir
+                window._geoShare = { geoCaba, geoProv, geoProvSinLej, geoLej, date: currentNavDate || new Date() };
+                if (btnCompartir) btnCompartir.classList.remove('hidden');
             } else {
                 geoEl.innerHTML = '';
+                if (btnCompartir) btnCompartir.classList.add('hidden');
             }
+        }
+
+        function compartirWhatsApp() {
+            const d = window._geoShare;
+            if (!d) return;
+            const diasNombres = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+            const mesesNombres = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+            const fecha = new Date(d.date);
+            const diaNombre = diasNombres[fecha.getDay()];
+            const diaN = fecha.getDate();
+            const mesNombre = mesesNombres[fecha.getMonth()];
+            const total = d.geoCaba + d.geoProv; // geoProv incluye lejanos
+            const texto =
+                `${diaNombre} ${diaN} ${mesNombre}\n\n` +
+                `${d.geoCaba} CABA\n` +
+                `${d.geoProvSinLej} Provincia\n` +
+                `${d.geoLej} Lejanos\n\n` +
+                `Total ${total}`;
+            const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
+            window.open(url, '_blank');
         }
 
         document.addEventListener('click', (e) => {
