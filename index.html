@@ -1526,6 +1526,7 @@
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
         const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbx3E52ZuQK23TIvmlNATqGVyKbRc3gISXi7VAIxPakR1GWph0byisD9P2cnNb4WECVe/exec';
+        const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbxRtV8FmTFuwiHcuDIrboemvvZQIHtSk0AyABKZGY_S_rjMDN9wxkPAIhWd3zbJu5sd-w/exec';
 
         let etiquetasSet = null;
 
@@ -1572,6 +1573,7 @@
         let mostrarCanceladas = false;
         let currentSort = 'zona';
         let dropdownOpen = false;
+        let _pendingComparacion = null;
         const vistaSimple = true; // Vista simple siempre
 
         // Evita que dos cargas simultáneas mezclen resultados
@@ -2179,10 +2181,12 @@
                         return orders;
                     }
 
-                    // Ambas queries en paralelo
-                    const [ordersA, ordersB] = await Promise.all([fetchPaged(filterA), fetchPaged(filterB)]);
+                    const filterC = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=cancelled`;
 
-                    // Deduplicar A+B
+                    // Las tres queries en paralelo
+                    const [ordersA, ordersB, ordersC] = await Promise.all([fetchPaged(filterA), fetchPaged(filterB), fetchPaged(filterC)]);
+
+                    // Deduplicar A+B (sin canceladas)
                     const seen = new Set();
                     const combined = [];
                     [...ordersA, ...ordersB].forEach(o => {
@@ -2190,6 +2194,15 @@
                         if (!sid || seen.has(sid) || o.status === 'cancelled') return;
                         seen.add(sid);
                         combined.push(o);
+                    });
+                    // Canceladas separadas
+                    const canceladas = [];
+                    ordersC.forEach(o => {
+                        const sid = o.shipping?.id;
+                        if (!sid || seen.has(sid)) return;
+                        seen.add(sid);
+                        o._canceladaDevolver = true;
+                        canceladas.push(o);
                     });
 
                     console.log(`[${cuenta.nombre}] NE — A:${ordersA.length} B:${ordersB.length} → ${combined.length} únicos`);
@@ -2206,26 +2219,36 @@
                         while (bi < bats.length) {
                             const bat = bats[bi++];
                             const ids = bat.map(o => o.shipping.id);
-                            try {
-                                const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`,
-                                    { headers: { 'Authorization': `Bearer ${token}` } });
-                                if (r.ok) {
-                                    const d = await r.json();
-                                    const arr = Array.isArray(d) ? d : (d.shipments || d.results || []);
-                                    arr.forEach(s => { if (s?.id) sMap.set(s.id, s); });
-                                } else {
-                                    // fallback individual
-                                    await Promise.all(ids.map(id =>
-                                        fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-                                            .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
-                                            .then(s => { if (s?.id) sMap.set(s.id, s); })
-                                    ));
-                                }
-                            } catch {}
+                            await Promise.all(ids.map(id =>
+                                fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                                    .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
+                                    .then(s => { if (s?.id) sMap.set(s.id, s); })
+                            ));
                             prog.done += bat.length; notifyProg();
                         }
                     }
                     await Promise.all(Array.from({ length: BCONC }, bw));
+
+                    // Batch fetch canceladas también
+                    if (canceladas.length > 0) {
+                        prog.total += canceladas.length; notifyProg();
+                        const batsC = [];
+                        for (let i = 0; i < canceladas.length; i += BSIZ) batsC.push(canceladas.slice(i, i+BSIZ));
+                        let bci = 0;
+                        async function bwC() {
+                            while (bci < batsC.length) {
+                                const bat = batsC[bci++];
+                                const ids = bat.map(o => o.shipping.id);
+                                await Promise.all(ids.map(id =>
+                                    fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                                        .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
+                                        .then(s => { if (s?.id) sMap.set(s.id, s); })
+                                ));
+                                prog.done += bat.length; notifyProg();
+                            }
+                        }
+                        await Promise.all(Array.from({ length: BCONC }, bwC));
+                    }
 
                     const results = [];
                     combined.forEach(order => {
@@ -2236,6 +2259,19 @@
                             && !shipping.status_history?.date_delivered
                             && (shipping.status === 'shipped' || shipping.status === 'not_delivered')
                         ) {
+                            results.push({ order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color });
+                        }
+                    });
+                    // Canceladas donde el driver ya había retirado el paquete pero NO lo entregó
+                    // (si tiene date_delivered = el comprador lo recibió y está haciendo devolución → ignorar)
+                    canceladas.forEach(order => {
+                        const shipping = sMap.get(order.shipping.id);
+                        if (shipping
+                            && shipping.logistic_type === 'self_service'
+                            && shipping.status_history?.date_shipped
+                            && !shipping.status_history?.date_delivered
+                        ) {
+                            shipping._canceladaDevolver = true;
                             results.push({ order, shipping, cuentaNombre: cuenta.nombre, cuentaColor: cuenta.color });
                         }
                     });
@@ -2253,12 +2289,13 @@
                 const sid = item.shipping.id;
                 if (shippingIdsVistos.has(sid)) return;
                 shippingIdsVistos.add(sid);
-                // Excluir paquetes con fecha estimada HOY (aún en camino, no son "atrasados")
+                // Filtrar por ventana de 7 días (independiente del filtro de ML que no es exacto)
                 const fechaEntItem = item.shipping.shipping_option?.estimated_delivery_time?.date
                                   || item.shipping.shipping_option?.estimated_delivery_final?.date;
                 if (fechaEntItem) {
                     const entItem = new Date(fechaEntItem); entItem.setHours(0,0,0,0);
-                    if (entItem.getTime() === hoy.getTime()) return;
+                    if (entItem.getTime() === hoy.getTime()) return;   // hoy → aún en camino
+                    if (entItem.getTime() < desde.getTime()) return;   // más viejo que 7d → excluir
                 }
                 todos.push(item);
             });
@@ -2268,6 +2305,33 @@
                 const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
                 const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
                 return fa.localeCompare(fb);
+            });
+
+            // ── Consultar GAS por cancelados desaparecidos en los últimos 7 días ──
+            const desdeStr = fmt(desde);
+            const idsEnML  = new Set(todos.map(t => String(t.shipping.id)));
+
+            new Promise(resolve => {
+                const cbName = 'ne7dCb_' + Date.now();
+                const script = document.createElement('script');
+                window[cbName] = (data) => { delete window[cbName]; script.remove(); resolve(data); };
+                script.onerror = () => { delete window[cbName]; script.remove(); resolve(null); };
+                script.src = `${GAS_TRACKER}?desde=${desdeStr}&callback=${cbName}`;
+                setTimeout(() => { if (window[cbName]) { delete window[cbName]; script.remove(); resolve(null); } }, 8000);
+                document.head.appendChild(script);
+            }).then(data => {
+                if (!data?.cuentas) return;
+                const cancelados = [];
+                Object.entries(data.cuentas).forEach(([fechaKey, cuentas]) => {
+                    Object.entries(cuentas).forEach(([cuenta, envios]) => {
+                        envios.forEach(e => {
+                            if (!idsEnML.has(String(e.id))) {
+                                cancelados.push({...e, cuenta, fecha_guardada: fechaKey});
+                            }
+                        });
+                    });
+                });
+                if (cancelados.length > 0) mostrarCanceladosADevolver(cancelados);
             });
 
             document.getElementById('badgeFecha').textContent = `🚫 ATRASADOS (7 días)`;
@@ -2301,8 +2365,9 @@
             };
 
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            const fallidoCount  = todos.filter(t => t.shipping.status === 'not_delivered').length;
-            const enCaminoCount = todos.length - fallidoCount;
+            const canceladaCount = todos.filter(t => t.shipping._canceladaDevolver).length;
+            const fallidoCount   = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver).length;
+            const enCaminoCount  = todos.length - fallidoCount - canceladaCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
             const groups = new Map();
@@ -2332,95 +2397,133 @@
             function renderNECards(filterKey) {
                 const container = document.getElementById('neCards');
                 if (!container) return;
-                // Actualizar estado activo de botones
                 document.querySelectorAll('.ne-day-btn').forEach(b => {
                     b.style.outline = b.dataset.key === filterKey ? '2px solid white' : 'none';
                     b.style.opacity = b.dataset.key === filterKey ? '1' : '0.6';
                 });
 
-                let html = '';
-                groups.forEach(({ label, atraso, color, items }, gKey) => {
-                    if (filterKey !== 'all' && gKey !== filterKey) return;
-
-                    html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;">
-                        <div style="flex:1;height:1px;background:#21262d;"></div>
-                        <div style="background:${color};color:${color==='#FFE600'?'#000':'white'};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;">
-                            📅 ${label}${atraso ? ' · ' + atraso : ''}
-                            <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${items.length})</span>
-                        </div>
-                        <div style="flex:1;height:1px;background:#21262d;"></div>
-                    </div>`;
-
-                    items.forEach(({ shipping, order, cuentaNombre }) => {
-                        const sub = (shipping.substatus || '').toLowerCase();
-                        const isEnCamino = shipping.status === 'shipped';
-                        const grupoInfo = isEnCamino
+                function buildCard({ shipping, order, cuentaNombre }, gLabel, gAtraso, gColor) {
+                    const sub = (shipping.substatus || '').toLowerCase();
+                    const isEnCamino  = shipping.status === 'shipped';
+                    const isCancelada = !!shipping._canceladaDevolver;
+                    const grupoInfo   = isCancelada
+                        ? { label: '⚠️ Cancelada — Driver debe devolver', color: '#f85149' }
+                        : isEnCamino
                             ? (grupoLabels[sub] || { label: '🚚 En camino (sin confirmar)', color: '#00d9ff' })
                             : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
 
-                        const barrio  = shipping.receiver_address?.neighborhood?.name || '';
-                        const ciudad  = shipping.receiver_address?.city?.name || '';
-                        const zipCode = shipping.receiver_address?.zip_code || '';
-                        const zona    = getZonaDetallada(barrio, ciudad, zipCode);
-                        const calle   = shipping.receiver_address?.street_name || '';
-                        const numero  = shipping.receiver_address?.street_number || '';
-                        const provincia = shipping.receiver_address?.state?.name || '';
-                        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
-                        const comprador = order.buyer?.nickname || 'N/A';
-                        const orderId   = order.id || '';
-                        const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-                        const subHistory = shipping.substatus_history || [];
-                        const lastProb = [...subHistory].reverse().find(e => e.substatus === sub);
-                        const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
-                        const cuentaBadge = cuentaNombre === 'Mikra'
-                            ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
-                            : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
+                    const barrio  = shipping.receiver_address?.neighborhood?.name || '';
+                    const ciudad  = shipping.receiver_address?.city?.name || '';
+                    const zipCode = shipping.receiver_address?.zip_code || '';
+                    const zona    = getZonaDetallada(barrio, ciudad, zipCode);
+                    const calle   = shipping.receiver_address?.street_name || '';
+                    const numero  = shipping.receiver_address?.street_number || '';
+                    const provincia = shipping.receiver_address?.state?.name || '';
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle} ${numero}, ${ciudad}, ${provincia}`)}`;
+                    const comprador = order.buyer?.nickname || 'N/A';
+                    const orderId   = order.id || '';
+                    const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
+                    const subHistory = shipping.substatus_history || [];
+                    const lastProb   = [...subHistory].reverse().find(e => e.substatus === sub);
+                    const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
+                    const cuentaBadge = cuentaNombre === 'Mikra'
+                        ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
+                        : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
+                    const fechaBadge = gLabel
+                        ? `<span style="background:${gColor};color:${gColor==='#FFE600'?'#000':'white'};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">📅 ${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>`
+                        : '';
 
-                        html += `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color}; margin-bottom:8px;">
-                            <div class="simple-header">
-                                <div style="flex:1;">
-                                    <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:4px;">📍 ${zona}</div>
-                                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                                        <span style="background:${grupoInfo.color};color:${isEnCamino?'#000':'white'};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
-                                        ${cuentaBadge}
-                                    </div>
+                    return `<div class="envio-card-simple ${isCancelada ? 'cancelado' : isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color};margin-bottom:8px;">
+                        <div class="simple-header">
+                            <div style="flex:1;">
+                                <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:5px;">📍 ${zona}</div>
+                                <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+                                    <span style="background:${grupoInfo.color};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
+                                    ${cuentaBadge}
+                                    ${fechaBadge}
                                 </div>
-                                <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
                             </div>
-                            <div class="card-address-row" style="margin-top:8px;">
-                                <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
-                                <span class="card-sep">·</span>
-                                <span class="card-comprador">👤 <strong>${comprador}</strong></span>
-                            </div>
-                        </div>`;
-                    });
-                });
+                            <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
+                        </div>
+                        <div class="card-address-row" style="margin-top:8px;">
+                            <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                            <span class="card-sep">·</span>
+                            <span class="card-comprador">👤 <strong>${comprador}</strong></span>
+                        </div>
+                        <div style="margin-top:8px;text-align:right;">
+                            <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                        </div>
+                    </div>`;
+                }
 
-                if (!html) html = `<div class="no-results" style="padding:30px;text-align:center;">Sin envíos para ese día</div>`;
+                let html = '';
+                if (filterKey === 'canceladas') {
+                    // Filtro especial: solo canceladas de todos los grupos
+                    todos.forEach(item => {
+                        if (!item.shipping._canceladaDevolver) return;
+                        const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                       || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                        let gLabel = '', gAtraso = '', gColor = '#f85149';
+                        if (fechaEnt) {
+                            const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                            const diffDias = Math.round((hoy - entrega) / 86400000);
+                            gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                            gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : `en ${Math.abs(diffDias)}d`;
+                        }
+                        html += buildCard(item, gLabel, gAtraso, gColor);
+                    });
+                } else {
+                    groups.forEach(({ label, atraso, color, items }, gKey) => {
+                        if (filterKey !== 'all' && gKey !== filterKey) return;
+                        html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;">
+                            <div style="flex:1;height:1px;background:#21262d;"></div>
+                            <div style="background:${color};color:${color==='#FFE600'?'#000':'white'};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;">
+                                📅 ${label}${atraso ? ' · '+atraso : ''}
+                                <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${items.length})</span>
+                            </div>
+                            <div style="flex:1;height:1px;background:#21262d;"></div>
+                        </div>`;
+                        items.forEach(item => html += buildCard(item, label, atraso, color));
+                    });
+                }
+
+                if (!html) html = `<div class="no-results" style="padding:30px;text-align:center;">Sin envíos para ese filtro</div>`;
                 container.innerHTML = html;
             }
 
             // ── Armar botones de filtro por día ───────────────────────────
+            const btnStyle = `border:none;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;min-height:34px;touch-action:manipulation;`;
+            const activarBtn = `document.querySelectorAll('.ne-day-btn').forEach(b=>{b.style.outline='none';b.style.opacity='0.6'});this.style.outline='2px solid white';this.style.opacity='1';`;
+
             let btnHtml = `<button class="ne-day-btn" data-key="all"
-                style="background:#21262d;border:none;border-radius:20px;color:#e6edf3;padding:6px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;min-height:34px;touch-action:manipulation;"
-                onclick="document.querySelectorAll('.ne-day-btn').forEach(b=>{b.style.outline='none';b.style.opacity='0.6'});this.style.outline='2px solid white';this.style.opacity='1';renderNECards('all')">
+                style="${btnStyle}background:#21262d;color:#e6edf3;"
+                onclick="${activarBtn}renderNECards('all')">
                 Todos (${todos.length})
             </button>`;
 
             groups.forEach(({ label, atraso, color, items }, gKey) => {
                 const txtColor = color === '#FFE600' ? '#000' : 'white';
                 btnHtml += `<button class="ne-day-btn" data-key="${gKey}"
-                    style="background:${color};border:none;border-radius:20px;color:${txtColor};padding:6px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;min-height:34px;touch-action:manipulation;opacity:0.6;"
-                    onclick="document.querySelectorAll('.ne-day-btn').forEach(b=>{b.style.outline='none';b.style.opacity='0.6'});this.style.outline='2px solid white';this.style.opacity='1';renderNECards('${gKey}')">
+                    style="${btnStyle}background:${color};color:${txtColor};opacity:0.6;"
+                    onclick="${activarBtn}renderNECards('${gKey}')">
                     ${label}${atraso ? ' · '+atraso : ''} (${items.length})
                 </button>`;
             });
+
+            if (canceladaCount > 0) {
+                btnHtml += `<button class="ne-day-btn" data-key="canceladas"
+                    style="${btnStyle}background:#f85149;color:white;opacity:0.6;"
+                    onclick="${activarBtn}renderNECards('canceladas')">
+                    ⚠️ A devolver (${canceladaCount})
+                </button>`;
+            }
 
             // Construir el contenedor raíz
             let html = `
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
                 ${enCaminoCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">sin confirmar entrega</span></div>` : ''}
                 ${fallidoCount  > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">intento de entrega fallido</span></div>` : ''}
+                ${canceladaCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#7b1a1a);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></div>` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:12px;">
                 ${btnHtml}
@@ -2719,7 +2822,7 @@
                         console.error(`No hay token para ${cuenta.nombre}`);
                         return [];
                     }
-                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen, progress, notifyProgress);
+                    const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen, progress, notifyProgress, backgroundRefresh);
                     return orders.map(item => ({
                         ...item,
                         cuentaNombre: cuenta.nombre,
@@ -2788,10 +2891,10 @@
                 if (activas.length === 0) return;
             }
 
-            renderCargaCompletada(label, targetDate);
+            renderCargaCompletada(label, targetDate, backgroundRefresh);
         }
 
-        async function cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen = null, progress = null, notify = null) {
+        async function cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen = null, progress = null, notify = null, isBackground = false) {
             let tempOrders = [];
 
             const cuentaKey = cuenta.nombre.toLowerCase();
@@ -2951,7 +3054,7 @@
             // Son las "entregadas pero con orden cancelada" = reclamables.
             {
                 const filterCancelled = `&shipping.estimated_delivery_time.from=${deliveryFrom}&shipping.estimated_delivery_time.to=${deliveryTo}&order.status=cancelled`;
-                const cancelledOrds = await fetchAllPages(filterCancelled, 5);
+                const cancelledOrds = await fetchAllPages(filterCancelled, 1);
                 if (cancelledOrds.length > 0) {
                     const existingShipIds = new Set(allOrders.map(o => o.shipping?.id).filter(Boolean));
                     cancelledOrds.forEach(o => {
@@ -2977,24 +3080,21 @@
             const BATCH_CONC = 8; // batches en paralelo simultáneos
 
             async function fetchShipmentBatch(ids) {
-                const url = `${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`;
+                // El proxy no soporta batch → fetch individual con concurrencia limitada
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
-                try {
-                    const r = await fetch(url, opts);
-                    if (r.ok) {
-                        const data = await r.json();
-                        // ML devuelve array o { shipments: [...] }
-                        return Array.isArray(data) ? data : (data.shipments || data.results || []);
+                const results = [];
+                const CONC = 8;
+                let i = 0;
+                async function worker() {
+                    while (i < ids.length) {
+                        const id = ids[i++];
+                        const s = await fetch(`${cuenta.proxy}/api/shipments/${id}`, opts)
+                            .then(r => r.ok ? r.json() : null).catch(() => null);
+                        if (s?.id) results.push(s);
                     }
-                    // Fallback: si el bulk no funciona, fetch individual en paralelo
-                    const results = await Promise.all(ids.map(id =>
-                        fetch(`${cuenta.proxy}/api/shipments/${id}`, opts)
-                            .then(r2 => r2.ok ? r2.json() : null).catch(() => null)
-                    ));
-                    return results.filter(Boolean);
-                } catch {
-                    return [];
                 }
+                await Promise.all(Array.from({ length: CONC }, worker));
+                return results;
             }
 
             // Dividir en batches
@@ -3020,22 +3120,6 @@
             }
             await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
 
-            // Detectar y reintentar shipments que no se pudieron cargar en batch
-            const missingIds = ordersConShipping
-                .map(o => o.shipping.id)
-                .filter(id => !shippingMap.has(id));
-            if (missingIds.length > 0) {
-                console.warn(`[${cuenta.nombre}] Reintentando ${missingIds.length} shipments faltantes individualmente...`);
-                await Promise.all(missingIds.map(id =>
-                    fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-                        .then(r => r.ok ? r.json() : null).catch(() => null)
-                        .then(s => { if (s?.id) shippingMap.set(s.id, s); })
-                ));
-                const stillMissing = ordersConShipping.filter(o => !shippingMap.has(o.shipping.id)).length;
-                if (stillMissing > 0) {
-                    console.warn(`[${cuenta.nombre}] ${stillMissing} shipments siguen sin cargarse después del reintento`);
-                }
-            }
 
             // Construir tempOrders filtrando por fecha y tipo
             const tempOrders2 = [];
@@ -3048,7 +3132,7 @@
                 const esReclamacion = order._orderCancelled &&
                     shipping.status === 'delivered' &&
                     esEntregaParaFecha(shipping, targetDate);
-                if (order._orderCancelled && !esReclamacion) return; // descartar resto de canceladas
+                if (order._orderCancelled && !esReclamacion) return;
                 if (esEntregaParaFecha(shipping, targetDate) ||
                     shipping.status === 'not_delivered' ||
                     shipping.status === 'cancelled' ||
@@ -3986,6 +4070,17 @@
         async function cargarDia(fecha) {
             currentNavDate = new Date(fecha); currentNavDate.setHours(0,0,0,0);
             buildDateNav();
+            // Iniciar comparación GAS inmediatamente (en paralelo con todo lo demás)
+            const fechaStr = fecha.toISOString().split('T')[0];
+            _pendingComparacion = new Promise(resolve => {
+                const cbName = 'preComp_' + Date.now();
+                const script = document.createElement('script');
+                window[cbName] = (data) => { delete window[cbName]; script.remove(); resolve(data); };
+                script.onerror = () => { delete window[cbName]; script.remove(); resolve(null); };
+                script.src = `${GAS_TRACKER}?fecha=${fechaStr}&callback=${cbName}`;
+                setTimeout(() => { if (window[cbName]) { delete window[cbName]; script.remove(); resolve(null); } }, 8000);
+                document.head.appendChild(script);
+            });
             const myGen = ++loadGeneration;
             currentStateFilter = 'all'; currentZoneFilter = 'all';
             currentCuentaFilter = 'all'; mostrarCanceladas = false;
@@ -4033,7 +4128,131 @@
         }
 
         // Extrae el render final de cargarFlexPorFecha para poder llamarlo desde cache
-        function renderCargaCompletada(label, targetDate) {
+        // ── Guardar envíos del día en Google Sheet (fire & forget) ──
+        function guardarEnviosDia(fecha, orders) {
+            const ESTADOS_A_GUARDAR = new Set(['en-camino','reprogramado']);
+            const fechaStr = fecha.toISOString().split('T')[0];
+
+            // Agrupar por cuenta, solo estados que ya salieron del depósito
+            const porCuenta = {};
+            orders.forEach(({orders: ol, shipping, cuentaNombre}) => {
+                if (!ESTADOS_A_GUARDAR.has(shipping._state)) return;
+                if (!porCuenta[cuentaNombre]) porCuenta[cuentaNombre] = [];
+                porCuenta[cuentaNombre].push({
+                    id:           String(shipping.id),
+                    order_id:     String(ol[0]?.id || ''),
+                    zona:         shipping._zona || '',
+                    destinatario: ol[0]?.buyer?.nickname || '',
+                    estado:       shipping._state,
+                    calle:        (shipping.receiver_address?.street_name || '') + ' ' + (shipping.receiver_address?.street_number || ''),
+                    ciudad:       shipping.receiver_address?.city?.name || '',
+                    cp:           shipping.receiver_address?.zip_code || '',
+                    fecha_entrega: shipping.shipping_option?.estimated_delivery_time?.date || ''
+                });
+            });
+
+            Object.entries(porCuenta).forEach(([cuenta, envios]) => {
+                if (envios.length === 0) return;
+                // Iframe form: funciona sin CORS
+                const iframeName = 'gas_' + Date.now() + '_' + cuenta;
+                const iframe = document.createElement('iframe');
+                iframe.name = iframeName;
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = GAS_TRACKER;
+                form.target = iframeName;
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'd';
+                input.value = JSON.stringify({fecha: fechaStr, cuenta, envios});
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+                setTimeout(() => { form.remove(); iframe.remove(); }, 8000);
+            });
+        }
+
+        // ── Comparar envíos guardados vs actuales → detecta cancelados ──
+        function compararConGuardado(fecha, ordersActuales) {
+            const procesar = (data) => {
+                if (!data?.cuentas) return;
+                const idsActuales = new Set(ordersActuales.map(({shipping}) => String(shipping.id)));
+                const cancelados = [];
+                Object.entries(data.cuentas).forEach(([cuenta, envios]) => {
+                    envios.forEach(e => {
+                        if (!idsActuales.has(String(e.id))) cancelados.push({...e, cuenta});
+                    });
+                });
+                if (cancelados.length > 0) mostrarCanceladosADevolver(cancelados);
+            };
+
+            // Usar el resultado pre-cargado si está disponible
+            if (_pendingComparacion) {
+                _pendingComparacion.then(data => { _pendingComparacion = null; procesar(data); });
+            }
+        }
+
+        function mostrarCanceladosADevolver(cancelados) {
+            const existing = document.getElementById('seccionADevolver');
+            if (existing) existing.remove();
+            const cards = cancelados.map((e, idx) => {
+                const fechaFmt  = e.fecha_entrega ? formatearFecha(e.fecha_entrega) : '';
+                const calle     = e.calle || '';
+                const ciudad    = e.ciudad || '';
+                const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${e.order_id}/detalle`;
+                const mapsUrl   = calle ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(calle + ', ' + ciudad)}` : '';
+                const cuentaColor = e.cuenta?.toLowerCase() === 'mikra' ? 'mikra' : 'chaya';
+                const waTexto   = encodeURIComponent(
+                    `⚠️ PAQUETE A DEVOLVER\n\n` +
+                    `📍 ${e.zona}\n` +
+                    `🏠 ${calle}${ciudad ? ', ' + ciudad : ''}\n` +
+                    `👤 ${e.destinatario}\n` +
+                    (fechaFmt ? `📅 Entrega estimada: ${fechaFmt}\n` : '') +
+                    `🔢 Envío: ${e.id}\n` +
+                    `🔗 ${orderUrl}`
+                );
+                return `<div class="envio-card-simple cancelado" style="border-left-color:#f85149;margin-bottom:8px;">
+                    <div class="simple-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                        <div class="simple-zona" style="color:#f85149;">📍 ${e.zona}</div>
+                        <div class="simple-estado cancelado">⚠️ A devolver</div>
+                    </div>
+                    <div class="simple-details expanded">
+                        <div class="card-meta" style="margin-top:10px;">
+                            <span class="cuenta-badge ${cuentaColor}">${e.cuenta}</span>
+                            <div class="card-meta-right">
+                                <span style="font-size:12px;color:#8b949e;">#${e.order_id}</span>
+                            </div>
+                        </div>
+                        <div class="card-address-row">
+                            ${mapsUrl ? `<a href="${mapsUrl}" target="_blank">📍 ${calle}${ciudad ? ', ' + ciudad : ''}</a>` : `<span>📍 ${calle}${ciudad ? ', ' + ciudad : ''}</span>`}
+                            <span class="card-sep">·</span>
+                            <span class="card-comprador">👤 <strong>${e.destinatario}</strong></span>
+                            ${fechaFmt ? `<span class="card-sep">·</span><span style="font-size:12px;color:#ff6b00;">📅 ${fechaFmt}</span>` : ''}
+                        </div>
+                        <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                            <a href="https://wa.me/?text=${waTexto}" target="_blank" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📤 Compartir</a>
+                            <button onclick="verEtiqueta('${e.id}', event)" style="background:#1a73e8;color:white;border:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            const seccion = document.createElement('div');
+            seccion.id = 'seccionADevolver';
+            seccion.style.cssText = 'margin-bottom:16px;';
+            seccion.innerHTML = `
+                <div style="background:linear-gradient(135deg,#2d1515,#1a0d0d);border:2px solid #f85149;border-radius:14px;padding:14px;">
+                    <div style="color:#f85149;font-weight:700;font-size:15px;margin-bottom:12px;">
+                        ⚠️ ${cancelados.length} paquete${cancelados.length>1?'s':''} — El driver debe devolver
+                    </div>
+                    ${cards}
+                </div>`;
+            const content = document.getElementById('content');
+            content.insertBefore(seccion, content.firstChild);
+        }
+
+        function renderCargaCompletada(label, targetDate, isBackground = false) {
             const zonaCounts = new Map();
             let cabaCount = 0, provinciaCount = 0;
             allFlexOrders.forEach(({ shipping }) => {
@@ -4063,6 +4282,14 @@
             document.getElementById('sortToggleRow').style.display = 'flex';
             document.getElementById('btnMapa').classList.remove('hidden');
             displayOrders('all');
+
+            if (!isBackground) {
+                // Guardar en Drive (fire & forget, no bloquea)
+                guardarEnviosDia(targetDate, allFlexOrders);
+                // Comparar con guardado anterior para detectar cancelados
+                compararConGuardado(targetDate, allFlexOrders);
+            }
+
             // Pre-cargar días vecinos en background para clicks instantáneos
             if (currentNavDate) precargarDiasAdyacentes(currentNavDate);
         }
