@@ -2556,48 +2556,41 @@
 
                     console.log(`[${cuenta.nombre}] NE — A:${ordersA.length} B:${ordersB.length} → ${combined.length} únicos`);
 
-                    prog.total += combined.length; notifyProg();
+                    const todosParaFetch = [...combined, ...canceladas];
+                    prog.total += todosParaFetch.length; notifyProg();
 
-                    // Batch fetch shipments
+                    // Batch fetch shipments — el Worker hace fan-out interno (1 request → 20 paralelos en edge)
                     const BSIZ = 20, BCONC = 8;
                     const sMap = new Map();
                     const bats = [];
-                    for (let i = 0; i < combined.length; i += BSIZ) bats.push(combined.slice(i, i+BSIZ));
+                    for (let i = 0; i < todosParaFetch.length; i += BSIZ)
+                        bats.push(todosParaFetch.slice(i, i + BSIZ));
                     let bi = 0;
                     async function bw() {
                         while (bi < bats.length) {
                             const bat = bats[bi++];
                             const ids = bat.map(o => o.shipping.id);
-                            await Promise.all(ids.map(id =>
-                                fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-                                    .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
-                                    .then(s => { if (s?.id) sMap.set(s.id, s); })
-                            ));
+                            try {
+                                const r = await fetch(
+                                    `${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`,
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                if (r.ok) {
+                                    const data = await r.json();
+                                    (Array.isArray(data) ? data : []).forEach(s => { if (s?.id) sMap.set(s.id, s); });
+                                } else {
+                                    // Fallback individual si el Worker no soporta batch aún
+                                    await Promise.all(ids.map(id =>
+                                        fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+                                            .then(r2 => r2.ok ? r2.json() : null).catch(() => null)
+                                            .then(s => { if (s?.id) sMap.set(s.id, s); })
+                                    ));
+                                }
+                            } catch(e) {}
                             prog.done += bat.length; notifyProg();
                         }
                     }
                     await Promise.all(Array.from({ length: BCONC }, bw));
-
-                    // Batch fetch canceladas también
-                    if (canceladas.length > 0) {
-                        prog.total += canceladas.length; notifyProg();
-                        const batsC = [];
-                        for (let i = 0; i < canceladas.length; i += BSIZ) batsC.push(canceladas.slice(i, i+BSIZ));
-                        let bci = 0;
-                        async function bwC() {
-                            while (bci < batsC.length) {
-                                const bat = batsC[bci++];
-                                const ids = bat.map(o => o.shipping.id);
-                                await Promise.all(ids.map(id =>
-                                    fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-                                        .then(r2 => r2.ok ? r2.json() : null).catch(()=>null)
-                                        .then(s => { if (s?.id) sMap.set(s.id, s); })
-                                ));
-                                prog.done += bat.length; notifyProg();
-                            }
-                        }
-                        await Promise.all(Array.from({ length: BCONC }, bwC));
-                    }
 
                     const results = [];
                     combined.forEach(order => {
@@ -3372,7 +3365,7 @@
             if (!backgroundRefresh) {
                 content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...<div class="load-progress-wrap" id="loadProgressWrap" style="display:none;"><div class="load-progress-track"><div class="load-progress-fill" id="loadProgressFill"></div><div class="load-progress-pct" id="loadProgressPct">0%</div></div></div></div>`;
             }
-            
+
             let allOrdersFromAllAccounts = [];
             const shippingIdsVistos = new Set();
 
@@ -3654,13 +3647,25 @@
             // y usamos el endpoint /shipments?ids=id1,id2,... (una sola request = 20 shipments)
             // 80 órdenes → 4 requests en lugar de 80. ~20x menos llamadas.
             const BATCH_SIZE = 20;
-            const BATCH_CONC = 8; // batches en paralelo simultáneos
+            const BATCH_CONC = 16;
 
             async function fetchShipmentBatch(ids) {
-                // El proxy no soporta batch → fetch individual con concurrencia limitada
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
+                // Intentar batch real primero (?ids=...)
+                try {
+                    const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`, opts);
+                    if (r.ok) {
+                        const data = await r.json();
+                        // ML devuelve array de objetos con {code,body} o directamente array de shipments
+                        if (Array.isArray(data)) {
+                            const results = data.map(d => d.body || d).filter(s => s?.id);
+                            if (results.length > 0) return results;
+                        }
+                    }
+                } catch(e) {}
+                // Fallback: individual con alta concurrencia
                 const results = [];
-                const CONC = 8;
+                const CONC = 16;
                 let i = 0;
                 async function worker() {
                     while (i < ids.length) {
