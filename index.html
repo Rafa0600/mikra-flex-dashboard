@@ -1526,7 +1526,7 @@
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
         const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbyV__2aEwhFGhLgB-Da9POE_kRi-0hXOp6qTly-S6wGqfoyIECmJIy3KecsS6jSJg49/exec';
-        const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbxRtV8FmTFuwiHcuDIrboemvvZQIHtSk0AyABKZGY_S_rjMDN9wxkPAIhWd3zbJu5sd-w/exec';
+        const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbzUaw-zR1Mm6gMVACD5w6S055Mn0kxkieePBvTA0J_5cwwWAApRY2hEPaEmi8HYiILizA/exec';
 
         let etiquetasSet = null;
 
@@ -1563,6 +1563,148 @@
                 })
                 .catch(e => alert('Error cargando etiqueta: ' + e.message));
         }
+
+        // ══ QR Scanner (foto nativa — funciona en file:// y content://) ═════
+
+        function abrirEscaner() {
+            const modal = document.getElementById('qrModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            document.getElementById('qrStatus').textContent = '';
+        }
+
+        function _dispararCamara() {
+            document.getElementById('qrStatus').textContent = '';
+            document.getElementById('qrFileInput').value = '';
+            document.getElementById('qrFileInput').click();
+        }
+
+        function cerrarEscaner() {
+            const modal = document.getElementById('qrModal');
+            if (modal) modal.style.display = 'none';
+            document.getElementById('qrFileInput').value = '';
+        }
+
+        function _onQRFileSelected(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            document.getElementById('qrStatus').textContent = 'Leyendo QR...';
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = function() {
+                const canvas = document.getElementById('qrCanvas');
+                // Reducir resolución si es muy grande (mejora velocidad jsQR)
+                const MAX = 1200;
+                let w = img.naturalWidth, h = img.naturalHeight;
+                if (w > MAX || h > MAX) {
+                    const r = Math.min(MAX/w, MAX/h);
+                    w = Math.round(w * r); h = Math.round(h * r);
+                }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                URL.revokeObjectURL(url);
+                const imgData = ctx.getImageData(0, 0, w, h);
+                const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+                if (code) {
+                    cerrarEscaner();
+                    _procesarQREscaneado(code.data);
+                } else {
+                    document.getElementById('qrStatus').textContent = '⚠️ No se encontró QR en la foto. Intentá de nuevo más cerca.';
+                }
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(url);
+                document.getElementById('qrStatus').textContent = '❌ Error al leer la imagen.';
+            };
+            img.src = url;
+        }
+
+        function _procesarQREscaneado(qrText) {
+            let shippingId = '';
+            try {
+                const d = JSON.parse(qrText);
+                shippingId = String(d.id || '');
+            } catch(e) {
+                const m = qrText.match(/\b\d{10,}\b/);
+                shippingId = m ? m[0] : '';
+            }
+            if (!shippingId) {
+                alert('QR no reconocido:\n' + qrText.substring(0, 120));
+                return;
+            }
+            const item = (window._neTodos || []).find(t => String(t.shipping.id) === shippingId);
+            if (!item) {
+                alert(`⚠️ Envío ${shippingId} no está en la lista actual.\n\nPuede que ya haya sido entregado o no esté en la ventana de 7 días.`);
+                return;
+            }
+            const barrio = item.shipping.receiver_address?.neighborhood?.name || '';
+            const ciudad = item.shipping.receiver_address?.city?.name || '';
+            const zip    = item.shipping.receiver_address?.zip_code || '';
+            const zona   = typeof getZonaDetallada === 'function' ? getZonaDetallada(barrio, ciudad, zip) : (barrio || ciudad);
+            const calle  = item.shipping.receiver_address?.street_name   || '';
+            const numero = item.shipping.receiver_address?.street_number || '';
+            const comprador = item.order?.buyer?.nickname || '';
+            const pin = prompt(`🔐 Confirmá recepción del paquete\n\n📍 ${zona}\n🏠 ${calle} ${numero}\n👤 ${comprador}\n\nIngresá el PIN:`);
+            if (pin === null) return;
+            if (pin !== '9148') { alert('❌ PIN incorrecto'); return; }
+            _guardarRecibido(shippingId, item.cuentaNombre || '', zona);
+        }
+
+        function _guardarRecibido(shippingId, cuentaNombre, zona) {
+            const cbName = '_rcv' + Date.now();
+            const sc = document.createElement('script');
+            window[cbName] = () => { delete window[cbName]; if (sc.parentNode) sc.remove(); };
+            sc.onerror   = () => { delete window[cbName]; if (sc.parentNode) sc.remove(); };
+            sc.src = GAS_TRACKER + '?action=recibir&id=' + shippingId + '&cuenta=' + encodeURIComponent(cuentaNombre) + '&callback=' + cbName;
+            document.head.appendChild(sc);
+            // Actualizar caché local
+            window._neRecibidosIds = window._neRecibidosIds || new Set();
+            window._neRecibidosIds.add(String(shippingId));
+            _showNEToast('✅ Recibido: ' + zona);
+            setTimeout(() => cargarNoEntregados(), 900);
+        }
+
+        function _recibirManual(shippingId, cuentaNombre, event) {
+            if (event) event.stopPropagation();
+            const item = (window._neTodos || []).find(t => String(t.shipping.id) === String(shippingId));
+            const barrio = item?.shipping.receiver_address?.neighborhood?.name || '';
+            const ciudad = item?.shipping.receiver_address?.city?.name || '';
+            const zip    = item?.shipping.receiver_address?.zip_code || '';
+            const zona   = typeof getZonaDetallada === 'function' ? getZonaDetallada(barrio, ciudad, zip) : (barrio || ciudad || shippingId);
+            const calle  = item?.shipping.receiver_address?.street_name   || '';
+            const numero = item?.shipping.receiver_address?.street_number || '';
+            const comprador = item?.order?.buyer?.nickname || '';
+            const pin = prompt(`🔐 Confirmá recepción\n\n📍 ${zona}\n🏠 ${calle} ${numero}\n👤 ${comprador}\n\nIngresá el PIN:`);
+            if (pin === null) return;
+            if (pin !== '9148') { alert('❌ PIN incorrecto'); return; }
+            _guardarRecibido(shippingId, cuentaNombre, zona);
+        }
+
+        function _showNEToast(msg) {
+            const t = document.createElement('div');
+            t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#25D366;color:white;padding:12px 20px;border-radius:12px;font-weight:700;z-index:10000;font-size:13px;text-align:center;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:pre-line;transition:opacity .4s;';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; }, 2200);
+            setTimeout(() => t.remove(), 2700);
+        }
+
+        // Carga IDs recibidos desde GAS (con caché de sesión)
+        function cargarRecibidosIds() {
+            if (window._neRecibidosIds) return Promise.resolve(window._neRecibidosIds);
+            return new Promise(resolve => {
+                const cbName = '_rcbIds' + Date.now();
+                const sc = document.createElement('script');
+                const timer = setTimeout(() => { cleanup(); resolve(new Set()); }, 6000);
+                function cleanup() { clearTimeout(timer); delete window[cbName]; if (sc.parentNode) sc.remove(); }
+                window[cbName] = d => { cleanup(); window._neRecibidosIds = new Set((d.ids || []).map(String)); resolve(window._neRecibidosIds); };
+                sc.onerror = () => { cleanup(); resolve(new Set()); };
+                sc.src = GAS_TRACKER + '?action=get_recibidos&callback=' + cbName;
+                document.head.appendChild(sc);
+            });
+        }
+        // ══ Fin QR Scanner ═══════════════════════════════════════════════════
 
                 const CUENTAS = [
             {
@@ -2154,8 +2296,11 @@
             const shippingIdsVistos = new Set();
             const CONC = 35;
 
-            // Pre-fetch tokens en paralelo para ambas cuentas
-            const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
+            // Pre-fetch tokens e IDs recibidos en paralelo
+            const [tokens, recibidosIds] = await Promise.all([
+                Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c))),
+                cargarRecibidosIds()
+            ]);
 
             const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta, ci) => {
                 try {
@@ -2301,6 +2446,7 @@
             cuentaResults.flat().forEach(item => {
                 const sid = item.shipping.id;
                 if (shippingIdsVistos.has(sid)) return;
+                if (recibidosIds.has(String(sid))) return;   // ya fue recibido → excluir
                 shippingIdsVistos.add(sid);
                 // Filtrar por ventana de 7 días (independiente del filtro de ML que no es exacto)
                 const fechaEntItem = item.shipping.shipping_option?.estimated_delivery_time?.date
@@ -2325,6 +2471,9 @@
                 const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
                 return fa.localeCompare(fb);
             });
+
+            // Exponer todos globalmente para que el escáner pueda encontrar items
+            window._neTodos = todos;
 
             // GAS tracker removido de esta vista — genera falsos positivos
             // Los cancelados reales (driver debe devolver) vienen directo de ML arriba
@@ -2459,9 +2608,10 @@
                             <div class="card-address-row" style="margin-top:8px;">
                                 <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
                             </div>
-                            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">
+                            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
                                 <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
                                 <button onclick="window._compartirDevolver(${idx}, event)" style="background:#25D366;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📤 Compartir</button>
+                                <button onclick="_recibirManual('${shipping.id}','${cuentaNombre}',event)" style="background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📥 Recibido</button>
                             </div>
                         </div>`;
                     }
@@ -2483,8 +2633,9 @@
                             <span class="card-sep">·</span>
                             <span class="card-comprador">👤 <strong>${comprador}</strong></span>
                         </div>
-                        <div style="margin-top:8px;text-align:right;">
+                        <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
                             <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                            <button onclick="_recibirManual('${shipping.id}','${cuentaNombre}',event)" style="background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📥 Recibido</button>
                         </div>
                     </div>`;
                 }
@@ -2706,10 +2857,11 @@
             // Construir el contenedor raíz
             const bannerBtn = `border:none;cursor:pointer;flex:1;min-width:120px;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;font-family:inherit;touch-action:manipulation;transition:opacity .15s;`;
             let html = `
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:stretch;">
                 ${enCaminoCount > 0 ? `<button id="neBannerEnCamino" style="${bannerBtn}background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;" onclick="renderNECards('en-camino');document.getElementById('neBannerEnCamino').style.outline=window._neCurrentFilter==='en-camino'?'3px solid white':'none'">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
                 ${fallidoCount  > 0 ? `<button style="${bannerBtn}background:linear-gradient(135deg,#f85149,#da3633);color:white;" onclick="renderNECards('en-camino')">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
                 ${canceladaCount > 0 ? `<button id="neBannerDevolver" style="${bannerBtn}background:linear-gradient(135deg,#f85149,#7b1a1a);color:white;" onclick="renderNECards('canceladas');document.getElementById('neBannerDevolver').style.outline=window._neCurrentFilter==='canceladas'?'3px solid white':'none'">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></button>` : ''}
+                <button onclick="abrirEscaner()" style="${bannerBtn}background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:2px solid #4CAF50;flex:0 0 auto;min-width:110px;">📷 Escanear QR<br><span style="font-size:10px;font-weight:400;color:#81C784;">marcar recibido</span></button>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:12px;">
                 ${btnHtml}
@@ -4580,6 +4732,7 @@
     
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
@@ -4587,5 +4740,23 @@
             .catch(err => console.log('SW error:', err));
     }
     </script>
+
+<!-- ══ Modal QR Scanner (foto nativa) ═══════════════════════════════ -->
+<input type="file" id="qrFileInput" accept="image/*" capture="environment"
+    style="display:none;" onchange="_onQRFileSelected(this)">
+<canvas id="qrCanvas" style="display:none;"></canvas>
+
+<div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;">
+    <div style="color:#FFE600;font-size:18px;font-weight:700;text-align:center;">📷 Escaneá el QR del paquete</div>
+    <div style="background:#161b22;border:2px dashed #4CAF50;border-radius:16px;padding:28px 32px;text-align:center;max-width:300px;">
+        <div style="font-size:52px;margin-bottom:12px;">📦</div>
+        <div style="color:#e6edf3;font-size:14px;margin-bottom:18px;line-height:1.5;">Tocá el botón para abrir la cámara y apuntala al QR de la etiqueta</div>
+        <button onclick="_dispararCamara()" style="background:linear-gradient(135deg,#4CAF50,#2d7a31);color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;touch-action:manipulation;width:100%;">
+            📷 Abrir cámara
+        </button>
+    </div>
+    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;"></div>
+    <button onclick="cerrarEscaner()" style="background:#f85149;color:white;border:none;padding:11px 32px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;">✕ Cancelar</button>
+</div>
 </body>
 </html>
