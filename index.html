@@ -1564,60 +1564,52 @@
                 .catch(e => alert('Error cargando etiqueta: ' + e.message));
         }
 
-        // ══ QR Scanner (foto nativa — funciona en file:// y content://) ═════
+        // ══ QR Scanner ═══════════════════════════════════════════════════════
+        let _qrStream = null, _qrRaf = null;
 
         function abrirEscaner() {
             const modal = document.getElementById('qrModal');
             if (!modal) return;
             modal.style.display = 'flex';
-            document.getElementById('qrStatus').textContent = '';
+            document.getElementById('qrStatus').textContent = 'Iniciando cámara...';
+            const video  = document.getElementById('qrVideo');
+            const canvas = document.getElementById('qrCanvas');
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+                .then(stream => {
+                    _qrStream = stream;
+                    video.srcObject = stream;
+                    video.play();
+                    document.getElementById('qrStatus').textContent = 'Buscando QR...';
+                    _tickQR(video, canvas);
+                })
+                .catch(err => {
+                    cerrarEscaner();
+                    alert('No se pudo acceder a la cámara: ' + err.message);
+                });
         }
 
-        function _dispararCamara() {
-            document.getElementById('qrStatus').textContent = '';
-            document.getElementById('qrFileInput').value = '';
-            document.getElementById('qrFileInput').click();
-        }
-
-        function cerrarEscaner() {
-            const modal = document.getElementById('qrModal');
-            if (modal) modal.style.display = 'none';
-            document.getElementById('qrFileInput').value = '';
-        }
-
-        function _onQRFileSelected(input) {
-            const file = input.files && input.files[0];
-            if (!file) return;
-            document.getElementById('qrStatus').textContent = 'Leyendo QR...';
-            const img = new Image();
-            const url = URL.createObjectURL(file);
-            img.onload = function() {
-                const canvas = document.getElementById('qrCanvas');
-                // Reducir resolución si es muy grande (mejora velocidad jsQR)
-                const MAX = 1200;
-                let w = img.naturalWidth, h = img.naturalHeight;
-                if (w > MAX || h > MAX) {
-                    const r = Math.min(MAX/w, MAX/h);
-                    w = Math.round(w * r); h = Math.round(h * r);
-                }
-                canvas.width = w; canvas.height = h;
+        function _tickQR(video, canvas) {
+            if (video.readyState >= 2 && video.videoWidth > 0) {
+                canvas.width  = video.videoWidth;
+                canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                URL.revokeObjectURL(url);
-                const imgData = ctx.getImageData(0, 0, w, h);
-                const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+                ctx.drawImage(video, 0, 0);
+                const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
                 if (code) {
                     cerrarEscaner();
                     _procesarQREscaneado(code.data);
-                } else {
-                    document.getElementById('qrStatus').textContent = '⚠️ No se encontró QR en la foto. Intentá de nuevo más cerca.';
+                    return;
                 }
-            };
-            img.onerror = function() {
-                URL.revokeObjectURL(url);
-                document.getElementById('qrStatus').textContent = '❌ Error al leer la imagen.';
-            };
-            img.src = url;
+            }
+            _qrRaf = requestAnimationFrame(() => _tickQR(video, canvas));
+        }
+
+        function cerrarEscaner() {
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            if (_qrRaf)    { cancelAnimationFrame(_qrRaf); _qrRaf = null; }
+            const modal = document.getElementById('qrModal');
+            if (modal) modal.style.display = 'none';
         }
 
         function _procesarQREscaneado(qrText) {
@@ -4741,21 +4733,23 @@
     }
     </script>
 
-<!-- ══ Modal QR Scanner (foto nativa) ═══════════════════════════════ -->
-<input type="file" id="qrFileInput" accept="image/*" capture="environment"
-    style="display:none;" onchange="_onQRFileSelected(this)">
-<canvas id="qrCanvas" style="display:none;"></canvas>
-
-<div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;">
-    <div style="color:#FFE600;font-size:18px;font-weight:700;text-align:center;">📷 Escaneá el QR del paquete</div>
-    <div style="background:#161b22;border:2px dashed #4CAF50;border-radius:16px;padding:28px 32px;text-align:center;max-width:300px;">
-        <div style="font-size:52px;margin-bottom:12px;">📦</div>
-        <div style="color:#e6edf3;font-size:14px;margin-bottom:18px;line-height:1.5;">Tocá el botón para abrir la cámara y apuntala al QR de la etiqueta</div>
-        <button onclick="_dispararCamara()" style="background:linear-gradient(135deg,#4CAF50,#2d7a31);color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;touch-action:manipulation;width:100%;">
-            📷 Abrir cámara
-        </button>
+<!-- ══ Modal QR Scanner ══════════════════════════════════════════════ -->
+<div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+    <div style="color:#FFE600;font-size:16px;font-weight:700;text-align:center;">📷 Escaneá el QR del paquete</div>
+    <div style="position:relative;width:min(90vw,340px);">
+        <video id="qrVideo" playsinline autoplay muted style="width:100%;border-radius:14px;display:block;background:#000;"></video>
+        <canvas id="qrCanvas" style="display:none;"></canvas>
+        <!-- Esquinas de targeting -->
+        <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;">
+            <div style="position:relative;width:190px;height:190px;">
+                <div style="position:absolute;top:0;left:0;width:32px;height:32px;border-top:3px solid #FFE600;border-left:3px solid #FFE600;border-radius:4px 0 0 0;"></div>
+                <div style="position:absolute;top:0;right:0;width:32px;height:32px;border-top:3px solid #FFE600;border-right:3px solid #FFE600;border-radius:0 4px 0 0;"></div>
+                <div style="position:absolute;bottom:0;left:0;width:32px;height:32px;border-bottom:3px solid #FFE600;border-left:3px solid #FFE600;border-radius:0 0 0 4px;"></div>
+                <div style="position:absolute;bottom:0;right:0;width:32px;height:32px;border-bottom:3px solid #FFE600;border-right:3px solid #FFE600;border-radius:0 0 4px 0;"></div>
+            </div>
+        </div>
     </div>
-    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;"></div>
+    <div id="qrStatus" style="color:#8b949e;font-size:13px;">Buscando QR...</div>
     <button onclick="cerrarEscaner()" style="background:#f85149;color:white;border:none;padding:11px 32px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;">✕ Cancelar</button>
 </div>
 </body>
