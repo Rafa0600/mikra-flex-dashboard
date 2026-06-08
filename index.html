@@ -1525,7 +1525,7 @@
 
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
-        const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbx3E52ZuQK23TIvmlNATqGVyKbRc3gISXi7VAIxPakR1GWph0byisD9P2cnNb4WECVe/exec';
+        const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbyV__2aEwhFGhLgB-Da9POE_kRi-0hXOp6qTly-S6wGqfoyIECmJIy3KecsS6jSJg49/exec';
         const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbxRtV8FmTFuwiHcuDIrboemvvZQIHtSk0AyABKZGY_S_rjMDN9wxkPAIhWd3zbJu5sd-w/exec';
 
         let etiquetasSet = null;
@@ -1546,9 +1546,22 @@
             document.head.appendChild(script);
         }
 
-        async function verEtiqueta(shippingId, event) {
-            event.stopPropagation();
-            window.open(`${GAS_ETIQUETAS}?id=${shippingId}`, '_blank');
+        function verEtiqueta(shippingId, event) {
+            if (event) event.stopPropagation();
+            fetch(`https://etiquetas-proxy.rafaelassir.workers.dev/?id=${shippingId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.pdf) {
+                        const binary = atob(data.pdf);
+                        const bytes  = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: 'application/pdf' });
+                        window.open(URL.createObjectURL(blob), '_blank');
+                    } else {
+                        alert(data?.error || 'No se encontró etiqueta para el envío ' + shippingId);
+                    }
+                })
+                .catch(e => alert('Error cargando etiqueta: ' + e.message));
         }
 
                 const CUENTAS = [
@@ -2296,6 +2309,12 @@
                     const entItem = new Date(fechaEntItem); entItem.setHours(0,0,0,0);
                     if (entItem.getTime() === hoy.getTime()) return;   // hoy → aún en camino
                     if (entItem.getTime() < desde.getTime()) return;   // más viejo que 7d → excluir
+                } else if (item.shipping._canceladaDevolver) {
+                    // Canceladas sin fecha estimada (ML la borra): usar date_shipped como referencia
+                    const dateShipped = item.shipping.status_history?.date_shipped;
+                    if (!dateShipped) return;
+                    const shippedDate = new Date(dateShipped); shippedDate.setHours(0,0,0,0);
+                    if (shippedDate.getTime() < desde.getTime()) return;
                 }
                 todos.push(item);
             });
@@ -2307,32 +2326,8 @@
                 return fa.localeCompare(fb);
             });
 
-            // ── Consultar GAS por cancelados desaparecidos en los últimos 7 días ──
-            const desdeStr = fmt(desde);
-            const idsEnML  = new Set(todos.map(t => String(t.shipping.id)));
-
-            new Promise(resolve => {
-                const cbName = 'ne7dCb_' + Date.now();
-                const script = document.createElement('script');
-                window[cbName] = (data) => { delete window[cbName]; script.remove(); resolve(data); };
-                script.onerror = () => { delete window[cbName]; script.remove(); resolve(null); };
-                script.src = `${GAS_TRACKER}?desde=${desdeStr}&callback=${cbName}`;
-                setTimeout(() => { if (window[cbName]) { delete window[cbName]; script.remove(); resolve(null); } }, 8000);
-                document.head.appendChild(script);
-            }).then(data => {
-                if (!data?.cuentas) return;
-                const cancelados = [];
-                Object.entries(data.cuentas).forEach(([fechaKey, cuentas]) => {
-                    Object.entries(cuentas).forEach(([cuenta, envios]) => {
-                        envios.forEach(e => {
-                            if (!idsEnML.has(String(e.id))) {
-                                cancelados.push({...e, cuenta, fecha_guardada: fechaKey});
-                            }
-                        });
-                    });
-                });
-                if (cancelados.length > 0) mostrarCanceladosADevolver(cancelados);
-            });
+            // GAS tracker removido de esta vista — genera falsos positivos
+            // Los cancelados reales (driver debe devolver) vienen directo de ML arriba
 
             document.getElementById('badgeFecha').textContent = `🚫 ATRASADOS (7 días)`;
             document.getElementById('badgeCaba').textContent = `📦 ${todos.length} envío${todos.length !== 1 ? 's' : ''}`;
@@ -2350,18 +2345,22 @@
             }
 
             const grupoLabels = {
-                'receiver_absent':            { label: '🚫 Comprador ausente',          color: '#f85149' },
-                'rescheduled_by_buyer':        { label: '📅 Reprog. por comprador',      color: '#FF9800' },
-                'buyer_rescheduled':           { label: '📅 Reprog. por comprador',      color: '#FF9800' },
-                'rescheduled':                 { label: '🔄 Reprogramado',               color: '#FF9800' },
-                'delayed':                     { label: '⏰ Demorado',                    color: '#FF9800' },
-                'returning_to_sender':         { label: '↩️ Devolviendo al vendedor',     color: '#f85149' },
-                'not_delivered_and_returning': { label: '↩️ En devolución',               color: '#f85149' },
-                'out_of_delivery_area':        { label: '📍 Fuera de zona',               color: '#f85149' },
-                'delivery_failed':             { label: '❌ Entrega fallida',              color: '#f85149' },
-                'waiting_for_withdrawal':      { label: '📦 Esperando retiro',             color: '#FF9800' },
-                'out_for_delivery':            { label: '🚚 En camino (sin confirmar)',    color: '#00d9ff' },
-                'in_transit':                  { label: '🚚 En camino',                   color: '#00d9ff' },
+                'receiver_absent':            { label: '🚫 Comprador ausente',               color: '#f85149' },
+                'rescheduled_by_buyer':        { label: '📅 Reprogramado por comprador',      color: '#FF9800' },
+                'buyer_rescheduled':           { label: '📅 Reprogramado por comprador',      color: '#FF9800' },
+                'rescheduled_by_meli':         { label: '📅 Reprogramado por Mercado Libre',  color: '#FF9800' },
+                'rescheduled':                 { label: '🔄 Reprogramado',                    color: '#FF9800' },
+                'delayed':                     { label: '⏰ Demorado',                         color: '#FF9800' },
+                'returning_to_sender':         { label: '↩️ Devolviendo al vendedor',          color: '#f85149' },
+                'not_delivered_and_returning': { label: '↩️ En devolución',                    color: '#f85149' },
+                'out_of_delivery_area':        { label: '📍 Fuera de zona de entrega',         color: '#f85149' },
+                'delivery_failed':             { label: '❌ Intento de entrega fallido',        color: '#f85149' },
+                'waiting_for_withdrawal':      { label: '📦 Esperando retiro',                 color: '#FF9800' },
+                'out_for_delivery':            { label: '🚚 En camino (sin confirmar)',         color: '#00d9ff' },
+                'in_transit':                  { label: '🚚 En tránsito',                      color: '#00d9ff' },
+                'stolen':                      { label: '🚨 Robado',                           color: '#f85149' },
+                'lost':                        { label: '🔍 Extraviado',                       color: '#f85149' },
+                'damaged':                     { label: '💥 Dañado',                           color: '#f85149' },
             };
 
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -2394,13 +2393,20 @@
             });
 
             // ── Función de render con filtro ──────────────────────────────
+            window._neCurrentFilter = 'all';
             function renderNECards(filterKey) {
+                // Toggle: si ya está activo ese filtro, volver a 'all'
+                if (filterKey !== 'all' && window._neCurrentFilter === filterKey) filterKey = 'all';
+                window._neCurrentFilter = filterKey;
                 const container = document.getElementById('neCards');
                 if (!container) return;
                 document.querySelectorAll('.ne-day-btn').forEach(b => {
                     b.style.outline = b.dataset.key === filterKey ? '2px solid white' : 'none';
                     b.style.opacity = b.dataset.key === filterKey ? '1' : '0.6';
                 });
+
+                // Almacén global para compartir canceladas
+                window._neDevolver = [];
 
                 function buildCard({ shipping, order, cuentaNombre }, gLabel, gAtraso, gColor) {
                     const sub = (shipping.substatus || '').toLowerCase();
@@ -2433,7 +2439,34 @@
                         ? `<span style="background:${gColor};color:${gColor==='#FFE600'?'#000':'white'};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">📅 ${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>`
                         : '';
 
-                    return `<div class="envio-card-simple ${isCancelada ? 'cancelado' : isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color};margin-bottom:8px;">
+                    // Para canceladas: guardar datos para compartir y construir card especial
+                    if (isCancelada) {
+                        const idx = window._neDevolver.length;
+                        window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: shipping.id });
+
+                        return `<div class="envio-card-simple cancelado" style="border-left:4px solid #f85149;margin-bottom:8px;background:linear-gradient(135deg,#1c0f0f,#1a1520);">
+                            <div style="background:linear-gradient(90deg,#f85149,#c62828);color:white;padding:6px 14px;margin:-12px -12px 10px -12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">
+                                ⚠️ DRIVER DEBE DEVOLVER
+                                <span style="margin-left:auto;font-size:10px;opacity:0.85;">${cuentaNombre} · ${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>
+                            </div>
+                            <div class="simple-header" style="align-items:flex-start;">
+                                <div style="flex:1;">
+                                    <div style="font-size:15px;font-weight:700;color:#FFE600;margin-bottom:5px;">📍 ${zona}</div>
+                                    <div style="font-size:12px;color:#8b949e;">👤 ${comprador}</div>
+                                </div>
+                                <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
+                            </div>
+                            <div class="card-address-row" style="margin-top:8px;">
+                                <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
+                            </div>
+                            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">
+                                <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
+                                <button onclick="window._compartirDevolver(${idx}, event)" style="background:#25D366;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📤 Compartir</button>
+                            </div>
+                        </div>`;
+                    }
+
+                    return `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color};margin-bottom:8px;">
                         <div class="simple-header">
                             <div style="flex:1;">
                                 <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:5px;">📍 ${zona}</div>
@@ -2456,9 +2489,130 @@
                     </div>`;
                 }
 
+                // ── Funciones globales para compartir ─────────────────────
+                window._compartirDevolver = function(idx, event) {
+                    if (event) event.stopPropagation();
+                    const e = window._neDevolver[idx];
+                    if (!e) return;
+                    const etiquetaUrl = `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1`;
+                    const txt = `⚠️ *PAQUETE A DEVOLVER*\n\n` +
+                        `📍 *${e.zona}*\n` +
+                        `🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n` +
+                        `👤 ${e.comprador}\n` +
+                        (e.gLabel ? `📅 Estimada: ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n` : '') +
+                        `🏪 Cuenta: ${e.cuentaNombre}\n` +
+                        `🔢 Venta: #${e.orderId}\n` +
+                        `🏷️ Ver etiqueta: ${etiquetaUrl}\n` +
+                        `🔗 ${e.orderUrl}`;
+                    if (navigator.share) {
+                        navigator.share({ text: txt }).catch(()=>{});
+                    } else {
+                        window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+                    }
+                };
+
+                window._compartirTodosDevolver = function() {
+                    const lista = window._neDevolver;
+                    if (!lista.length) return;
+                    let txt = `⚠️ *PAQUETES A DEVOLVER (${lista.length})*\n`;
+                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n\n`;
+                    lista.forEach((e, i) => {
+                        txt += `*${i+1}. ${e.zona}*\n`;
+                        txt += `   🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n`;
+                        txt += `   👤 ${e.comprador}\n`;
+                        if (e.gLabel) txt += `   📅 ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n`;
+                        txt += `   🏪 ${e.cuentaNombre} · #${e.orderId}\n`;
+                        txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1\n\n`;
+                    });
+                    if (navigator.share) {
+                        navigator.share({ text: txt.trim() }).catch(()=>{});
+                    } else {
+                        window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank');
+                    }
+                };
+
+                // Helper: construye bloque de texto para un item
+                function _buildItemTxt(t, num) {
+                    const s = t.shipping, o = t.order;
+                    const barrio    = s.receiver_address?.neighborhood?.name || '';
+                    const ciudad    = s.receiver_address?.city?.name || '';
+                    const zipCode   = s.receiver_address?.zip_code || '';
+                    const zona      = getZonaDetallada(barrio, ciudad, zipCode);
+                    const calle     = s.receiver_address?.street_name || '';
+                    const numero    = s.receiver_address?.street_number || '';
+                    const comprador = o.buyer?.nickname || '';
+                    const orderId   = o.id || '';
+                    const fechaEnt  = s.shipping_option?.estimated_delivery_time?.date
+                                    || s.shipping_option?.estimated_delivery_final?.date;
+                    let fechaStr = '';
+                    if (fechaEnt) {
+                        const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                        const diffDias = Math.round((hoy - entrega) / 86400000);
+                        const gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                        const gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : '';
+                        fechaStr = `${gLabel}${gAtraso ? ' · '+gAtraso : ''}`;
+                    }
+                    const subKey   = (s.substatus || '').toLowerCase();
+                    const subLabel = grupoLabels[subKey]?.label || (subKey ? subKey.replace(/_/g,' ') : '');
+                    const etiqueta = `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${s.id}&view=1`;
+                    let txt = `*${num}. ${zona}*\n`;
+                    txt += `   🏠 ${calle} ${numero}, ${ciudad}\n`;
+                    txt += `   👤 ${comprador}\n`;
+                    if (fechaStr) txt += `   📅 ${fechaStr}\n`;
+                    if (subLabel) txt += `   📌 ${subLabel}\n`;
+                    txt += `   🏪 ${t.cuentaNombre} · #${orderId}\n`;
+                    txt += `   🏷️ ${etiqueta}\n\n`;
+                    return txt;
+                }
+
+                // Compartir todos los no-entregados para reclamar
+                window._compartirParaReclamar = function() {
+                    const items = todos.filter(t => !t.shipping._canceladaDevolver);
+                    if (!items.length) return;
+                    let txt = `📋 *ENVÍOS SIN ENTREGAR — RECLAMAR (${items.length})*\n`;
+                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n\n`;
+                    items.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
+                    if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
+                    else { window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank'); }
+                };
+
+                // Compartir todo (a devolver primero, luego en camino/reclamar)
+                window._compartirTodo = function() {
+                    const devolver   = todos.filter(t => t.shipping._canceladaDevolver);
+                    const enCamino   = todos.filter(t => !t.shipping._canceladaDevolver);
+                    let txt = `📦 *RESUMEN ENVÍOS SIN ENTREGAR*\n`;
+                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n\n`;
+                    if (devolver.length) {
+                        txt += `⚠️ *A DEVOLVER (${devolver.length})*\n\n`;
+                        devolver.forEach((t, i) => {
+                            const e = window._neDevolver.find(x => x.shippingId == t.shipping.id);
+                            if (e) {
+                                txt += `*${i+1}. ${e.zona}*\n`;
+                                txt += `   🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n`;
+                                txt += `   👤 ${e.comprador}\n`;
+                                if (e.gLabel) txt += `   📅 ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n`;
+                                txt += `   🏪 ${e.cuentaNombre} · #${e.orderId}\n`;
+                                txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1\n\n`;
+                            } else { txt += _buildItemTxt(t, i + 1); }
+                        });
+                    }
+                    if (enCamino.length) {
+                        txt += `🚚 *EN CAMINO / SIN ENTREGAR (${enCamino.length})*\n\n`;
+                        enCamino.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
+                    }
+                    if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
+                    else { window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank'); }
+                };
+
                 let html = '';
                 if (filterKey === 'canceladas') {
-                    // Filtro especial: solo canceladas de todos los grupos
+                    // Limpiar lista para regenerar con índices correctos
+                    window._neDevolver = [];
+                    html += `<div style="text-align:right;margin-bottom:12px;">
+                        <button onclick="window._compartirTodosDevolver()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+                            📤 Compartir todos (${canceladaCount})
+                        </button>
+                    </div>`;
                     todos.forEach(item => {
                         if (!item.shipping._canceladaDevolver) return;
                         const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
@@ -2472,7 +2626,38 @@
                         }
                         html += buildCard(item, gLabel, gAtraso, gColor);
                     });
+                } else if (filterKey === 'en-camino') {
+                    // Solo los en camino sin entregar (excluye canceladas)
+                    window._neDevolver = [];
+                    const enCaminoItems = todos.filter(t => !t.shipping._canceladaDevolver);
+                    html += `<div style="text-align:right;margin-bottom:12px;">
+                        <button onclick="window._compartirParaReclamar()" style="background:linear-gradient(135deg,#FF6B00,#e85d04);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+                            📋 Compartir para reclamar (${enCaminoItems.length})
+                        </button>
+                    </div>`;
+                    enCaminoItems.forEach(item => {
+                        const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                       || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                        let gLabel = '', gAtraso = '', gColor = '#484f58';
+                        if (fechaEnt) {
+                            const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                            const diffDias = Math.round((hoy - entrega) / 86400000);
+                            gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                            gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : `en ${Math.abs(diffDias)}d`;
+                            gColor = diffDias >= 5 ? '#f44336' : diffDias >= 3 ? '#FF6B00' : '#FF9800';
+                        }
+                        html += buildCard(item, gLabel, gAtraso, gColor);
+                    });
                 } else {
+                    // Resetear para que los índices del botón compartir individual sean correctos
+                    window._neDevolver = [];
+                    if (filterKey === 'all' && todos.length > 0) {
+                        html += `<div style="text-align:right;margin-bottom:12px;">
+                            <button onclick="window._compartirTodo()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+                                📤 Compartir todo (${todos.length})
+                            </button>
+                        </div>`;
+                    }
                     groups.forEach(({ label, atraso, color, items }, gKey) => {
                         if (filterKey !== 'all' && gKey !== filterKey) return;
                         html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;">
@@ -2519,11 +2704,12 @@
             }
 
             // Construir el contenedor raíz
+            const bannerBtn = `border:none;cursor:pointer;flex:1;min-width:120px;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;font-family:inherit;touch-action:manipulation;transition:opacity .15s;`;
             let html = `
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                ${enCaminoCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">sin confirmar entrega</span></div>` : ''}
-                ${fallidoCount  > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#da3633);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">intento de entrega fallido</span></div>` : ''}
-                ${canceladaCount > 0 ? `<div style="flex:1;min-width:120px;background:linear-gradient(135deg,#f85149,#7b1a1a);color:white;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></div>` : ''}
+                ${enCaminoCount > 0 ? `<button id="neBannerEnCamino" style="${bannerBtn}background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;" onclick="renderNECards('en-camino');document.getElementById('neBannerEnCamino').style.outline=window._neCurrentFilter==='en-camino'?'3px solid white':'none'">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
+                ${fallidoCount  > 0 ? `<button style="${bannerBtn}background:linear-gradient(135deg,#f85149,#da3633);color:white;" onclick="renderNECards('en-camino')">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
+                ${canceladaCount > 0 ? `<button id="neBannerDevolver" style="${bannerBtn}background:linear-gradient(135deg,#f85149,#7b1a1a);color:white;" onclick="renderNECards('canceladas');document.getElementById('neBannerDevolver').style.outline=window._neCurrentFilter==='canceladas'?'3px solid white':'none'">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></button>` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:12px;">
                 ${btnHtml}
