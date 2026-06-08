@@ -1767,24 +1767,58 @@
             _pinCb = null; _pinVal = '';
         }
 
-        function _procesarQREscaneado(qrText) {
+        async function _procesarQREscaneado(qrText) {
             let shippingId = '';
             try { const d = JSON.parse(qrText); shippingId = String(d.id || ''); }
             catch(e) { const m = qrText.match(/\b\d{10,}\b/); shippingId = m ? m[0] : ''; }
             if (!shippingId) { alert('QR no reconocido:\n' + qrText.substring(0,120)); return; }
-            const item = (window._neTodos || []).find(t => String(t.shipping.id) === shippingId);
-            if (!item) { alert(`⚠️ Envío ${shippingId} no está en la lista actual.`); return; }
-            const barrio = item.shipping.receiver_address?.neighborhood?.name || '';
-            const ciudad = item.shipping.receiver_address?.city?.name || '';
-            const zip    = item.shipping.receiver_address?.zip_code || '';
-            const zona   = typeof getZonaDetallada === 'function' ? getZonaDetallada(barrio, ciudad, zip) : (barrio || ciudad);
-            const calle  = item.shipping.receiver_address?.street_name || '';
-            const numero = item.shipping.receiver_address?.street_number || '';
-            const comprador = item.order?.buyer?.nickname || '';
-            _mostrarPIN(
-                `📍 <strong>${zona}</strong><br>🏠 ${calle} ${numero}<br>👤 ${comprador}<br><span style="color:#8b949e;font-size:11px;">${item.cuentaNombre} · #${item.order?.id||''}</span>`,
-                () => _guardarRecibido(shippingId, item.cuentaNombre || '', zona)
-            );
+
+            // Intentar encontrar en lista ya cargada
+            let item = (window._neTodos || []).find(t => String(t.shipping.id) === shippingId);
+            let cuentaNombre = item?.cuentaNombre || '';
+
+            // Si no está en la lista, buscar en ML directamente
+            if (!item) {
+                document.getElementById('qrStatus').textContent = '🔍 Buscando datos del envío...';
+                document.getElementById('qrModal').style.display = 'flex'; // mostrar status aunque ya cerró cámara
+                try {
+                    const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c).catch(()=>null)));
+                    let shipping = null;
+                    for (let i = 0; i < CUENTAS.length; i++) {
+                        if (!tokens[i]) continue;
+                        try {
+                            const r = await fetch(`${CUENTAS[i].proxy}/api/shipments/${shippingId}`,
+                                { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                            if (r.ok) {
+                                const d = await r.json();
+                                if (d && d.id) { shipping = d; cuentaNombre = CUENTAS[i].nombre; break; }
+                            }
+                        } catch(e) {}
+                    }
+                    if (shipping) {
+                        item = { shipping, order: {}, cuentaNombre };
+                    }
+                } catch(e) {}
+                document.getElementById('qrModal').style.display = 'none';
+            }
+
+            let zona = '', calle = '', numero = '', comprador = '';
+            if (item?.shipping?.receiver_address) {
+                const addr   = item.shipping.receiver_address;
+                const barrio = addr.neighborhood?.name || '';
+                const ciudad = addr.city?.name || '';
+                const zip    = addr.zip_code || '';
+                zona       = typeof getZonaDetallada === 'function' ? getZonaDetallada(barrio, ciudad, zip) : (barrio || ciudad);
+                calle      = addr.street_name   || '';
+                numero     = addr.street_number || '';
+                comprador  = item.order?.buyer?.nickname || '';
+            }
+
+            const infoHtml = zona
+                ? `📍 <strong>${zona}</strong><br>🏠 ${calle} ${numero}<br>👤 ${comprador || '—'}<br><span style="color:#8b949e;font-size:11px;">${cuentaNombre}</span>`
+                : `📦 Envío <strong>#${shippingId}</strong><br><span style="color:#8b949e;font-size:11px;">${cuentaNombre || 'cuenta desconocida'}</span>`;
+
+            _mostrarPIN(infoHtml, () => _guardarRecibido(shippingId, cuentaNombre, zona || shippingId));
         }
 
         function _guardarRecibido(shippingId, cuentaNombre, zona) {
