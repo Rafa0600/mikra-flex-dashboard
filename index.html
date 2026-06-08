@@ -1777,13 +1777,16 @@
             let item = (window._neTodos || []).find(t => String(t.shipping.id) === shippingId);
             let cuentaNombre = item?.cuentaNombre || '';
 
-            // Si no está en la lista, buscar en ML directamente
+            // Si no está en la lista, buscar en ML directamente (envío + orden)
             if (!item) {
-                document.getElementById('qrStatus').textContent = '🔍 Buscando datos del envío...';
-                document.getElementById('qrModal').style.display = 'flex'; // mostrar status aunque ya cerró cámara
+                const statusEl = document.getElementById('qrStatus');
+                const modalEl  = document.getElementById('qrModal');
+                if (statusEl) statusEl.textContent = '🔍 Buscando datos del envío...';
+                if (modalEl)  modalEl.style.display = 'flex';
                 try {
                     const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c).catch(()=>null)));
-                    let shipping = null;
+                    let shipping = null, order = {}, foundCuenta = null;
+                    // Probar cada cuenta hasta encontrar el envío
                     for (let i = 0; i < CUENTAS.length; i++) {
                         if (!tokens[i]) continue;
                         try {
@@ -1791,15 +1794,26 @@
                                 { headers: { Authorization: `Bearer ${tokens[i]}` } });
                             if (r.ok) {
                                 const d = await r.json();
-                                if (d && d.id) { shipping = d; cuentaNombre = CUENTAS[i].nombre; break; }
+                                if (d && d.id) { shipping = d; foundCuenta = CUENTAS[i]; break; }
                             }
                         } catch(e) {}
                     }
-                    if (shipping) {
-                        item = { shipping, order: {}, cuentaNombre };
+                    if (shipping && foundCuenta) {
+                        cuentaNombre = foundCuenta.nombre;
+                        // Buscar la orden para obtener el comprador
+                        const orderId = shipping.order_id;
+                        if (orderId) {
+                            if (statusEl) statusEl.textContent = '🔍 Obteniendo datos del comprador...';
+                            try {
+                                const ro = await fetch(`${foundCuenta.proxy}/api/orders/${orderId}`,
+                                    { headers: { Authorization: `Bearer ${tokens[CUENTAS.indexOf(foundCuenta)]}` } });
+                                if (ro.ok) order = await ro.json();
+                            } catch(e) {}
+                        }
+                        item = { shipping, order, cuentaNombre };
                     }
                 } catch(e) {}
-                document.getElementById('qrModal').style.display = 'none';
+                if (modalEl) modalEl.style.display = 'none';
             }
 
             let zona = '', calle = '', numero = '', comprador = '';
