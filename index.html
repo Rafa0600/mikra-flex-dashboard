@@ -13,6 +13,8 @@
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- jsQR — lector de QR via cámara -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
@@ -1684,7 +1686,34 @@
     <script>
         // CONFIGURACIÓN - AMBAS CUENTAS ACTIVAS
         const GAS_ETIQUETAS = 'https://script.google.com/macros/s/AKfycbyV__2aEwhFGhLgB-Da9POE_kRi-0hXOp6qTly-S6wGqfoyIECmJIy3KecsS6jSJg49/exec';
-        const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbycXSRH5AieF9DLmyzHYs8M6nIk2S8p08eS8pOppKSYtMDsJn1fpSc98AuiY0flyWh0MQ/exec';
+        const GAS_TRACKER   = 'https://script.google.com/macros/s/AKfycbx5zxPsDvTtzFVz9qN6gjSXf2Wr3rYo6qbe20tESHQGCMT6lrocOsBi8ZRPmH3mZagNKg/exec';
+        const GAS_RECLAMOS  = 'https://script.google.com/macros/s/AKfycbx5zxPsDvTtzFVz9qN6gjSXf2Wr3rYo6qbe20tESHQGCMT6lrocOsBi8ZRPmH3mZagNKg/exec';
+
+        // ── Helper genérico para llamar GAS_RECLAMOS via GET + JSONP fallback ──
+        function _gasReclamo(params) {
+            return new Promise(resolve => {
+                const qs  = Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+                const url = GAS_RECLAMOS + '?' + qs;
+                // Intentar fetch primero
+                fetch(url, { signal: AbortSignal.timeout(8000) })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => resolve(d))
+                    .catch(() => {
+                        // Fallback JSONP
+                        const cb = '_gr' + Date.now();
+                        const sc = document.createElement('script');
+                        const t  = setTimeout(() => { cleanup(); resolve(null); }, 10000);
+                        function cleanup() { clearTimeout(t); delete window[cb]; sc.remove(); }
+                        window[cb] = d => { cleanup(); resolve(d); };
+                        sc.onerror = () => { cleanup(); resolve(null); };
+                        sc.src = url + '&callback=' + cb;
+                        document.head.appendChild(sc);
+                    });
+            });
+        }
+
+        // Mapa global: shippingId → { id, estado, ... } — se llena al cargar NE
+        window._reclamosMap = window._reclamosMap || new Map();
 
         let etiquetasSet = null;
 
@@ -1730,6 +1759,20 @@
                 })
                 .catch(e => { restore(); alert('Error cargando etiqueta: ' + e.message); });
         }
+
+        // ── Archivados helpers (scope global para que el drawer siempre los vea) ──
+        function _getArchivados() {
+            try { return new Set(JSON.parse(localStorage.getItem('_neArchivados') || '[]')); }
+            catch(e) { return new Set(); }
+        }
+        function _saveArchivados(set) {
+            try { localStorage.setItem('_neArchivados', JSON.stringify([...set])); } catch(e) {}
+        }
+        // Botón de emergencia siempre disponible en consola: _desarchivarTodoGlobal()
+        window._desarchivarTodoGlobal = function() {
+            localStorage.removeItem('_neArchivados');
+            alert('✅ Archivados borrados. Recargá la página.');
+        };
 
         // ══ QR Scanner (cámara en vivo con fallback a foto) ════════════════
         let _qrStream = null, _qrRaf = null;
@@ -1863,6 +1906,9 @@
             catch(e) { const m = qrText.match(/\b\d{10,}\b/); shippingId = m ? m[0] : ''; }
             if (!shippingId) { alert('QR no reconocido:\n' + qrText.substring(0,120)); return; }
 
+            // Mostrar panel de carga inmediatamente (feedback visual rápido)
+            _mostrarInfoEscaneado({ shippingId, cargando: true });
+
             // Intentar encontrar en lista ya cargada
             let item = (window._neTodos || []).find(t => String(t.shipping.id) === shippingId);
             let cuentaNombre = item?.cuentaNombre || '';
@@ -1918,11 +1964,112 @@
                 comprador  = item.order?.buyer?.nickname || '';
             }
 
-            const infoHtml = zona
-                ? `📍 <strong>${zona}</strong><br>🏠 ${calle} ${numero}<br>👤 ${comprador || '—'}<br><span style="color:#8b949e;font-size:11px;">${cuentaNombre}</span>`
-                : `📦 Envío <strong>#${shippingId}</strong><br><span style="color:#8b949e;font-size:11px;">${cuentaNombre || 'cuenta desconocida'}</span>`;
+            // Buscar datos del reclamo en el sheet (local primero, luego GAS)
+            let rec = window._reclamosMap?.get(String(shippingId));
+            if (!rec) {
+                const d = await _gasReclamo({ action: 'search_reclamos', q: shippingId }).catch(() => null);
+                rec = d?.records?.find(r => r.shippingId === String(shippingId));
+                if (rec) window._reclamosMap?.set(String(shippingId), rec);
+            }
 
-            _mostrarPIN(infoHtml, () => _guardarRecibido(shippingId, cuentaNombre, zona || shippingId));
+            // Mostrar panel de info con opciones (NO ir directo al PIN)
+            _mostrarInfoEscaneado({
+                shippingId,
+                zona:        zona || rec?.zona || '',
+                calle, numero, comprador: comprador || rec?.comprador || '',
+                cuentaNombre: cuentaNombre || rec?.cuenta || '',
+                valor:       item?.order?.total_amount || rec?.valor || 0,
+                rec,
+            });
+        }
+
+        // ── Panel de resultado post-escaneo ──────────────────────────────
+        function _mostrarInfoEscaneado({ shippingId, zona, calle, numero, comprador, cuentaNombre, valor, rec, cargando = false }) {
+            // Crear o reutilizar modal
+            let modal = document.getElementById('modalInfoEscaneado');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalInfoEscaneado';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:flex-end;justify-content:center;';
+                document.body.appendChild(modal);
+            }
+
+            // ── Estado de carga ───────────────────────────────────────────
+            if (cargando) {
+                modal.innerHTML = `
+                    <div style="background:#161b22;border:1px solid #30363d;border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:24px 16px 36px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+                            <span style="color:#8b949e;font-size:12px;">📷 Paquete escaneado</span>
+                            <button onclick="document.getElementById('modalInfoEscaneado').style.display='none'" style="background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer;">✕</button>
+                        </div>
+                        <div style="color:#58a6ff;font-size:15px;font-weight:600;text-align:center;">
+                            🔍 Buscando información...
+                        </div>
+                        <div style="color:#484f58;font-size:11px;font-family:monospace;">#${shippingId}</div>
+                        <div style="width:100%;height:3px;background:#21262d;border-radius:2px;overflow:hidden;">
+                            <div style="height:100%;background:#58a6ff;border-radius:2px;animation:scanProgress 1.5s ease-in-out infinite;"></div>
+                        </div>
+                    </div>`;
+                // Agregar animación de progreso si no existe
+                if (!document.getElementById('scanProgressStyle')) {
+                    const st = document.createElement('style');
+                    st.id = 'scanProgressStyle';
+                    st.textContent = '@keyframes scanProgress{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}';
+                    document.head.appendChild(st);
+                }
+                modal.style.display = 'flex';
+                return;
+            }
+
+            // ── Datos cargados ────────────────────────────────────────────
+            const estadoColor = { pendiente:'#e3b341', recibido:'#3fb950', descontado:'#58a6ff', reclamado:'#f85149', 'en deposito':'#FF9800' };
+            const estado  = rec?.estado || '';
+            const recId   = rec?.id || '';
+            const col     = estadoColor[estado] || '#8b949e';
+            const valStr  = valor > 0 ? `$${Math.round(valor).toLocaleString('es-AR')}` : '';
+
+            // Motivo del reclamo
+            const tipoLabel = rec?.tipo === 'driver_devolver'
+                ? `<span style="background:#3b1010;color:#f85149;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;">⚠️ CANCELADO — driver debe devolver</span>`
+                : rec?.tipo === 'demorado'
+                ? `<span style="background:#2a1f00;color:#e3b341;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;">⏱️ DEMORADO${rec?.notas ? ' · '+rec.notas : ''}</span>`
+                : '';
+
+            modal.innerHTML = `
+                <div style="background:#161b22;border:1px solid #30363d;border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:20px 16px 32px;display:flex;flex-direction:column;gap:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="color:#8b949e;font-size:12px;">📷 Paquete escaneado</span>
+                        <button onclick="document.getElementById('modalInfoEscaneado').style.display='none'" style="background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        ${recId ? `<span style="background:#1f3a1f;color:#3fb950;padding:3px 12px;border-radius:6px;font-size:16px;font-weight:700;font-family:monospace;">${recId}</span>` : '<span style="color:#484f58;font-size:12px;">Sin #ID</span>'}
+                        ${estado ? `<span style="color:${col};font-size:12px;font-weight:700;text-transform:uppercase;">${estado}</span>` : ''}
+                        ${valStr ? `<span style="color:#3fb950;font-size:14px;font-weight:700;">${valStr}</span>` : ''}
+                    </div>
+                    ${tipoLabel ? `<div>${tipoLabel}</div>` : ''}
+                    <div style="background:#0d1117;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;">
+                        ${zona      ? `<div style="color:#e6edf3;font-size:14px;font-weight:600;">📍 ${zona}</div>` : ''}
+                        ${calle     ? `<div style="color:#8b949e;font-size:13px;">🏠 ${calle} ${numero}</div>` : ''}
+                        ${comprador ? `<div style="color:#8b949e;font-size:13px;">👤 ${comprador}</div>` : ''}
+                        ${cuentaNombre ? `<div style="color:#8b949e;font-size:12px;">🏪 ${cuentaNombre}</div>` : ''}
+                        <div style="color:#484f58;font-size:11px;font-family:monospace;margin-top:2px;">#${shippingId}</div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button onclick="document.getElementById('modalInfoEscaneado').style.display='none';_recibirManual('${shippingId}','${cuentaNombre}',null)"
+                            style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;flex:1;">
+                            📥 Recibido
+                        </button>
+                        <button onclick="window._cambiarEstadoReclamo('${shippingId}','descontado',this);setTimeout(()=>document.getElementById('modalInfoEscaneado').style.display='none',1000)"
+                            style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;flex:1;">
+                            ✅ Descontado
+                        </button>
+                    </div>
+                    <button onclick="document.getElementById('modalInfoEscaneado').style.display='none';abrirEscaner()"
+                        style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:10px;border-radius:10px;font-size:13px;cursor:pointer;width:100%;">
+                        🔄 Escanear otro
+                    </button>
+                </div>`;
+            modal.style.display = 'flex';
         }
 
         async function _guardarRecibido(shippingId, cuentaNombre, zona) {
@@ -1947,6 +2094,11 @@
             } else {
                 _showNEToast('⚠️ Sin conexión — guardado localmente\nSe sincronizará al reabrir');
             }
+
+            // 4. Marcar como recibido en la hoja de reclamos (en background, no bloquea)
+            _gasReclamo({ action: 'update_reclamo', shippingId: String(shippingId), estado: 'recibido' })
+                .catch(() => {}); // silencioso si falla
+
             setTimeout(() => cargarNoEntregados(), 900);
         }
 
@@ -2041,7 +2193,7 @@
                         substatus_history: (shipping.substatus_history || []).slice(-10),
                         _canceladaDevolver: shipping._canceladaDevolver
                     },
-                    order: { id: order?.id, buyer: order?.buyer },
+                    order: { id: order?.id, buyer: order?.buyer, total_amount: order?.total_amount, status: order?.status },
                     cuentaNombre, cuentaColor
                 }));
                 localStorage.setItem(_NE_CACHE_KEY, JSON.stringify({ ts: Date.now(), items: slim }));
@@ -2715,6 +2867,7 @@
             if (neCache) {
                 window._neTodos = neCache.items;
                 _renderNEItems(neCache.items, { fromCache: true, cacheAgeMin: neCache.ageMin });
+                _syncReclamosEnBackground(neCache.items); // IDs y precios visibles desde el caché
                 // No mostramos spinner — los datos ya están en pantalla
             } else {
                 content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
@@ -2952,6 +3105,126 @@
             // Guardar en caché localStorage y renderizar
             _saveNECache(todos);
             _renderNEItems(todos);
+
+            // Auto-registro en Google Sheets (en background, no bloquea el render)
+            _syncReclamosEnBackground(todos);
+        }
+
+        // ── Cache local de reclamos (localStorage) ───────────────────────────
+        function _saveReclamosCache(map) {
+            try {
+                const arr = [];
+                map.forEach((v, k) => arr.push([k, v]));
+                localStorage.setItem('_reclamosCache', JSON.stringify({ ts: Date.now(), data: arr }));
+            } catch(e) {}
+        }
+        function _loadReclamosCache() {
+            try {
+                const raw = localStorage.getItem('_reclamosCache');
+                if (!raw) return null;
+                const p = JSON.parse(raw);
+                if (!p?.data || Date.now() - p.ts > 30 * 60 * 1000) return null; // max 30 min
+                return new Map(p.data);
+            } catch(e) { return null; }
+        }
+
+        // ── Sincronizar reclamos con Google Sheets en background ─────────────
+        async function _syncReclamosEnBackground(todos) {
+            try {
+                // 0. Cargar desde caché local instantáneamente (antes del fetch)
+                if (!window._reclamosMap?.size) {
+                    const cached = _loadReclamosCache();
+                    if (cached) {
+                        window._reclamosMap = cached;
+                        _aplicarReclamosAlDOM(); // muestra #IDs y estados visualmente
+                    }
+                }
+
+                // 1. Traer todos los reclamos existentes del sheet
+                const res = await _gasReclamo({ action: 'get_reclamos' });
+                if (res?.records) {
+                    window._reclamosMap = new Map(res.records.map(r => [r.shippingId, r]));
+                    _saveReclamosCache(window._reclamosMap); // guardar para próxima carga
+                }
+
+                // 2. Identificar items que necesitan registrarse
+                const hoySync = new Date(); hoySync.setHours(0,0,0,0);
+                const nuevos = todos.filter(t => {
+                    const sid = String(t.shipping.id);
+                    if (window._reclamosMap.has(sid)) return false; // ya registrado
+                    if (t.shipping._canceladaDevolver) return true;  // driver debe devolver → siempre
+                    // Demorados: fecha estimada pasó hace >1 día
+                    const fechaEnt = t.shipping.shipping_option?.estimated_delivery_time?.date
+                                  || t.shipping.shipping_option?.estimated_delivery_final?.date;
+                    if (!fechaEnt) return false;
+                    const entrega  = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                    const diffDias = Math.round((hoySync - entrega) / 86400000);
+                    return diffDias > 1; // más de 1 día de atraso
+                });
+
+                // 3. Registrar cada uno (secuencial para no saturar GAS)
+                for (const item of nuevos) {
+                    const sid  = String(item.shipping.id);
+                    const fechaEnt2 = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                   || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                    const entrega2  = fechaEnt2 ? new Date(fechaEnt2) : null;
+                    entrega2?.setHours(0,0,0,0);
+                    const diffDias2 = entrega2 ? Math.round((hoySync - entrega2) / 86400000) : 0;
+                    const tipo = item.shipping._canceladaDevolver ? 'driver_devolver' : 'demorado';
+                    const data = await _gasReclamo({
+                        action:     'add_reclamo',
+                        shippingId: sid,
+                        orderId:    String(item.order?.id || ''),
+                        comprador:  item.order?.buyer?.nickname || '',
+                        zona:       item.shipping._zona || '',
+                        cuenta:     item.cuentaNombre || '',
+                        tipo,
+                        valor:      Math.round(item.order?.total_amount || 0),
+                        notas:      tipo === 'demorado' ? `${diffDias2}d de atraso` : '',
+                    });
+                    if (data?.ok && data?.record) {
+                        window._reclamosMap.set(sid, data.record);
+                        // Actualizar el badge #ID en el DOM si la tarjeta ya está visible
+                        const el = document.getElementById('recid-' + sid);
+                        if (el) {
+                            el.textContent = data.record.id;
+                            el.style.display = 'inline';
+                        }
+                    }
+                }
+
+                // 4. Reflejar en DOM
+                _aplicarReclamosAlDOM();
+
+            } catch(e) {
+                console.warn('[reclamos] sync error:', e.message);
+            }
+        }
+
+        function _aplicarReclamosAlDOM() {
+            window._reclamosMap?.forEach((rec, sid) => {
+                // Badge #ID
+                const el = document.getElementById('recid-' + sid);
+                if (el) {
+                    if (!el.textContent || el.dataset.lastId !== rec.id) {
+                        el.textContent = rec.id;
+                        el.style.display = 'inline';
+                        el.dataset.lastId = rec.id;
+                    }
+                }
+                // Monto: tachado si descontado
+                const valEl = document.getElementById('recval-' + sid);
+                if (valEl) {
+                    if (rec.estado === 'descontado') {
+                        valEl.style.color = '#555';
+                        valEl.style.textDecoration = 'line-through';
+                        if (!valEl.textContent.includes('✅')) valEl.textContent += ' ✅';
+                    } else {
+                        valEl.style.color = '#3fb950';
+                        valEl.style.textDecoration = '';
+                    }
+                }
+            });
         }
 
         function _renderNEItems(items, { fromCache = false, cacheAgeMin = 0 } = {}) {
@@ -3033,9 +3306,12 @@
                 window._neCurrentFilter = filterKey;
                 const container = document.getElementById('neCards');
                 if (!container) return;
-                // Aplicar filtro de cuenta si está activo
+                // Aplicar filtros (cuenta + archivados)
                 const acctFilt = window._neAccountFilter || 'all';
-                const todosVis = acctFilt === 'all' ? todos : todos.filter(t => t.cuentaNombre === acctFilt);
+                const _archivados = _getArchivados();
+                const todosVis = todos
+                    .filter(t => acctFilt === 'all' || t.cuentaNombre === acctFilt)
+                    .filter(t => !_archivados.has(String(t.shipping.id)));
                 document.querySelectorAll('.ne-day-btn').forEach(b => {
                     b.style.outline = b.dataset.key === filterKey ? '2px solid white' : 'none';
                     b.style.opacity = b.dataset.key === filterKey ? '1' : '0.6';
@@ -3077,30 +3353,48 @@
                     const fechaTxt    = gLabel
                         ? `<span style="color:#8b949e;font-size:10px;white-space:nowrap;">${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>`
                         : '';
+                    const valorNum    = order.total_amount || 0;
+                    // Fecha corta para Excel (ej: "3/6") extraída del gLabel "Mié 3/6"
+                    const _fechaCorta  = gLabel ? (gLabel.split(' ')[1] || '') : '';
+                    const _recAhora    = window._reclamosMap?.get(String(sid));
+                    const _descontado  = _recAhora?.estado === 'descontado';
+                    const valorTxt    = valorNum > 0
+                        ? `<span id="recval-${sid}" style="color:${_descontado?'#555':'#3fb950'};font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;user-select:none;${_descontado?'text-decoration:line-through;':''}"
+                             title="Tocar para copiar al Excel"
+                             onclick="event.stopPropagation();window._copiarValorExcel(${-Math.round(valorNum)},'${_fechaCorta}','${sid}')">$${Math.round(valorNum).toLocaleString('es-AR')}${_descontado?' ✅':''}</span>`
+                        : '';
 
                     const detHTML = (extraBtns = '') => `
                         <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
                             <a href="${googleMapsUrl}" target="_blank" onclick="event.stopPropagation()" class="ne-mini-addr">📍 ${calle} ${numero}, ${ciudad}</a>
-                            <div class="ne-mini-buy">👤 ${comprador} · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a></div>
+                            <div class="ne-mini-buy">👤 ${comprador} · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a>${valorNum > 0 ? ` · <span style="color:#3fb950;font-weight:700;">$${Math.round(valorNum).toLocaleString('es-AR')}</span>` : ''}</div>
                             <div class="ne-mini-btns">
                                 <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a73e8;color:white;">🏷️ Etiqueta</button>
                                 ${extraBtns}
                                 <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#25D366;color:white;">📤 Compartir</button>
                                 <button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
+                                <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;">✅ Descontado</button>
+                                <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1.5px solid #484f58;">🗃️ Archivar</button>
                             </div>
                         </div>`;
 
+                    // Badge de ID del sheet (se llena async después del render)
+                    const recExist  = window._reclamosMap?.get(String(sid));
+                    const recIdTxt  = recExist
+                        ? `<span id="recid-${sid}" style="background:#1f3a1f;color:#3fb950;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;">${recExist.id}</span>`
+                        : `<span id="recid-${sid}" style="background:#1f3a1f;color:#3fb950;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;display:none;"></span>`;
+
                     if (isCancelada) {
                         const idx = window._neDevolver.length;
-                        window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: sid });
-                        return `<div class="ne-mini-card ne-mini-cancelada" onclick="_neToggleCard('${sid}')">
+                        window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: sid, valor: valorNum });
+                        return `<div class="ne-mini-card ne-mini-cancelada" data-sid="${sid}" onclick="_neToggleCard('${sid}')">
                             <div class="ne-mini-row">
                                 <span style="color:#f85149;font-size:13px;flex-shrink:0;">⚠️</span>
                                 <span class="ne-mini-zona">${zona}</span>
-                                <div class="ne-mini-badges">${cuentaDot}${fechaTxt}</div>
+                                <div class="ne-mini-badges">${recIdTxt}${valorTxt}${cuentaDot}${fechaTxt}</div>
                                 <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                             </div>
-                            ${detHTML(`<button onclick="event.stopPropagation();window._compartirDevolver(${idx},event)" style="background:#c62828;color:white;">📦 Devolver</button>`)}
+                            ${detHTML()}
                         </div>`;
                     }
 
@@ -3110,11 +3404,11 @@
                     const lineColor = gColor || grupoInfo.color;
                     const icon = isEnCamino ? '🚚' : '🔄';
 
-                    return `<div class="ne-mini-card" style="border-left-color:${lineColor};" onclick="_neToggleCard('${sid}')">
+                    return `<div class="ne-mini-card" data-sid="${sid}" style="border-left-color:${lineColor};" onclick="_neToggleCard('${sid}')">
                         <div class="ne-mini-row">
                             <span style="font-size:13px;flex-shrink:0;">${icon}</span>
                             <span class="ne-mini-zona">${zona}</span>
-                            <div class="ne-mini-badges">${cuentaDot}${fechaTxt}</div>
+                            <div class="ne-mini-badges">${recIdTxt}${valorTxt}${cuentaDot}${fechaTxt}</div>
                             <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                         </div>
                         ${detHTML()}
@@ -3187,12 +3481,14 @@
                     const subKey   = (s.substatus || '').toLowerCase();
                     const subLabel = grupoLabels[subKey]?.label || (subKey ? subKey.replace(/_/g,' ') : '');
                     const etiqueta = `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${s.id}&view=1`;
-                    let txt = `*${num}. ${zona}*\n`;
+                    const valor    = o.total_amount ? `$${Math.round(o.total_amount).toLocaleString('es-AR')}` : '';
+                    const recRec   = window._reclamosMap?.get(String(s.id));
+                    let txt = `*${num}. ${zona}*${recRec ? ' '+recRec.id : ''}\n`;
                     txt += `   🏠 ${calle} ${numero}, ${ciudad}\n`;
                     txt += `   👤 ${comprador}\n`;
                     if (fechaStr) txt += `   📅 ${fechaStr}\n`;
-                    if (subLabel) txt += `   ${subLabel}\n`;   // subLabel ya trae su propio emoji
-                    txt += `   🏪 ${t.cuentaNombre} · #${orderId}\n`;
+                    if (subLabel) txt += `   ${subLabel}\n`;
+                    txt += `   🏪 ${t.cuentaNombre} · #${orderId}${valor ? ' · '+valor : ''}\n`;
                     txt += `   🏷️ ${etiqueta}\n\n`;
                     return txt;
                 }
@@ -3236,7 +3532,9 @@
                         linResumen = `🚚 ${enCamino.length} paquete${enCamino.length!==1?'s':''} sin entregar`;
                     // Listado de atrasos en una sola línea
                     const todosAtraso = [...devolver, ...enCamino].map((t,i) => `${i+1}. ${_resumenAtraso(t)}`).join(' · ');
-                    let txt = `📦 *${todos.length} PAQUETES SIN ENTREGAR*\n`;
+                    const totalValor = todos.reduce((sum, t) => sum + (t.order?.total_amount || 0), 0);
+                    const totalValorStr = totalValor > 0 ? ` · Total: $${Math.round(totalValor).toLocaleString('es-AR')}` : '';
+                    let txt = `📦 *${todos.length} PAQUETES SIN ENTREGAR${totalValorStr}*\n`;
                     txt += `${linResumen}\n`;
                     txt += `${todosAtraso}\n`;
                     txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n`;
@@ -3261,6 +3559,281 @@
                     }
                     if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
                     else { window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank'); }
+                };
+
+                // ── Modo selección ────────────────────────────────────────────
+                window._neSeleccionados = new Set();
+                window._modoSeleccion   = false;
+
+                window._activarModoSeleccion = function() {
+                    window._modoSeleccion = !window._modoSeleccion;
+                    window._neSeleccionados.clear();
+                    const btn = document.getElementById('btnSeleccionar');
+                    if (btn) btn.textContent = window._modoSeleccion ? '✕ Cancelar' : '☑️ Seleccionar';
+                    // Agregar/quitar overlay de selección en cada tarjeta
+                    document.querySelectorAll('.ne-mini-card').forEach(card => {
+                        const sid = card.dataset.sid;
+                        if (!sid) return;
+                        if (window._modoSeleccion) {
+                            card.style.outline = '2px solid transparent';
+                            card.onclick = (e) => { e.stopPropagation(); window._toggleSeleccion(sid, card); };
+                        } else {
+                            card.style.outline = '';
+                            card.onclick = (e) => { if (!e.target.closest('button,a')) _neToggleCard(sid); };
+                        }
+                    });
+                    _actualizarBarraSeleccion();
+                };
+
+                window._toggleSeleccion = function(sid, card) {
+                    if (window._neSeleccionados.has(sid)) {
+                        window._neSeleccionados.delete(sid);
+                        card.style.outline = '2px solid transparent';
+                        card.style.background = '';
+                    } else {
+                        window._neSeleccionados.add(sid);
+                        card.style.outline = '2px solid #58a6ff';
+                        card.style.background = '#0d1f30';
+                    }
+                    _actualizarBarraSeleccion();
+                };
+
+                function _actualizarBarraSeleccion() {
+                    let barra = document.getElementById('barraSeleccion');
+                    if (!window._modoSeleccion || window._neSeleccionados.size === 0) {
+                        if (barra) barra.remove();
+                        return;
+                    }
+                    const selItems = todos.filter(t => window._neSeleccionados.has(String(t.shipping.id)));
+                    const totalVal = selItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                    const valorStr = totalVal > 0 ? ` · $${Math.round(totalVal).toLocaleString('es-AR')}` : '';
+                    if (!barra) {
+                        barra = document.createElement('div');
+                        barra.id = 'barraSeleccion';
+                        barra.style.cssText = 'position:fixed;bottom:70px;left:0;right:0;z-index:9000;display:flex;gap:10px;justify-content:center;padding:10px 16px;background:#0d1117;border-top:1px solid #30363d;';
+                        document.body.appendChild(barra);
+                    }
+                    barra.innerHTML = `
+                        <span style="color:#8b949e;font-size:13px;align-self:center;">${window._neSeleccionados.size} seleccionados${valorStr}</span>
+                        <button onclick="window._compartirSeleccionados()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:10px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;flex:1;max-width:220px;">
+                            📤 Compartir seleccionados
+                        </button>`;
+                };
+
+                window._compartirSeleccionados = function() {
+                    const selItems = todos.filter(t => window._neSeleccionados.has(String(t.shipping.id)));
+                    if (!selItems.length) return;
+                    const devolver = selItems.filter(t => t.shipping._canceladaDevolver);
+                    const enCamino = selItems.filter(t => !t.shipping._canceladaDevolver);
+                    const totalVal = selItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                    const totalValStr = totalVal > 0 ? ` · Total: $${Math.round(totalVal).toLocaleString('es-AR')}` : '';
+                    // Resumen compacto: #ID · $valor por item
+                    const resumenLineas = selItems.map(t => {
+                        const rec = window._reclamosMap?.get(String(t.shipping.id));
+                        const id  = rec?.id || '—';
+                        const v   = t.order?.total_amount ? `$${Math.round(t.order.total_amount).toLocaleString('es-AR')}` : '';
+                        return `  ${id}${v ? ' · ' + v : ''}`;
+                    }).join('\n');
+                    let txt = `📦 *${selItems.length} PAQUETES${totalValStr}*\n`;
+                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n`;
+                    txt += `📋 *RESUMEN:*\n${resumenLineas}\n`;
+                    txt += `─────────────────────\n\n`;
+                    if (devolver.length) {
+                        txt += `⚠️ *A DEVOLVER (${devolver.length})*\n\n`;
+                        devolver.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
+                    }
+                    if (enCamino.length) {
+                        txt += `🚚 *SIN ENTREGAR (${enCamino.length})*\n\n`;
+                        enCamino.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
+                    }
+                    if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
+                    else { window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank'); }
+                };
+
+                // ── Archivar paquetes (ocultar del listado, guardado en localStorage) ──
+                function _getArchivados() {
+                    try {
+                        return new Set(JSON.parse(localStorage.getItem('_neArchivados') || '[]'));
+                    } catch(e) { return new Set(); }
+                }
+                function _saveArchivados(set) {
+                    try { localStorage.setItem('_neArchivados', JSON.stringify([...set])); } catch(e) {}
+                }
+
+                window._archivarPaquete = function(sid, event) {
+                    if (event) event.stopPropagation();
+                    // Pedir PIN antes de archivar
+                    _mostrarPIN(
+                        `🗃️ <strong>Archivar paquete</strong><br><span style="color:#8b949e;font-size:12px;">Este paquete dejará de aparecer en el listado.</span>`,
+                        () => {
+                            const set = _getArchivados();
+                            set.add(String(sid));
+                            _saveArchivados(set);
+                            // Ocultar la tarjeta con animación
+                            const card = document.querySelector(`.ne-mini-card[data-sid="${sid}"]`);
+                            if (card) {
+                                card.style.transition = 'opacity .3s, max-height .4s';
+                                card.style.opacity = '0';
+                                card.style.overflow = 'hidden';
+                                card.style.maxHeight = card.offsetHeight + 'px';
+                                setTimeout(() => { card.style.maxHeight = '0'; card.style.marginBottom = '0'; }, 50);
+                                setTimeout(() => card.remove(), 450);
+                            }
+                            _showNEToast('🗃️ Paquete archivado');
+                        }
+                    );
+                };
+
+                window._desarchivarTodo = function() {
+                    localStorage.removeItem('_neArchivados');
+                    _showNEToast('↩️ Archivados restaurados');
+                    renderNECards(window._neCurrentFilter || 'all');
+                };
+
+                // Marcar reclamo como descontado (ya descontado del Excel, no es recibido)
+                window._marcarDescontado = function(sid, event) {
+                    if (event) event.stopPropagation();
+                    const btn = event?.currentTarget || event?.target;
+                    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+                    _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado: 'descontado' })
+                        .then(d => {
+                            if (d?.ok) {
+                                const rec = window._reclamosMap?.get(String(sid));
+                                if (rec) rec.estado = 'descontado';
+                                // Tachar el monto en la tarjeta
+                                const valEl = document.getElementById('recval-' + sid);
+                                if (valEl) { valEl.style.color = '#555'; valEl.style.textDecoration = 'line-through'; if (!valEl.textContent.includes('✅')) valEl.textContent += ' ✅'; }
+                                _showNEToast('✅ Marcado como descontado');
+                                if (btn) { btn.textContent = '✅ Descontado'; btn.style.background = '#0d2233'; btn.style.color = '#8b949e'; btn.style.borderColor = '#30363d'; }
+                            } else {
+                                if (btn) { btn.textContent = '✅ Descontado'; btn.disabled = false; }
+                                _showNEToast('⚠️ Error al guardar');
+                            }
+                        });
+                };
+
+                // Copiar valor al portapapeles en formato Excel
+                // Resultado: -27959  [TAB][TAB]  3/6  [TAB]  Paquete perdido · #001
+                window._copiarValorExcel = function(valorNeg, fecha, sid) {
+                    const rec  = window._reclamosMap?.get(String(sid));
+                    const id   = rec?.id || '';
+                    const desc = 'Paquete' + (id ? ' ' + id : '');
+                    const texto = valorNeg + '\t\t' + fecha + '\t' + desc;
+                    const showOk = () => {
+                        const t = document.createElement('div');
+                        t.textContent = '✅ Copiado al Excel';
+                        t.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#238636;color:white;padding:10px 22px;border-radius:10px;font-size:15px;font-weight:700;z-index:99999;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5);';
+                        document.body.appendChild(t);
+                        setTimeout(() => t.remove(), 1600);
+                    };
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(texto).then(showOk).catch(() => {
+                            const ta = document.createElement('textarea');
+                            ta.value = texto; document.body.appendChild(ta);
+                            ta.select(); document.execCommand('copy'); ta.remove(); showOk();
+                        });
+                    } else {
+                        const ta = document.createElement('textarea');
+                        ta.value = texto; document.body.appendChild(ta);
+                        ta.select(); document.execCommand('copy'); ta.remove(); showOk();
+                    }
+                };
+
+                // ── Buscador de reclamos ───────────────────────────────────
+                window._abrirBuscadorReclamos = function() {
+                    // Si ya existe el modal, solo mostrarlo
+                    let modal = document.getElementById('modalBuscadorReclamos');
+                    if (modal) { modal.style.display = 'flex'; document.getElementById('inputBuscadorReclamos').focus(); return; }
+                    modal = document.createElement('div');
+                    modal.id = 'modalBuscadorReclamos';
+                    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:stretch;padding:12px;gap:10px;overflow:hidden;';
+                    modal.innerHTML = `
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input id="inputBuscadorReclamos" placeholder="Buscar por #ID, comprador, zona, orden..."
+                                style="flex:1;background:#161b22;border:1.5px solid #30363d;color:#e6edf3;padding:10px 14px;border-radius:10px;font-size:14px;outline:none;"
+                                oninput="window._buscarReclamos(this.value)" />
+                            <button onclick="document.getElementById('modalBuscadorReclamos').style.display='none'"
+                                style="background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:10px 16px;border-radius:10px;font-size:14px;cursor:pointer;white-space:nowrap;">✕ Cerrar</button>
+                        </div>
+                        <div id="resultadosBuscador" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+                            <p style="color:#8b949e;text-align:center;margin-top:30px;">Escribí para buscar</p>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    document.getElementById('inputBuscadorReclamos').focus();
+                };
+
+                window._buscarReclamos = function(q) {
+                    const cont = document.getElementById('resultadosBuscador');
+                    if (!cont) return;
+                    const trim = (q || '').trim();
+                    if (trim.length < 2) {
+                        cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Escribí para buscar</p>';
+                        return;
+                    }
+                    cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">⏳ Buscando...</p>';
+                    // Primero buscar en el mapa local (instantáneo)
+                    const ql = trim.toLowerCase();
+                    const locales = [];
+                    window._reclamosMap?.forEach(r => {
+                        if (r.id?.toLowerCase().includes(ql) || r.comprador?.toLowerCase().includes(ql) ||
+                            r.zona?.toLowerCase().includes(ql) || String(r.orderId).includes(ql) ||
+                            String(r.shippingId).includes(ql)) locales.push(r);
+                    });
+                    if (locales.length) {
+                        _renderResultadosReclamos(locales);
+                    }
+                    // También buscar en GAS (puede tener registros más viejos que ya no están en memoria)
+                    _gasReclamo({ action: 'search_reclamos', q: trim })
+                        .then(d => {
+                            if (d?.records?.length) _renderResultadosReclamos(d.records);
+                            else if (!locales.length) cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Sin resultados</p>';
+                        })
+                        .catch(() => { if (!locales.length) cont.innerHTML = '<p style="color:#f85149;text-align:center;margin-top:30px;">Error al buscar</p>'; });
+                };
+
+                function _renderResultadosReclamos(records) {
+                    const cont = document.getElementById('resultadosBuscador');
+                    if (!cont) return;
+                    const estadoColor = { pendiente: '#e3b341', recibido: '#3fb950', descontado: '#58a6ff', reclamado: '#f85149' };
+                    cont.innerHTML = records.map(r => {
+                        const col = estadoColor[r.estado] || '#8b949e';
+                        const valStr = r.valor > 0 ? `$${Math.round(r.valor).toLocaleString('es-AR')}` : '';
+                        return `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;">
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <span style="background:#1f3a1f;color:#3fb950;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700;font-family:monospace;">${r.id}</span>
+                                <span style="color:${col};font-size:11px;font-weight:700;text-transform:uppercase;">${r.estado}</span>
+                                ${valStr ? `<span style="color:#3fb950;font-size:12px;font-weight:700;">${valStr}</span>` : ''}
+                                <span style="color:#8b949e;font-size:11px;margin-left:auto;">${r.fechaAlta}</span>
+                            </div>
+                            <div style="color:#e6edf3;font-size:13px;font-weight:600;">${r.comprador || '—'}</div>
+                            <div style="color:#8b949e;font-size:11px;">${r.zona || '—'} · ${r.cuenta || '—'} · <span style="font-family:monospace;">#${r.orderId}</span></div>
+                            ${r.tipo === 'driver_devolver' ? '<div style="color:#f85149;font-size:11px;">⚠️ Driver debe devolver</div>' : '<div style="color:#e3b341;font-size:11px;">⏱️ Demorado</div>'}
+                            ${r.notas ? `<div style="color:#8b949e;font-size:11px;font-style:italic;">${r.notas}</div>` : ''}
+                            ${r.fechaRecibido ? `<div style="color:#3fb950;font-size:11px;">📥 Recibido: ${r.fechaRecibido}</div>` : ''}
+                            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','descontado',this)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">✅ Descontado</button>
+                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','recibido',this)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">📥 Recibido</button>
+                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','reclamado',this)" style="background:#2a1a1a;color:#f85149;border:1.5px solid #f85149;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">🚨 Reclamado</button>
+                                <button onclick="navigator.clipboard?.writeText('${r.shippingId}')" style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:5px 12px;border-radius:7px;font-size:11px;cursor:pointer;">📋 Copiar ID</button>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                window._cambiarEstadoReclamo = function(sid, estado, btn) {
+                    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+                    _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado })
+                        .then(d => {
+                            if (d?.ok) {
+                                _showNEToast(`✅ Marcado como ${estado}`);
+                                // Refrescar búsqueda
+                                const q = document.getElementById('inputBuscadorReclamos')?.value || '';
+                                if (q.length >= 2) window._buscarReclamos(q);
+                            } else {
+                                if (btn) { btn.disabled = false; btn.textContent = estado; }
+                                _showNEToast('⚠️ Error al guardar');
+                            }
+                        });
                 };
 
                 // Compartir individual item en-camino (por shipping ID)
@@ -3326,9 +3899,15 @@
                     // Resetear para que los índices del botón compartir individual sean correctos
                     window._neDevolver = [];
                     if (filterKey === 'all' && todosVis.length > 0) {
-                        html += `<div style="text-align:right;margin-bottom:10px;">
+                        html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
                             <button onclick="window._compartirTodo()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:7px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">
                                 📤 Compartir todo (${todosVis.length})
+                            </button>
+                            <button onclick="window._activarModoSeleccion()" id="btnSeleccionar" style="background:#1f3a4f;color:#58a6ff;border:1.5px solid #58a6ff;padding:7px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">
+                                ☑️ Seleccionar
+                            </button>
+                            <button onclick="window._abrirBuscadorReclamos()" style="background:#1f2a1f;color:#3fb950;border:1.5px solid #3fb950;padding:7px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">
+                                🔍 Buscar reclamo
                             </button>
                         </div>`;
                     }
@@ -4004,7 +4583,7 @@
                 // Intentar batch real primero (?ids=...)
                 try {
                     const ctrl = new AbortController();
-                    const tid = setTimeout(() => ctrl.abort(), 6000); // 6s → fallback rápido
+                    const tid = setTimeout(() => ctrl.abort(), 10000); // 10s > Worker 8s → Worker devuelve parcial antes de abortar
                     const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`, { ...opts, signal: ctrl.signal });
                     clearTimeout(tid);
                     if (r.ok) {
@@ -4236,6 +4815,13 @@
                     if (dev > 0) html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();window._compartirTodosDevolver();">
                         <span style="font-size:20px;">⚠️</span>
                         <div><div>Compartir a devolver (${dev})</div><div style="font-size:11px;color:#8b949e;">Solo driver debe devolver</div></div>
+                    </button>`;
+                }
+                const archivadosCnt = _getArchivados().size;
+                if (archivadosCnt > 0) {
+                    html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();window._desarchivarTodo();" style="opacity:.7;">
+                        <span style="font-size:20px;">↩️</span>
+                        <div><div>Restaurar archivados (${archivadosCnt})</div><div style="font-size:11px;color:#8b949e;">Volver a mostrar en el listado</div></div>
                     </button>`;
                 }
             }
