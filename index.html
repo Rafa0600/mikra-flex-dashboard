@@ -953,6 +953,96 @@
             letter-spacing: -0.3px;
         }
 
+        /* ── NE mini-cards (colapsables) ──────────────────────────────── */
+        .ne-mini-card {
+            background: #161b22;
+            border-left: 3px solid #484f58;
+            border-radius: 10px;
+            margin-bottom: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .ne-mini-card:active { background: #1c2128; }
+        .ne-mini-cancelada { border-left-color: #f85149 !important; background: #160f0f; }
+        .ne-mini-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            min-height: 42px;
+        }
+        .ne-mini-zona {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 700;
+            color: #e6edf3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ne-mini-badges {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex-shrink: 0;
+            flex-wrap: nowrap;
+        }
+        .ne-mini-chev {
+            color: #484f58;
+            font-size: 16px;
+            flex-shrink: 0;
+            transition: transform 0.2s;
+            margin-left: 2px;
+            line-height: 1;
+        }
+        .ne-mini-det {
+            padding: 0 12px 10px 12px;
+            border-top: 1px solid #21262d;
+        }
+        .ne-mini-addr {
+            display: block;
+            font-size: 12px;
+            color: #00b4d8;
+            margin: 8px 0 4px;
+            text-decoration: none;
+        }
+        .ne-mini-buy {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+        .ne-mini-btns {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .ne-mini-btns button {
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 7px;
+            border: none;
+            cursor: pointer;
+            touch-action: manipulation;
+            font-family: inherit;
+        }
+        .ne-section-hdr {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 14px 0 6px;
+        }
+        .ne-section-hdr-line { flex: 1; height: 1px; background: #21262d; }
+        .ne-section-hdr-pill {
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        /* ── fin NE mini-cards ───────────────────────────────────────────── */
+
         .simple-estado {
             padding: 5px 14px;
             border-radius: 20px;
@@ -1835,25 +1925,81 @@
             _mostrarPIN(infoHtml, () => _guardarRecibido(shippingId, cuentaNombre, zona || shippingId));
         }
 
-        function _guardarRecibido(shippingId, cuentaNombre, zona) {
-            const cbName = '_rcv' + Date.now();
-            const sc = document.createElement('script');
-            window[cbName] = () => { delete window[cbName]; if (sc.parentNode) sc.remove(); };
-            sc.onerror   = () => { delete window[cbName]; if (sc.parentNode) sc.remove(); };
-            // Buscar comprador para guardarlo también
+        async function _guardarRecibido(shippingId, cuentaNombre, zona) {
             const item = (window._neTodos || []).find(t => String(t.shipping.id) === String(shippingId));
             const comprador = item?.order?.buyer?.nickname || '';
-            sc.src = GAS_TRACKER + '?action=recibir&id=' + shippingId
-                   + '&cuenta=' + encodeURIComponent(cuentaNombre)
-                   + '&zona='   + encodeURIComponent(zona)
-                   + '&comprador=' + encodeURIComponent(comprador)
-                   + '&callback=' + cbName;
-            document.head.appendChild(sc);
-            // Actualizar caché local
+
+            // 1. Actualizar UI de inmediato
             window._neRecibidosIds = window._neRecibidosIds || new Set();
             window._neRecibidosIds.add(String(shippingId));
-            _showNEToast('✅ Recibido: ' + zona);
+            _showNEToast('⏳ Guardando recepción...');
+
+            // 2. Respaldo en localStorage ANTES de intentar GAS
+            const pendingKey = 'rcv_' + shippingId;
+            try { localStorage.setItem(pendingKey, JSON.stringify({ shippingId, cuentaNombre, zona, comprador, ts: Date.now() })); } catch(e) {}
+
+            // 3. Intentar guardar en GAS (fetch con reintentos → JSONP como último recurso)
+            const ok = await _enviarRecibidoGAS(shippingId, cuentaNombre, zona, comprador);
+
+            if (ok) {
+                try { localStorage.removeItem(pendingKey); } catch(e) {}
+                _showNEToast('✅ Guardado: ' + zona);
+            } else {
+                _showNEToast('⚠️ Sin conexión — guardado localmente\nSe sincronizará al reabrir');
+            }
             setTimeout(() => cargarNoEntregados(), 900);
+        }
+
+        async function _enviarRecibidoGAS(shippingId, cuentaNombre, zona, comprador) {
+            const url = GAS_TRACKER
+                + '?action=recibir'
+                + '&id='        + encodeURIComponent(shippingId)
+                + '&cuenta='    + encodeURIComponent(cuentaNombre)
+                + '&zona='      + encodeURIComponent(zona)
+                + '&comprador=' + encodeURIComponent(comprador);
+            // fetch con 3 reintentos
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const ctrl = new AbortController();
+                    const tid  = setTimeout(() => ctrl.abort(), 10000);
+                    const r = await fetch(url, { signal: ctrl.signal });
+                    clearTimeout(tid);
+                    if (r.ok) return true;
+                } catch(e) {
+                    if (i < 2) await new Promise(res => setTimeout(res, 1500 * (i + 1)));
+                }
+            }
+            // Fallback: JSONP (por si CORS falla o viene de file://)
+            return new Promise(resolve => {
+                const cb = '_rcv' + Date.now();
+                const sc = document.createElement('script');
+                const timer = setTimeout(() => { cleanup(); resolve(false); }, 12000);
+                function cleanup() { clearTimeout(timer); delete window[cb]; if (sc.parentNode) sc.remove(); }
+                window[cb] = () => { cleanup(); resolve(true); };
+                sc.onerror = () => { cleanup(); resolve(false); };
+                sc.src = url + '&callback=' + cb;
+                document.head.appendChild(sc);
+            });
+        }
+
+        async function _procesarColaRecibidos() {
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k?.startsWith('rcv_')) keys.push(k);
+            }
+            if (!keys.length) return;
+            let synced = 0;
+            for (const key of [...keys]) {
+                try {
+                    const d = JSON.parse(localStorage.getItem(key));
+                    if (!d?.shippingId) { localStorage.removeItem(key); continue; }
+                    if (Date.now() - (d.ts || 0) > 86400000) { localStorage.removeItem(key); continue; }
+                    const ok = await _enviarRecibidoGAS(d.shippingId, d.cuentaNombre, d.zona, d.comprador);
+                    if (ok) { localStorage.removeItem(key); synced++; }
+                } catch(e) {}
+            }
+            if (synced > 0) _showNEToast(`✅ ${synced} recibo${synced > 1 ? 's' : ''} sincronizado${synced > 1 ? 's' : ''}`);
         }
 
         function _recibirManual(shippingId, cuentaNombre, event) {
@@ -1879,6 +2025,62 @@
             document.body.appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; }, 2200);
             setTimeout(() => t.remove(), 2700);
+        }
+
+        // ── NE localStorage cache (30 min TTL) ──────────────────────────────────
+        const _NE_CACHE_KEY = 'ne_cache_v1';
+        const _NE_CACHE_TTL = 30 * 60 * 1000;
+
+        function _saveNECache(items) {
+            try {
+                const slim = items.map(({ shipping, order, cuentaNombre, cuentaColor }) => ({
+                    shipping: {
+                        id: shipping.id, status: shipping.status, substatus: shipping.substatus,
+                        logistic_type: shipping.logistic_type, receiver_address: shipping.receiver_address,
+                        shipping_option: shipping.shipping_option, status_history: shipping.status_history,
+                        substatus_history: (shipping.substatus_history || []).slice(-10),
+                        _canceladaDevolver: shipping._canceladaDevolver
+                    },
+                    order: { id: order?.id, buyer: order?.buyer },
+                    cuentaNombre, cuentaColor
+                }));
+                localStorage.setItem(_NE_CACHE_KEY, JSON.stringify({ ts: Date.now(), items: slim }));
+            } catch(e) {}
+        }
+
+        function _loadNECache() {
+            try {
+                const raw = localStorage.getItem(_NE_CACHE_KEY);
+                if (!raw) return null;
+                const { ts, items } = JSON.parse(raw);
+                if (Date.now() - ts > _NE_CACHE_TTL) return null;
+                return { items, ageMin: Math.round((Date.now() - ts) / 60000) };
+            } catch(e) { return null; }
+        }
+
+        // ── Cache de shipments ya entregados (evita re-fetchear lo que ya sabemos) ──
+        const _NE_DELIV_KEY = 'ne_deliv_v2'; // v2: evita cachear "debe devolver" (bug corregido)
+        const _NE_DELIV_TTL = 6 * 60 * 60 * 1000; // 6 horas
+
+        function _getDeliveredCache() {
+            try {
+                const raw = localStorage.getItem(_NE_DELIV_KEY);
+                if (!raw) return new Set();
+                const { ts, ids } = JSON.parse(raw);
+                if (Date.now() - ts > _NE_DELIV_TTL) return new Set();
+                return new Set(ids.map(String));
+            } catch(e) { return new Set(); }
+        }
+
+        function _addToDeliveredCache(shippingIds) {
+            if (!shippingIds.length) return;
+            try {
+                const existing = _getDeliveredCache();
+                shippingIds.forEach(id => existing.add(String(id)));
+                // Limitar a 5000 IDs para no inflar el localStorage
+                const arr = [...existing].slice(-5000);
+                localStorage.setItem(_NE_DELIV_KEY, JSON.stringify({ ts: Date.now(), ids: arr }));
+            } catch(e) {}
         }
 
         // Carga IDs recibidos desde GAS (con caché de sesión)
@@ -2440,9 +2642,42 @@
             await cargarFlexPorFecha(fecha, label, false, myGen);
         }
 
+        // ── Diagnóstico de carga NE ───────────────────────────────────────────────
+        const _diagLines = [];
+        let _diagStart = 0;
+        function _diagLog(msg) {
+            const ms = Date.now() - (_diagStart || Date.now());
+            const line = `${ms > 0 ? '+'+ms+'ms' : '0ms'} ${msg}`;
+            _diagLines.push(line);
+            console.log('[DIAG]', line);
+            // Actualizar panel si está visible
+            const panel = document.getElementById('diagPanel');
+            if (panel) panel.textContent = _diagLines.slice(-40).join('\n');
+        }
+        function _mostrarDiagnostico() {
+            let panel = document.getElementById('diagModal');
+            if (panel) { panel.remove(); return; }
+            panel = document.createElement('div');
+            panel.id = 'diagModal';
+            panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:19999;display:flex;flex-direction:column;padding:16px;gap:10px;';
+            panel.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:#FFE600;font-weight:700;font-size:15px;">🔍 Diagnóstico de carga</span>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="navigator.clipboard.writeText(document.getElementById('diagPanel').textContent).then(()=>_showNEToast('✅ Copiado'))" style="background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;">📋 Copiar</button>
+                        <button onclick="document.getElementById('diagModal').remove()" style="background:#f85149;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;">✕ Cerrar</button>
+                    </div>
+                </div>
+                <pre id="diagPanel" style="flex:1;overflow-y:auto;font-size:11px;color:#8b949e;background:#0d1117;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all;font-family:monospace;">${_diagLines.join('\n') || '(sin datos aún — abrí primero la vista 7d)'}</pre>`;
+            document.body.appendChild(panel);
+        }
+
         async function cargarNoEntregados() {
             const myGen = ++loadGeneration;
             const content = document.getElementById('content');
+            _diagLines.length = 0;
+            _diagStart = Date.now();
+            _diagLog('▶ cargarNoEntregados inicio');
 
             document.getElementById('statsSection').classList.add('hidden');
             document.getElementById('sortToggleRow').style.display = 'none';
@@ -2475,14 +2710,22 @@
                 });
             }
 
-            content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
-                <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
-                    <div class="load-progress-track">
-                        <div class="load-progress-fill" id="neProgressFill"></div>
-                        <div class="load-progress-pct" id="neProgressText">0%</div>
-                    </div>
-                    <div class="load-progress-text" id="neProgressSub"></div>
-                </div></div>`;
+            // ── Caché: mostrar datos previos de inmediato mientras carga ML ────────
+            const neCache = _loadNECache();
+            if (neCache) {
+                window._neTodos = neCache.items;
+                _renderNEItems(neCache.items, { fromCache: true, cacheAgeMin: neCache.ageMin });
+                // No mostramos spinner — los datos ya están en pantalla
+            } else {
+                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
+                    <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
+                        <div class="load-progress-track">
+                            <div class="load-progress-fill" id="neProgressFill"></div>
+                            <div class="load-progress-pct" id="neProgressText">0%</div>
+                        </div>
+                        <div class="load-progress-text" id="neProgressSub"></div>
+                    </div></div>`;
+            }
 
             const shippingIdsVistos = new Set();
             const CONC = 35;
@@ -2504,6 +2747,7 @@
                         if (td.user_id) { sellerId = td.user_id; sessionStorage.setItem(`${cuentaKey}_user_id`, sellerId); }
                     }
                     if (!sellerId) return [];
+                    _diagLog(`[${cuenta.nombre}] sellerId=${sellerId}`);
 
                     // Query A: delivery date range (ML filtra server-side → mucho menos volumen)
                     // Query B: date_created últimos 10 días para capturar not_delivered que ya fallaron
@@ -2554,43 +2798,89 @@
                         canceladas.push(o);
                     });
 
-                    console.log(`[${cuenta.nombre}] NE — A:${ordersA.length} B:${ordersB.length} → ${combined.length} únicos`);
+                    _diagLog(`[${cuenta.nombre}] órdenes: A=${ordersA.length} B=${ordersB.length} C=${ordersC.length} → ${combined.length} activos + ${canceladas.length} cancelados`);
 
                     const todosParaFetch = [...combined, ...canceladas];
-                    prog.total += todosParaFetch.length; notifyProg();
+                    // prog.total se ajusta después de saber cuántos hay que fetchear realmente
 
                     // Batch fetch shipments — el Worker hace fan-out interno (1 request → 20 paralelos en edge)
-                    const BSIZ = 20, BCONC = 8;
+                    // BCONC=4: evita rate limit de ML (Worker manda 4×20=80 requests simultáneos máx)
+                    const BSIZ = 20, BCONC = 4;
                     const sMap = new Map();
+                    // Saltar shipments que ya sabemos que están entregados (cache local)
+                    const delivCache = _getDeliveredCache();
+                    const skipped = todosParaFetch.filter(o => delivCache.has(String(o.shipping.id)));
+                    const toFetch  = todosParaFetch.filter(o => !delivCache.has(String(o.shipping.id)));
+                    _diagLog(`[${cuenta.nombre}] ${todosParaFetch.length} total · ${skipped.length} en cache (saltados) · ${toFetch.length} a fetchear`);
+                    prog.total += toFetch.length; notifyProg();
+
                     const bats = [];
-                    for (let i = 0; i < todosParaFetch.length; i += BSIZ)
-                        bats.push(todosParaFetch.slice(i, i + BSIZ));
+                    for (let i = 0; i < toFetch.length; i += BSIZ)
+                        bats.push(toFetch.slice(i, i + BSIZ));
+                    _diagLog(`[${cuenta.nombre}] ${toFetch.length} shipments → ${bats.length} batches × ${BSIZ}, BCONC=${BCONC}`);
                     let bi = 0;
                     async function bw() {
                         while (bi < bats.length) {
+                            const batIdx = bi;
                             const bat = bats[bi++];
                             const ids = bat.map(o => o.shipping.id);
+                            const t0 = Date.now();
                             try {
+                                const ctrl = new AbortController();
+                                const tid  = setTimeout(() => {
+                                    _diagLog(`⚠️ TIMEOUT batch ${batIdx+1}/${bats.length} [${cuenta.nombre}] (15s)`);
+                                    ctrl.abort();
+                                }, 15000);
                                 const r = await fetch(
                                     `${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`,
-                                    { headers: { Authorization: `Bearer ${token}` } }
+                                    { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }
                                 );
+                                clearTimeout(tid);
+                                const ms = Date.now() - t0;
                                 if (r.ok) {
                                     const data = await r.json();
-                                    (Array.isArray(data) ? data : []).forEach(s => { if (s?.id) sMap.set(s.id, s); });
+                                    const got = (Array.isArray(data) ? data : []).filter(s => s?.id);
+                                    got.forEach(s => sMap.set(s.id, s));
+                                    _diagLog(`✅ batch ${batIdx+1}/${bats.length} [${cuenta.nombre}] ${got.length}/${ids.length} ok · ${ms}ms`);
                                 } else {
-                                    // Fallback individual si el Worker no soporta batch aún
+                                    _diagLog(`⚠️ batch ${batIdx+1} HTTP ${r.status} → fallback individual [${cuenta.nombre}]`);
                                     await Promise.all(ids.map(id =>
                                         fetch(`${cuenta.proxy}/api/shipments/${id}`, { headers: { Authorization: `Bearer ${token}` } })
                                             .then(r2 => r2.ok ? r2.json() : null).catch(() => null)
                                             .then(s => { if (s?.id) sMap.set(s.id, s); })
                                     ));
                                 }
-                            } catch(e) {}
+                            } catch(e) {
+                                _diagLog(`❌ batch ${batIdx+1} error: ${e.message} [${cuenta.nombre}]`);
+                            }
                             prog.done += bat.length; notifyProg();
                         }
                     }
+                    const t0fetch = Date.now();
                     await Promise.all(Array.from({ length: BCONC }, bw));
+                    _diagLog(`[${cuenta.nombre}] fetch total: ${Date.now()-t0fetch}ms · encontrados en sMap: ${sMap.size}`);
+
+                    // Guardar en cache los shipments que NO son NE (entregados, tipo incorrecto, etc.)
+                    // → próxima carga los saltamos directamente
+                    // IMPORTANTE: NO cachear envíos que el driver debe devolver:
+                    //   status=cancelled + date_shipped + !date_delivered = "debe devolver"
+                    const nuevosEntregados = toFetch
+                        .map(o => sMap.get(o.shipping.id))
+                        .filter(s => {
+                            if (!s) return false;
+                            if (s.logistic_type !== 'self_service') return true; // no es Flex → ignorar
+                            if (s.status === 'delivered') return true;           // entregado ✓
+                            if (s.status_history?.date_delivered) return true;   // confirmación de entrega ✓
+                            // Cancelado pero NUNCA despachado → driver nunca lo tuvo → safe
+                            if (s.status === 'cancelled' && !s.status_history?.date_shipped) return true;
+                            // Cancelado + despachado + sin entrega = "driver debe devolver" → NO cachear
+                            return false;
+                        })
+                        .map(s => String(s.id));
+                    if (nuevosEntregados.length) {
+                        _addToDeliveredCache(nuevosEntregados);
+                        _diagLog(`[${cuenta.nombre}] +${nuevosEntregados.length} IDs agregados al cache de entregados`);
+                    }
 
                     const results = [];
                     combined.forEach(order => {
@@ -2659,8 +2949,18 @@
             // Exponer todos globalmente para que el escáner pueda encontrar items
             window._neTodos = todos;
 
-            // GAS tracker removido de esta vista — genera falsos positivos
-            // Los cancelados reales (driver debe devolver) vienen directo de ML arriba
+            // Guardar en caché localStorage y renderizar
+            _saveNECache(todos);
+            _renderNEItems(todos);
+        }
+
+        function _renderNEItems(items, { fromCache = false, cacheAgeMin = 0 } = {}) {
+            const content = document.getElementById('content');
+            if (!content) return;
+            const todos = items;
+
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const desde = new Date(hoy); desde.setDate(desde.getDate() - 7);
 
             document.getElementById('badgeFecha').textContent = `🚫 ATRASADOS (7 días)`;
             document.getElementById('badgeCaba').textContent = `📦 ${todos.length} envío${todos.length !== 1 ? 's' : ''}`;
@@ -2744,15 +3044,20 @@
                 // Almacén global para compartir canceladas
                 window._neDevolver = [];
 
+                // Toggle para expandir/colapsar mini-card
+                window._neToggleCard = function(sid) {
+                    const det  = document.getElementById('nedet-' + sid);
+                    const chev = document.getElementById('nechev-' + sid);
+                    if (!det) return;
+                    const open = det.style.display !== 'none';
+                    det.style.display = open ? 'none' : 'block';
+                    if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+                };
+
                 function buildCard({ shipping, order, cuentaNombre }, gLabel, gAtraso, gColor) {
-                    const sub = (shipping.substatus || '').toLowerCase();
+                    const sub       = (shipping.substatus || '').toLowerCase();
                     const isEnCamino  = shipping.status === 'shipped';
                     const isCancelada = !!shipping._canceladaDevolver;
-                    const grupoInfo   = isCancelada
-                        ? { label: '⚠️ Cancelada — Driver debe devolver', color: '#f85149' }
-                        : isEnCamino
-                            ? (grupoLabels[sub] || { label: '🚚 En camino (sin confirmar)', color: '#00d9ff' })
-                            : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
 
                     const barrio  = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad  = shipping.receiver_address?.city?.name || '';
@@ -2765,66 +3070,54 @@
                     const comprador = order.buyer?.nickname || 'N/A';
                     const orderId   = order.id || '';
                     const orderUrl  = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
-                    const subHistory = shipping.substatus_history || [];
-                    const lastProb   = [...subHistory].reverse().find(e => e.substatus === sub);
-                    const horaEvento = lastProb?.date ? formatearSoloHora(lastProb.date) : null;
-                    const cuentaBadge = cuentaNombre === 'Mikra'
-                        ? `<span style="background:#9C27B0;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟣 Mikra</span>`
-                        : `<span style="background:#FF6B00;color:white;padding:2px 8px;border-radius:8px;font-size:10px;">🟠 Chaya</span>`;
-                    const fechaBadge = gLabel
-                        ? `<span style="background:${gColor};color:${gColor==='#FFE600'?'#000':'white'};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">📅 ${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>`
+                    const sid       = shipping.id;
+
+                    const cuentaColor = cuentaNombre === 'Mikra' ? '#9C27B0' : '#FF6B00';
+                    const cuentaDot   = `<span style="background:${cuentaColor};color:white;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;">${cuentaNombre}</span>`;
+                    const fechaTxt    = gLabel
+                        ? `<span style="color:#8b949e;font-size:10px;white-space:nowrap;">${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>`
                         : '';
 
-                    // Para canceladas: guardar datos para compartir y construir card especial
+                    const detHTML = (extraBtns = '') => `
+                        <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
+                            <a href="${googleMapsUrl}" target="_blank" onclick="event.stopPropagation()" class="ne-mini-addr">📍 ${calle} ${numero}, ${ciudad}</a>
+                            <div class="ne-mini-buy">👤 ${comprador} · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a></div>
+                            <div class="ne-mini-btns">
+                                <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a73e8;color:white;">🏷️ Etiqueta</button>
+                                ${extraBtns}
+                                <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#25D366;color:white;">📤 Compartir</button>
+                                <button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
+                            </div>
+                        </div>`;
+
                     if (isCancelada) {
                         const idx = window._neDevolver.length;
-                        window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: shipping.id });
-
-                        return `<div class="envio-card-simple cancelado" style="border-left:4px solid #f85149;margin-bottom:8px;background:linear-gradient(135deg,#1c0f0f,#1a1520);">
-                            <div style="background:linear-gradient(90deg,#f85149,#c62828);color:white;padding:6px 14px;margin:-12px -12px 10px -12px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;">
-                                ⚠️ DRIVER DEBE DEVOLVER
-                                <span style="margin-left:auto;font-size:10px;opacity:0.85;">${cuentaNombre} · ${gLabel}${gAtraso ? ' · '+gAtraso : ''}</span>
+                        window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: sid });
+                        return `<div class="ne-mini-card ne-mini-cancelada" onclick="_neToggleCard('${sid}')">
+                            <div class="ne-mini-row">
+                                <span style="color:#f85149;font-size:13px;flex-shrink:0;">⚠️</span>
+                                <span class="ne-mini-zona">${zona}</span>
+                                <div class="ne-mini-badges">${cuentaDot}${fechaTxt}</div>
+                                <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                             </div>
-                            <div class="simple-header" style="align-items:flex-start;">
-                                <div style="flex:1;">
-                                    <div style="font-size:15px;font-weight:700;color:#FFE600;margin-bottom:5px;">📍 ${zona}</div>
-                                    <div style="font-size:12px;color:#8b949e;">👤 ${comprador}</div>
-                                </div>
-                                <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
-                            </div>
-                            <div class="card-address-row" style="margin-top:8px;">
-                                <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
-                            </div>
-                            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
-                                <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">🏷️ Ver etiqueta</button>
-                                <button onclick="window._compartirDevolver(${idx}, event)" style="background:#25D366;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📤 Compartir</button>
-                                <button onclick="_recibirManual('${shipping.id}','${cuentaNombre}',event)" style="background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">📥 Recibido</button>
-                            </div>
+                            ${detHTML(`<button onclick="event.stopPropagation();window._compartirDevolver(${idx},event)" style="background:#c62828;color:white;">📦 Devolver</button>`)}
                         </div>`;
                     }
 
-                    return `<div class="envio-card-simple ${isEnCamino ? 'en-camino' : 'reprogramado'}" style="border-left-color:${grupoInfo.color};margin-bottom:8px;">
-                        <div class="simple-header">
-                            <div style="flex:1;">
-                                <div style="font-size:14px;font-weight:700;color:#FFE600;margin-bottom:5px;">📍 ${zona}</div>
-                                <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-                                    <span style="background:${grupoInfo.color};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700;">${grupoInfo.label}${horaEvento ? ' · '+horaEvento : ''}</span>
-                                    ${cuentaBadge}
-                                    ${fechaBadge}
-                                </div>
-                            </div>
-                            <a href="${orderUrl}" target="_blank" class="order-link" onclick="event.stopPropagation()" style="font-size:11px;flex-shrink:0;">#${orderId}</a>
+                    const grupoInfo = isEnCamino
+                        ? (grupoLabels[sub] || { label: '🚚 En camino', color: '#00d9ff' })
+                        : (grupoLabels[sub] || { label: '🔄 No entregado', color: '#FF9800' });
+                    const lineColor = gColor || grupoInfo.color;
+                    const icon = isEnCamino ? '🚚' : '🔄';
+
+                    return `<div class="ne-mini-card" style="border-left-color:${lineColor};" onclick="_neToggleCard('${sid}')">
+                        <div class="ne-mini-row">
+                            <span style="font-size:13px;flex-shrink:0;">${icon}</span>
+                            <span class="ne-mini-zona">${zona}</span>
+                            <div class="ne-mini-badges">${cuentaDot}${fechaTxt}</div>
+                            <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                         </div>
-                        <div class="card-address-row" style="margin-top:8px;">
-                            <a href="${googleMapsUrl}" target="_blank">📍 ${calle} ${numero}, ${ciudad}</a>
-                            <span class="card-sep">·</span>
-                            <span class="card-comprador">👤 <strong>${comprador}</strong></span>
-                        </div>
-                        <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
-                            <button onclick="verEtiqueta('${shipping.id}', event)" style="background:#1a73e8;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">🏷️ Ver etiqueta</button>
-                            <button onclick="_compartirItemNE(${JSON.stringify({sid:shipping.id,idx:null}).replace(/"/g,'&quot;')}, event, ${JSON.stringify(null)})" data-ne-share-id="${shipping.id}" style="background:#25D366;color:white;border:none;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">📤 Compartir</button>
-                            <button onclick="_recibirManual('${shipping.id}','${cuentaNombre}',event)" style="background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;">📥 Recibido</button>
-                        </div>
+                        ${detHTML()}
                     </div>`;
                 }
 
@@ -3033,26 +3326,53 @@
                     // Resetear para que los índices del botón compartir individual sean correctos
                     window._neDevolver = [];
                     if (filterKey === 'all' && todosVis.length > 0) {
-                        html += `<div style="text-align:right;margin-bottom:12px;">
-                            <button onclick="window._compartirTodo()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+                        html += `<div style="text-align:right;margin-bottom:10px;">
+                            <button onclick="window._compartirTodo()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:7px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">
                                 📤 Compartir todo (${todosVis.length})
                             </button>
                         </div>`;
                     }
-                    groups.forEach(({ label, atraso, color, items }, gKey) => {
-                        if (filterKey !== 'all' && gKey !== filterKey) return;
-                        const visItems = acctFilt === 'all' ? items : items.filter(t => t.cuentaNombre === acctFilt);
-                        if (!visItems.length) return;
-                        html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px;">
-                            <div style="flex:1;height:1px;background:#21262d;"></div>
-                            <div style="background:${color};color:${color==='#FFE600'?'#000':'white'};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;">
-                                📅 ${label}${atraso ? ' · '+atraso : ''}
-                                <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${visItems.length})</span>
-                            </div>
-                            <div style="flex:1;height:1px;background:#21262d;"></div>
+
+                    // ── CANCELADAS primero (siempre, independiente del filtro activo) ──
+                    const canceladasVis = todosVis.filter(t => t.shipping._canceladaDevolver);
+                    if (canceladasVis.length) {
+                        html += `<div class="ne-section-hdr">
+                            <div class="ne-section-hdr-line"></div>
+                            <div class="ne-section-hdr-pill" style="background:#7b1a1a;color:#f85149;">⚠️ DRIVER DEBE DEVOLVER (${canceladasVis.length})</div>
+                            <div class="ne-section-hdr-line"></div>
                         </div>`;
-                        visItems.forEach(item => html += buildCard(item, label, atraso, color));
-                    });
+                        canceladasVis.forEach(item => {
+                            const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                           || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                            let gLabel = '', gAtraso = '', gColor = '#f85149';
+                            if (fechaEnt) {
+                                const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                                const diffDias = Math.round((hoy - entrega) / 86400000);
+                                gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                                gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : `en ${Math.abs(diffDias)}d`;
+                            }
+                            html += buildCard(item, gLabel, gAtraso, gColor);
+                        });
+                    }
+
+                    // ── EN CAMINO / REPROGRAMADOS agrupados por fecha ─────────
+                    const hayCaminoOReprog = todosVis.some(t => !t.shipping._canceladaDevolver);
+                    if (hayCaminoOReprog) {
+                        groups.forEach(({ label, atraso, color, items }, gKey) => {
+                            if (filterKey !== 'all' && gKey !== filterKey) return;
+                            const visItems = (acctFilt === 'all' ? items : items.filter(t => t.cuentaNombre === acctFilt))
+                                .filter(t => !t.shipping._canceladaDevolver); // ya se mostraron arriba
+                            if (!visItems.length) return;
+                            html += `<div class="ne-section-hdr">
+                                <div class="ne-section-hdr-line"></div>
+                                <div class="ne-section-hdr-pill" style="background:${color};color:${color==='#FFE600'?'#000':'white'};">
+                                    📅 ${label}${atraso ? ' · '+atraso : ''} <span style="opacity:0.7;font-weight:400;">(${visItems.length})</span>
+                                </div>
+                                <div class="ne-section-hdr-line"></div>
+                            </div>`;
+                            visItems.forEach(item => html += buildCard(item, label, atraso, color));
+                        });
+                    }
                 }
 
                 if (!html) html = `<div class="no-results" style="padding:30px;text-align:center;">Sin envíos para ese filtro</div>`;
@@ -3074,7 +3394,7 @@
                 btnHtml += `<button class="ne-day-btn" data-key="${gKey}"
                     style="${btnStyle}background:${color};color:${txtColor};opacity:0.6;"
                     onclick="${activarBtn}renderNECards('${gKey}')">
-                    ${label}${atraso ? ' · '+atraso : ''} (${items.length})
+                    ${label}${atraso ? ' · '+atraso : ''} (${items.filter(t=>!t.shipping._canceladaDevolver).length})
                 </button>`;
             });
 
@@ -3103,14 +3423,23 @@
                 <button onclick="cargarFlexHoy()" style="background:#3483FA;padding:12px 30px;font-size:15px;">🔙 Volver a HOY</button>
             </div>`;
 
+            // Banner de "actualizando" cuando se muestra desde caché
+            if (fromCache) {
+                html = `<div style="background:#21262d;border:1px solid #388e3c;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#81C784;display:flex;align-items:center;gap:8px;">
+                    <div class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:#388e3c transparent #388e3c transparent;"></div>
+                    Datos de hace ${cacheAgeMin || 0} min — actualizando en fondo...
+                </div>` + html;
+            }
+
             content.innerHTML = html;
 
-            // Exponer renderNECards globalmente y activar "Todos" por defecto
+            // Exponer renderNECards globalmente
             window.renderNECards = renderNECards;
-            // Marcar botón "Todos" como activo
+            // Preservar filtro activo si es refresh, sino 'all'
+            const filterToApply = fromCache ? 'all' : (window._neCurrentFilter || 'all');
             const allBtn = content.querySelector('.ne-day-btn[data-key="all"]');
             if (allBtn) { allBtn.style.outline = '2px solid white'; allBtn.style.opacity = '1'; }
-            renderNECards('all');
+            renderNECards(filterToApply);
         }
 
         async function cargarReprogramados() {
@@ -3361,6 +3690,11 @@
         }
 
         async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null, backgroundRefresh = false) {
+            if (!backgroundRefresh) {
+                _diagLines.length = 0;
+                _diagStart = Date.now();
+                _diagLog(`▶ cargarFlexPorFecha "${label}" silentRetry=${silentRetry}`);
+            }
             const content = document.getElementById('content');
             if (!backgroundRefresh) {
                 content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>Cargando entregas de ${label}...<div class="load-progress-wrap" id="loadProgressWrap" style="display:none;"><div class="load-progress-track"><div class="load-progress-fill" id="loadProgressFill"></div><div class="load-progress-pct" id="loadProgressPct">0%</div></div></div></div>`;
@@ -3382,27 +3716,36 @@
             };
 
             // Pre-fetch tokens de ambas cuentas en paralelo antes de las queries
+            if (backgroundRefresh) {
+                const pad = n => String(n).padStart(2,'0');
+                const d = targetDate;
+                _diagLog(`── background refresh ${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ──`);
+            }
+            _diagLog('obteniendo tokens...');
             const tokensPreFetch = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
+            _diagLog(`tokens ok: ${CUENTAS.map((c,i) => c.nombre + (tokensPreFetch[i] ? '✅' : '❌')).join(' ')}`);
 
             // Cargar AMBAS cuentas en PARALELO (2x más rápido)
             const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta, ci) => {
                 try {
                     const token = tokensPreFetch[ci];
                     if (!token) {
-                        console.error(`No hay token para ${cuenta.nombre}`);
+                        _diagLog(`❌ sin token para ${cuenta.nombre}`);
                         return [];
                     }
                     const orders = await cargarOrdenesDeCuenta(cuenta, token, targetDate, loadGen, progress, notifyProgress, backgroundRefresh);
+                    _diagLog(`[${cuenta.nombre}] cargarOrdenesDeCuenta → ${orders.length} items`);
                     return orders.map(item => ({
                         ...item,
                         cuentaNombre: cuenta.nombre,
                         cuentaColor: cuenta.color
                     }));
                 } catch (error) {
-                    console.error(`Error cargando cuenta ${cuenta.nombre}:`, error);
+                    _diagLog(`❌ error cuenta ${cuenta.nombre}: ${error.message}`);
                     return [];
                 }
             }));
+            _diagLog(`render: ${cuentaResults.flat().length} items totales`);
 
             // Guard: si arrancó otra carga, no renderizar
             if (loadGen !== null && loadGeneration !== loadGen) return;
@@ -3519,16 +3862,23 @@
 
                     if (total > 50) {
                         const pages = Math.min(Math.ceil(total / 50) - 1, maxPages);
-                        // TODAS las páginas en paralelo de una sola vez
-                        const extra = await Promise.all(
-                            Array.from({ length: pages }, (_, i) => fetchPage((i+1) * 50))
-                        );
-                        extra.forEach(d => orders.push(...(d.results || [])));
+                        _diagLog(`[${cuenta.nombre}] fetchAllPages: ${total} total → ${pages} páginas extra`);
 
-                        // Verificación: si tenemos muchas menos órdenes que las esperadas, advertir
+                        // Máximo 5 páginas simultáneas para no saturar ML desde el Worker
+                        const PAGE_CONC = 5;
+                        const extra = new Array(pages);
+                        let pi = 0;
+                        await Promise.all(Array.from({ length: PAGE_CONC }, async () => {
+                            while (pi < pages) {
+                                const idx = pi++;
+                                extra[idx] = await fetchPage((idx + 1) * 50);
+                            }
+                        }));
+                        extra.forEach(d => orders.push(...((d?.results) || [])));
+
                         const expected = Math.min(total, (pages + 1) * 50);
                         if (orders.length < expected * 0.85) {
-                            console.warn(`[${cuenta.nombre}] esperaba ${expected}, tengo ${orders.length} — algunas páginas fallaron`);
+                            _diagLog(`⚠️ [${cuenta.nombre}] esperaba ${expected}, tengo ${orders.length} — algunas páginas fallaron`);
                         }
                     }
                 } catch (e) {
@@ -3567,7 +3917,7 @@
                 // filterC: date_created del mismo día — recupera las delivered que ML quitó del índice.
                 const nextDay2 = new Date(targetDate); nextDay2.setDate(nextDay2.getDate() + 1);
                 const filterCold = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay2.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                console.log(`[${cuenta.nombre}] Fecha antigua (${diasAtras}d atrás), usando A+C`);
+                _diagLog(`[${cuenta.nombre}] fecha antigua (${diasAtras}d), usando A+C`);
                 const [ordA, ordC] = await Promise.all([fetchAllPages(filterA, 19), fetchAllPages(filterCold, 19)]);
                 const seenOld = new Set();
                 allOrders = [];
@@ -3576,7 +3926,7 @@
                     if (!sid || seenOld.has(sid)) return;
                     seenOld.add(sid); allOrders.push(o);
                 });
-                console.log(`[${cuenta.nombre}] antigua A:${ordA.length} C:${ordC.length} → ${allOrders.length} únicos`);
+                _diagLog(`[${cuenta.nombre}] antigua A:${ordA.length} C:${ordC.length} → ${allOrders.length} únicos`);
             } else {
                 // filterB: días ANTERIORES al día objetivo (viernes → targetDate exclusive).
                 // Captura not_delivered y reprogramados de días previos.
@@ -3585,38 +3935,35 @@
                 const reprogToStr  = targetDate.toISOString().split('.')[0] + '.000-00:00';
                 const filterB = `&order.date_created.from=${encodeURIComponent(reprogFromStr)}&order.date_created.to=${encodeURIComponent(reprogToStr)}&order.status=paid`;
 
-                // filterC: SOLO para días históricos (no hoy).
-                // ML quita del índice estimated_delivery_time las órdenes que pasan a "delivered",
-                // así que filterA deja de verlas al día siguiente. filterC las recupera buscando
-                // por date_created dentro del día objetivo (≤ 500 órdenes = nunca supera el cap).
+                // filterC: date_created = targetDate (mismo día).
+                // SIEMPRE incluida (antes era solo para días no-hoy, pero filterA no filtra
+                // server-side en ML — devuelve todos los pedidos — así que la reemplazamos con C).
+                // filterB cubre órdenes creadas ANTES de targetDate (reprogramadas).
+                // filterC cubre órdenes creadas en targetDate (el caso más común: pedidos de hoy).
+                // Juntas B+C reemplazan filterA sin el overhead de 19.000-56.000 resultados.
                 const esHoy = targetDate.toDateString() === new Date().toDateString();
-                let filterC = null;
-                if (!esHoy) {
-                    const nextDay = new Date(targetDate); nextDay.setDate(nextDay.getDate() + 1);
-                    filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                }
+                const nextDay = new Date(targetDate); nextDay.setDate(nextDay.getDate() + 1);
+                const filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
 
-                const queries = [fetchAllPages(filterA, 19), fetchAllPages(filterB, 19)];
-                if (filterC) queries.push(fetchAllPages(filterC, 19));
-                const [ordersA, ordersB, ordersC = []] = await Promise.all(queries);
+                // filterA (estimated_delivery_time) ignorado por ML como filtro → solo B+C
+                const [ordersB, ordersC] = await Promise.all([fetchAllPages(filterB, 19), fetchAllPages(filterC, 19)]);
 
-                if (ordersA.length === 0 && ordersB.length === 0 && ordersC.length === 0) {
-                    console.warn(`[${cuenta.nombre}] Todas las queries sin resultados, fallback date_created`);
-                    const dateFrom = new Date(targetDate);
-                    const dateTo = new Date(targetDate); dateTo.setDate(dateTo.getDate()+1); dateTo.setHours(23,59,59,0);
-                    const fbFilter = `&order.date_created.from=${encodeURIComponent(dateFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(dateTo.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
-                    allOrders = await fetchAllPages(fbFilter, 19);
+                if (ordersB.length === 0 && ordersC.length === 0) {
+                    _diagLog(`⚠️ [${cuenta.nombre}] B+C vacías → fallback filterA`);
+                    const ordersA_fb = await fetchAllPages(filterA, 5);
+                    const seen2 = new Set();
+                    allOrders = ordersA_fb.filter(o => { const sid = o.shipping?.id; if (!sid||seen2.has(sid)) return false; seen2.add(sid); return true; });
                 } else {
                     const seen = new Set();
                     allOrders = [];
-                    [...ordersA, ...ordersB, ...ordersC].forEach(o => {
+                    [...ordersB, ...ordersC].forEach(o => {
                         const sid = o.shipping?.id;
                         if (!sid || seen.has(sid)) return;
                         seen.add(sid);
                         allOrders.push(o);
                     });
                 }
-                console.log(`[${cuenta.nombre}] A:${ordersA?.length??0} B:${ordersB?.length??0} C:${ordersC?.length??0} → Total único:${allOrders.length}`);
+                _diagLog(`[${cuenta.nombre}] B:${ordersB.length} C:${ordersC.length} → ${allOrders.length} únicos (filterA omitido)`);
             }
 
             // Agregar órdenes canceladas del día (order.status=cancelled).
@@ -3631,7 +3978,7 @@
                         o._orderCancelled = true;
                         if (!existingShipIds.has(o.shipping?.id)) allOrders.push(o);
                     });
-                    console.log(`[${cuenta.nombre}] +${cancelledOrds.length} órdenes canceladas del día`);
+                    _diagLog(`[${cuenta.nombre}] +${cancelledOrds.length} órdenes canceladas del día`);
                 }
             }
 
@@ -3647,32 +3994,52 @@
             // y usamos el endpoint /shipments?ids=id1,id2,... (una sola request = 20 shipments)
             // 80 órdenes → 4 requests en lugar de 80. ~20x menos llamadas.
             const BATCH_SIZE = 20;
-            const BATCH_CONC = 16;
+            const BATCH_CONC = 4; // 4×20=80 requests simultáneas a ML → sin rate limit
 
             async function fetchShipmentBatch(ids) {
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
+                let fetchedShipments = [];
+                let missingIds = [...ids]; // arrancar asumiendo que todos faltan
+
                 // Intentar batch real primero (?ids=...)
                 try {
-                    const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`, opts);
+                    const ctrl = new AbortController();
+                    const tid = setTimeout(() => ctrl.abort(), 6000); // 6s → fallback rápido
+                    const r = await fetch(`${cuenta.proxy}/api/shipments?ids=${ids.join(',')}`, { ...opts, signal: ctrl.signal });
+                    clearTimeout(tid);
                     if (r.ok) {
                         const data = await r.json();
-                        // ML devuelve array de objetos con {code,body} o directamente array de shipments
                         if (Array.isArray(data)) {
-                            const results = data.map(d => d.body || d).filter(s => s?.id);
-                            if (results.length > 0) return results;
+                            const ok = data.map(d => d.body || d).filter(s => s?.id);
+                            if (ok.length > 0) {
+                                fetchedShipments = ok;
+                                const gotIds = new Set(ok.map(s => String(s.id)));
+                                missingIds = ids.filter(id => !gotIds.has(String(id)));
+                                if (missingIds.length === 0) return fetchedShipments; // éxito total
+                                _diagLog(`⚠️ batch parcial [${cuenta.nombre}]: ${ok.length}/${ids.length} ok → ${missingIds.length} individual`);
+                            }
                         }
+                    } else {
+                        _diagLog(`⚠️ fetchShipmentBatch HTTP ${r.status} [${cuenta.nombre}] → fallback individual`);
                     }
-                } catch(e) {}
-                // Fallback: individual con alta concurrencia
-                const results = [];
-                const CONC = 16;
+                } catch(e) {
+                    _diagLog(`⚠️ fetchShipmentBatch error: ${e.message} [${cuenta.nombre}] → fallback individual`);
+                }
+                // Fallback: individual solo para los IDs faltantes (con timeout por ítem)
+                const results = [...fetchedShipments];
+                const CONC = 8;
                 let i = 0;
                 async function worker() {
-                    while (i < ids.length) {
-                        const id = ids[i++];
-                        const s = await fetch(`${cuenta.proxy}/api/shipments/${id}`, opts)
-                            .then(r => r.ok ? r.json() : null).catch(() => null);
-                        if (s?.id) results.push(s);
+                    while (i < missingIds.length) {
+                        const id = missingIds[i++];
+                        try {
+                            const ctrl2 = new AbortController();
+                            const tid2 = setTimeout(() => ctrl2.abort(), 8000);
+                            const r2 = await fetch(`${cuenta.proxy}/api/shipments/${id}`, { ...opts, signal: ctrl2.signal });
+                            clearTimeout(tid2);
+                            const s = r2.ok ? await r2.json() : null;
+                            if (s?.id) results.push(s);
+                        } catch(e) { /* timeout o error → skip */ }
                     }
                 }
                 await Promise.all(Array.from({ length: CONC }, worker));
@@ -3680,20 +4047,29 @@
             }
 
             // Dividir en batches
+            _diagLog(`[${cuenta.nombre}] ${ordersConShipping.length} shipments → ${Math.ceil(ordersConShipping.length/BATCH_SIZE)} batches × ${BATCH_SIZE}, BCONC=${BATCH_CONC}`);
             const batches = [];
             for (let i = 0; i < ordersConShipping.length; i += BATCH_SIZE) {
                 batches.push(ordersConShipping.slice(i, i + BATCH_SIZE));
             }
 
             // Procesar batches con concurrencia limitada
-            const shippingMap = new Map(); // shippingId → shipping object
+            const shippingMap = new Map();
             let batchIdx = 0;
+            const t0hoy = Date.now();
             async function batchWorker() {
                 while (batchIdx < batches.length) {
+                    const myIdx = batchIdx;
                     const batch = batches[batchIdx++];
                     const ids = batch.map(o => o.shipping.id);
-                    const shipments = await fetchShipmentBatch(ids);
-                    shipments.forEach(s => { if (s?.id) shippingMap.set(s.id, s); });
+                    const t0b = Date.now();
+                    try {
+                        const shipments = await fetchShipmentBatch(ids);
+                        shipments.forEach(s => { if (s?.id) shippingMap.set(s.id, s); });
+                        _diagLog(`✅ hoy batch ${myIdx+1}/${batches.length} [${cuenta.nombre}] ${shipments.length}/${ids.length} ok · ${Date.now()-t0b}ms`);
+                    } catch(e) {
+                        _diagLog(`❌ hoy batch ${myIdx+1}/${batches.length} [${cuenta.nombre}] error: ${e.message}`);
+                    }
                     if (progress) {
                         progress.done += batch.length;
                         if (notify) notify();
@@ -3701,9 +4077,13 @@
                 }
             }
             await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
+            _diagLog(`[${cuenta.nombre}] hoy fetch total: ${Date.now()-t0hoy}ms · sMap: ${shippingMap.size}`);
 
 
             // Construir tempOrders filtrando por fecha y tipo
+            const _noShip = ordersConShipping.filter(o => !shippingMap.get(o.shipping.id)).length;
+            const _noFlex = ordersConShipping.filter(o => { const s = shippingMap.get(o.shipping.id); return s && s.logistic_type !== 'self_service'; }).length;
+            _diagLog(`[${cuenta.nombre}] filtro: ${ordersConShipping.length} órdenes · sin ship:${_noShip} · no-flex:${_noFlex}`);
             const tempOrders2 = [];
             ordersConShipping.forEach(order => {
                 const shipping = shippingMap.get(order.shipping.id);
@@ -3789,6 +4169,10 @@
             html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verRecibidos();">
                 <span style="font-size:20px;">📋</span>
                 <div><div>Ver últimos recibidos</div><div style="font-size:11px;color:#8b949e;">Historial desde Google Sheets</div></div>
+            </button>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();_mostrarDiagnostico();" style="opacity:.7;">
+                <span style="font-size:20px;">🔍</span>
+                <div><div>Diagnóstico de carga</div><div style="font-size:11px;color:#8b949e;">Ver tiempos y errores de última carga</div></div>
             </button>`;
 
             // ── Sección: vista de hoy (si está cargada) ───────────────────────
@@ -5199,6 +5583,8 @@
             buildDateNav();
             // Pre-calentar tokens de ambas cuentas en paralelo antes del primer fetch de datos
             Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
+            // Sincronizar recibidos pendientes que no se pudieron guardar antes
+            _procesarColaRecibidos().catch(() => {});
             cargarFlexHoy();
         });
 
@@ -5219,7 +5605,7 @@
                     // Cargar en background sin tocar el DOM
                     setTimeout(() => {
                         cargarFlexPorFecha(fecha, '', true, null, true).catch(() => {});
-                    }, 1500); // esperar que termine la carga principal
+                    }, 30000); // esperar 30s para no competir con ML rate-limit del load principal
                 }
             });
         }
