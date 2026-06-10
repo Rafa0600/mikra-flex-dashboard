@@ -1554,7 +1554,7 @@
                 <!-- btnNoEntregados y btnCompartir ocultos — accesibles desde el drawer ＋ Más -->
                 <button onclick="cargarNoEntregados()" id="btnNoEntregados" style="display:none;" title="Viajes fallidos últimos 7 días">🚫 7d</button>
                 <button onclick="compartirWhatsApp()" id="btnCompartir" style="display:none;" title="Compartir resumen del día por WhatsApp">📤</button>
-                <button onclick="forzarRecarga()" title="Borrar cache y recargar desde cero" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">↺</button>
+                <button onclick="window._vistaActual==='ne' ? cargarNoEntregados() : forzarRecarga()" title="Recargar" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">↺</button>
                 <button onclick="abrirMasDrawer()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 14px; font-size:13px; font-weight:700; margin:0; min-height:34px; color:#e6edf3; font-family:inherit; border-radius:10px;">＋ Más</button>
             </div>
         </div>
@@ -2846,6 +2846,7 @@
 
 
         async function cargarFlexHoy() {
+            window._vistaActual = 'dia';
             cargarEtiquetas();
             const myGen = ++loadGeneration;
             // Resetear filtros
@@ -2975,6 +2976,7 @@
         }
 
         async function cargarNoEntregados() {
+            window._vistaActual = 'ne';
             const myGen = ++loadGeneration;
             const content = document.getElementById('content');
             _diagLines.length = 0;
@@ -3258,6 +3260,34 @@
 
             // Auto-registro en Google Sheets (en background, no bloquea el render)
             _syncReclamosEnBackground(todos);
+
+        }
+
+        function _compararEnviosFlexConActivos(todosActivos) {
+            // Solo mostrar lo que ya tiene #ID en el sheet de reclamos
+            // (los nuevos desaparecidos se detectan día a día con compararConGuardado)
+            const EXCLUIR    = new Set(['recibido', 'archivado']);
+            const idsActivos = new Set(todosActivos.map(t => String(t.shipping.id)));
+            const archivados = _getArchivados();
+            const recibidos  = window._neRecibidosIds || new Set();
+            const cancelados = [];
+
+            window._reclamosMap?.forEach((rec, sid) => {
+                if (rec.tipo !== 'driver_devolver') return;
+                if (EXCLUIR.has(rec.estado)) return;
+                if (archivados.has(sid)) return;
+                if (idsActivos.has(sid)) return;   // sigue activo en ML → no mostrar acá
+                if (recibidos.has(sid)) return;    // ya entregado → no mostrar
+                cancelados.push({
+                    id: sid, order_id: rec.orderId || '', zona: rec.zona || '',
+                    calle: '', ciudad: '', destinatario: rec.comprador || '',
+                    cuenta: rec.cuenta || '', fecha_entrega: '',
+                    _reclamoId: rec.id, _valor: rec.valor || 0, _estado: rec.estado || '',
+                    tipo: rec.tipo,
+                });
+            });
+
+            if (cancelados.length > 0) mostrarCanceladosADevolver(cancelados);
         }
 
         // ── Cache local de reclamos (localStorage) ───────────────────────────
@@ -3294,7 +3324,15 @@
                 const res = await _gasReclamo({ action: 'get_reclamos' });
                 if (res?.records) {
                     window._reclamosMap = new Map(res.records.map(r => [r.shippingId, r]));
-                    _saveReclamosCache(window._reclamosMap); // guardar para próxima carga
+                    _saveReclamosCache(window._reclamosMap);
+                    // Sincronizar localStorage: quitar archivados que el sheet ya no tiene como archivado
+                    const localArch = _getArchivados();
+                    let changed = false;
+                    localArch.forEach(sid => {
+                        const rec = window._reclamosMap.get(sid);
+                        if (!rec || rec.estado !== 'archivado') { localArch.delete(sid); changed = true; }
+                    });
+                    if (changed) _saveArchivados(localArch);
                 }
 
                 // 2. Identificar items que necesitan registrarse
@@ -3358,6 +3396,12 @@
 
         function _aplicarReclamosAlDOM() {
             window._reclamosMap?.forEach((rec, sid) => {
+                // Ocultar si está archivado
+                if (rec.estado === 'archivado') {
+                    const card = document.querySelector(`.ne-mini-card[data-sid="${sid}"]`);
+                    if (card) card.remove();
+                    return;
+                }
                 // Badge #ID
                 const el = document.getElementById('recid-' + sid);
                 if (el) {
@@ -3392,7 +3436,7 @@
 
             document.getElementById('badgeFecha').textContent = `🚫 ATRASADOS (7 días)`;
             document.getElementById('badgeCaba').textContent = `📦 ${todos.length} envío${todos.length !== 1 ? 's' : ''}`;
-            document.getElementById('badgeProvincia').textContent = '';
+            document.getElementById('badgeProvincia').innerHTML = `<button onclick="cargarNoEntregados()" style="background:#21262d;border:1.5px solid #30363d;color:#8b949e;padding:4px 10px;border-radius:8px;font-size:12px;cursor:pointer;">↺ Refrescar</button>`;
             document.getElementById('infoBadges').style.display = 'flex';
 
             if (todos.length === 0) {
@@ -3425,9 +3469,10 @@
             };
 
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            const canceladaCount = todos.filter(t => t.shipping._canceladaDevolver).length;
-            const fallidoCount   = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver).length;
-            const enCaminoCount  = todos.length - fallidoCount - canceladaCount;
+            const _esArchivado = sid => window._reclamosMap?.get(String(sid))?.estado === 'archivado' || _getArchivados().has(String(sid));
+            const canceladaCount = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
+            const fallidoCount   = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
+            const enCaminoCount  = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
             const groups = new Map();
@@ -3817,14 +3862,38 @@
 
                 window._archivarPaquete = function(sid, event) {
                     if (event) event.stopPropagation();
-                    // Pedir PIN antes de archivar
                     _mostrarPIN(
-                        `🗃️ <strong>Archivar paquete</strong><br><span style="color:#8b949e;font-size:12px;">Este paquete dejará de aparecer en el listado.</span>`,
-                        () => {
+                        `🗃️ <strong>Archivar paquete</strong><br><span style="color:#8b949e;font-size:12px;">Este paquete dejará de aparecer para todos.</span>`,
+                        async () => {
+                            // 1. Guardar en GAS (actualizar o crear reclamo con estado=archivado)
+                            const recExist = window._reclamosMap?.get(String(sid));
+                            if (recExist) {
+                                _gasReclamo({ action: 'update_reclamo', shippingId: sid, estado: 'archivado' }).catch(()=>{});
+                            } else {
+                                const item = (window._neTodos || []).find(t => String(t.shipping.id) === String(sid));
+                                _gasReclamo({
+                                    action:     'add_reclamo',
+                                    shippingId: sid,
+                                    orderId:    String(item?.order?.id || ''),
+                                    comprador:  item?.order?.buyer?.nickname || '',
+                                    zona:       item?.shipping?._zona || '',
+                                    cuenta:     item?.cuentaNombre || '',
+                                    tipo:       'archivado',
+                                    valor:      Math.round(item?.order?.total_amount || 0),
+                                    notas:      'archivado manualmente',
+                                }).catch(()=>{});
+                            }
+                            // 2. Actualizar mapa local
+                            if (window._reclamosMap) {
+                                const rec = window._reclamosMap.get(String(sid)) || { shippingId: sid };
+                                window._reclamosMap.set(String(sid), { ...rec, estado: 'archivado' });
+                                _saveReclamosCache(window._reclamosMap);
+                            }
+                            // 3. También en localStorage local por si acaso
                             const set = _getArchivados();
                             set.add(String(sid));
                             _saveArchivados(set);
-                            // Ocultar la tarjeta con animación
+                            // 4. Ocultar la tarjeta con animación
                             const card = document.querySelector(`.ne-mini-card[data-sid="${sid}"]`);
                             if (card) {
                                 card.style.transition = 'opacity .3s, max-height .4s';
@@ -3834,7 +3903,7 @@
                                 setTimeout(() => { card.style.maxHeight = '0'; card.style.marginBottom = '0'; }, 50);
                                 setTimeout(() => card.remove(), 450);
                             }
-                            _showNEToast('🗃️ Paquete archivado');
+                            _showNEToast('🗃️ Paquete archivado para todos');
                         }
                     );
                 };
@@ -4424,6 +4493,7 @@
         }
 
         async function cargarFlexPorFecha(targetDate, label, silentRetry = false, loadGen = null, backgroundRefresh = false) {
+            if (!backgroundRefresh) window._vistaActual = 'dia';
             if (!backgroundRefresh) {
                 _diagLines.length = 0;
                 _diagStart = Date.now();
@@ -6159,7 +6229,13 @@
                 const cancelados = [];
                 Object.entries(data.cuentas).forEach(([cuenta, envios]) => {
                     envios.forEach(e => {
-                        if (!idsActuales.has(String(e.id))) cancelados.push({...e, cuenta});
+                        if (!idsActuales.has(String(e.id))) {
+                            // No mostrar si está archivado (localStorage o reclamos)
+                            const sid = String(e.id);
+                            const archivadoLocal = _getArchivados().has(sid);
+                            const archivadoGAS   = window._reclamosMap?.get(sid)?.estado === 'archivado';
+                            if (!archivadoLocal && !archivadoGAS) cancelados.push({...e, cuenta});
+                        }
                     });
                 });
                 if (cancelados.length > 0) mostrarCanceladosADevolver(cancelados);
@@ -6192,8 +6268,8 @@
                 );
                 return `<div class="envio-card-simple cancelado" style="border-left-color:#f85149;margin-bottom:8px;">
                     <div class="simple-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                        <div class="simple-zona" style="color:#f85149;">📍 ${e.zona}</div>
-                        <div class="simple-estado cancelado">⚠️ A devolver</div>
+                        <div class="simple-zona" style="color:#f85149;">📍 ${e.zona || 'Sin zona'}${e._reclamoId ? ` <span style="background:#1f3a1f;color:#3fb950;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;font-family:monospace;">${e._reclamoId}</span>` : ''}${e._valor > 0 ? ` <span style="color:#3fb950;font-size:12px;font-weight:700;">$${Math.round(e._valor).toLocaleString('es-AR')}</span>` : ''}</div>
+                        <div class="simple-estado cancelado">${e._estado === 'descontado' ? '✅ Descontado' : '⚠️ A devolver'}</div>
                     </div>
                     <div class="simple-details expanded">
                         <div class="card-meta" style="margin-top:10px;">
