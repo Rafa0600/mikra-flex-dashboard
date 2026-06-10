@@ -1781,6 +1781,13 @@
             const modal = document.getElementById('qrModal');
             if (!modal) return;
             modal.style.display = 'flex';
+            // Resetear modo manual
+            const mw = document.getElementById('qrModoManualWrap');
+            if (mw) { mw.style.display = 'none'; }
+            const mi = document.getElementById('qrModoManualInput');
+            if (mi) mi.value = '';
+            const ms = document.getElementById('qrManualStatus');
+            if (ms) ms.textContent = '';
             document.getElementById('qrStatus').textContent = 'Iniciando cámara...';
             document.getElementById('qrLiveWrap').style.display  = 'none';
             document.getElementById('qrPhotoWrap').style.display = 'none';
@@ -1801,6 +1808,113 @@
                 .catch(() => _mostrarFallbackFoto());
         }
 
+        function _buscarManual(valor) {
+            const v = String(valor || '').trim().replace(/\D/g, '');
+            if (v.length < 4) {
+                document.getElementById('qrManualStatus').textContent = '⚠️ Ingresá al menos 4 dígitos';
+                return;
+            }
+            document.getElementById('qrManualStatus').textContent = '🔍 Buscando...';
+
+            // Si tiene 10+ dígitos es ID completo → procesar directo
+            if (v.length >= 10) {
+                _cerrarCamaraManual();
+                _procesarQREscaneado(v);
+                return;
+            }
+
+            // Buscar por coincidencia parcial en shipping ID y order ID
+            const todos = window._neTodos || [];
+            const coincidencias = todos.filter(t =>
+                String(t.shipping.id).includes(v) ||
+                String(t.order?.id || '').includes(v)
+            );
+
+            // También buscar en reclamos (paquetes ya recibidos/archivados)
+            const enReclamos = [];
+            window._reclamosMap?.forEach((rec, sid) => {
+                if (sid.includes(v) || String(rec.orderId || '').includes(v)) {
+                    if (!coincidencias.find(t => String(t.shipping.id) === sid)) {
+                        enReclamos.push(rec);
+                    }
+                }
+            });
+
+            const statusEl = document.getElementById('qrManualStatus');
+
+            if (coincidencias.length === 0 && enReclamos.length === 0) {
+                // Buscar en GAS como último recurso
+                _gasReclamo({ action: 'search_reclamos', q: v }).then(d => {
+                    if (d?.records?.length === 1) {
+                        // Un solo resultado → abrir directo
+                        _cerrarCamaraManual();
+                        _procesarQREscaneado(d.records[0].shippingId);
+                    } else if (d?.records?.length > 1) {
+                        statusEl.innerHTML = '<div style="color:#8b949e;font-size:11px;margin-bottom:4px;">Elegí el paquete:</div>' +
+                            d.records.slice(0,6).map(r =>
+                                `<button onclick="_cerrarCamaraManual();_procesarQREscaneado('${r.shippingId}')"
+                                    style="display:block;width:100%;background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:8px 12px;border-radius:8px;font-size:12px;text-align:left;cursor:pointer;margin-bottom:4px;">
+                                    📦 ${r.id} · ${r.comprador} · ${r.zona}</button>`
+                            ).join('');
+                    } else {
+                        statusEl.textContent = '❌ No encontrado. Verificá el número.';
+                    }
+                });
+                return;
+            }
+
+            // Un solo resultado total → abrir directo
+            const totalResultados = coincidencias.length + enReclamos.length;
+            if (totalResultados === 1) {
+                _cerrarCamaraManual();
+                if (coincidencias.length === 1) {
+                    _procesarQREscaneado(String(coincidencias[0].shipping.id));
+                } else {
+                    _procesarQREscaneado(enReclamos[0].shippingId);
+                }
+                return;
+            }
+
+            // Múltiples coincidencias → mostrar lista
+            const items = [
+                ...coincidencias.map(t => ({
+                    sid: String(t.shipping.id),
+                    label: (t.shipping._zona || t.shipping.receiver_address?.city?.name || ''),
+                    sub: t.order?.buyer?.nickname || '',
+                })),
+                ...enReclamos.map(r => ({
+                    sid: r.shippingId,
+                    label: r.zona || r.comprador,
+                    sub: r.id + ' · ' + r.estado,
+                })),
+            ];
+            statusEl.innerHTML = '<div style="color:#8b949e;font-size:11px;margin-bottom:4px;">Elegí el paquete:</div>' +
+                items.slice(0,6).map(it =>
+                    `<button onclick="_cerrarCamaraManual();_procesarQREscaneado('${it.sid}')"
+                        style="display:block;width:100%;background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:8px 12px;border-radius:8px;font-size:12px;text-align:left;cursor:pointer;margin-bottom:4px;">
+                        📦 ${it.label} <span style="color:#8b949e;font-size:10px;">· ${it.sub}</span>
+                    </button>`
+                ).join('');
+        }
+
+        // Detener cámara sin cerrar el modal
+        function _cerrarCamaraManual() {
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            if (_qrRaf)    { clearTimeout(_qrRaf); cancelAnimationFrame(_qrRaf); _qrRaf = null; }
+            cerrarEscaner(); // cierra todo
+        }
+
+        // Activar modo manual: apaga cámara, muestra teclado
+        function _activarModoManual() {
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            if (_qrRaf)    { clearTimeout(_qrRaf); cancelAnimationFrame(_qrRaf); _qrRaf = null; }
+            document.getElementById('qrLiveWrap').style.display  = 'none';
+            document.getElementById('qrPhotoWrap').style.display = 'none';
+            document.getElementById('qrStatus').textContent = '';
+            document.getElementById('qrModoManualWrap').style.display = 'block';
+            document.getElementById('qrModoManualInput').focus();
+        }
+
         function _mostrarFallbackFoto() {
             document.getElementById('qrLiveWrap').style.display  = 'none';
             document.getElementById('qrPhotoWrap').style.display = 'block';
@@ -1810,20 +1924,25 @@
         function _tickQR(video) {
             if (video.readyState >= 2 && video.videoWidth > 0) {
                 const canvas = document.getElementById('qrCanvas');
-                canvas.width  = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx  = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
+                // Reducir resolución para que jsQR procese más rápido (max 600px)
+                const MAX = 600;
+                const scale = Math.min(1, MAX / Math.max(video.videoWidth, video.videoHeight));
+                canvas.width  = Math.round(video.videoWidth  * scale);
+                canvas.height = Math.round(video.videoHeight * scale);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                // Intentar con y sin inversión para mayor detección
+                const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
                 if (code) { cerrarEscaner(); _procesarQREscaneado(code.data); return; }
             }
-            _qrRaf = requestAnimationFrame(() => _tickQR(video));
+            // 150ms entre frames — balance entre velocidad y CPU móvil
+            _qrRaf = setTimeout(() => _tickQR(video), 150);
         }
 
         function cerrarEscaner() {
             if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
-            if (_qrRaf)    { cancelAnimationFrame(_qrRaf); _qrRaf = null; }
+            if (_qrRaf)    { clearTimeout(_qrRaf); cancelAnimationFrame(_qrRaf); _qrRaf = null; }
             const modal = document.getElementById('qrModal');
             if (modal) modal.style.display = 'none';
             document.getElementById('qrFileInput').value = '';
@@ -1902,9 +2021,18 @@
 
         async function _procesarQREscaneado(qrText) {
             let shippingId = '';
-            try { const d = JSON.parse(qrText); shippingId = String(d.id || ''); }
-            catch(e) { const m = qrText.match(/\b\d{10,}\b/); shippingId = m ? m[0] : ''; }
-            if (!shippingId) { alert('QR no reconocido:\n' + qrText.substring(0,120)); return; }
+            // Primero: buscar número de 10+ dígitos en el texto raw
+            const mDirect = String(qrText).match(/\b(\d{10,})\b/);
+            if (mDirect) {
+                shippingId = mDirect[1];
+            } else {
+                // Si no hay número directo, intentar parsear como JSON
+                try {
+                    const d = JSON.parse(qrText);
+                    if (d && typeof d === 'object') shippingId = String(d.id || d.shipment_id || '');
+                } catch(e) {}
+            }
+            if (!shippingId) { alert('QR no reconocido:\n' + String(qrText).substring(0, 120)); return; }
 
             // Mostrar panel de carga inmediatamente (feedback visual rápido)
             _mostrarInfoEscaneado({ shippingId, cargando: true });
@@ -1915,10 +2043,6 @@
 
             // Si no está en la lista, buscar en ML directamente (envío + orden)
             if (!item) {
-                const statusEl = document.getElementById('qrStatus');
-                const modalEl  = document.getElementById('qrModal');
-                if (statusEl) statusEl.textContent = '🔍 Buscando datos del envío...';
-                if (modalEl)  modalEl.style.display = 'flex';
                 try {
                     const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c).catch(()=>null)));
                     let shipping = null, order = {}, foundCuenta = null;
@@ -1939,7 +2063,6 @@
                         // Buscar la orden para obtener el comprador
                         const orderId = shipping.order_id;
                         if (orderId) {
-                            if (statusEl) statusEl.textContent = '🔍 Obteniendo datos del comprador...';
                             try {
                                 const ro = await fetch(`${foundCuenta.proxy}/api/orders/${orderId}`,
                                     { headers: { Authorization: `Bearer ${tokens[CUENTAS.indexOf(foundCuenta)]}` } });
@@ -1949,7 +2072,6 @@
                         item = { shipping, order, cuentaNombre };
                     }
                 } catch(e) {}
-                if (modalEl) modalEl.style.display = 'none';
             }
 
             let zona = '', calle = '', numero = '', comprador = '';
@@ -2028,6 +2150,33 @@
             const col     = estadoColor[estado] || '#8b949e';
             const valStr  = valor > 0 ? `$${Math.round(valor).toLocaleString('es-AR')}` : '';
 
+            // ── Línea de progreso del reclamo ─────────────────────────────
+            // Pasos: registrado → descontado → [recibido | archivado]
+            const _pasos = [
+                { key: 'pendiente',   label: '📋 Registrado' },
+                { key: 'descontado',  label: '💸 Descontado' },
+                { key: 'fin',         label: estado === 'recibido' ? '📥 Recibido' : estado === 'archivado' ? '🗃️ Archivado' : '📥 Recibido' },
+            ];
+            const _ordenEstado = { pendiente: 0, reclamado: 0, descontado: 1, recibido: 2, archivado: 2 };
+            const _pasoActual  = estado ? (_ordenEstado[estado] ?? -1) : -1;
+            const _lineaProgreso = recId ? `
+                <div style="display:flex;align-items:center;gap:0;margin:2px 0 0;">
+                    ${_pasos.map((p, i) => {
+                        const done    = i < _pasoActual;
+                        const current = i === _pasoActual;
+                        const color   = done || current ? (i === 0 ? '#e3b341' : i === 1 ? '#58a6ff' : '#3fb950') : '#30363d';
+                        const txtCol  = done || current ? '#e6edf3' : '#484f58';
+                        return `
+                            <div style="display:flex;align-items:center;flex:1;min-width:0;">
+                                <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;">
+                                    <div style="width:${current?'12px':'8px'};height:${current?'12px':'8px'};border-radius:50%;background:${color};border:2px solid ${color};transition:all .2s;${current?'box-shadow:0 0 6px '+color+';':''}"></div>
+                                    <span style="font-size:9px;color:${txtCol};white-space:nowrap;font-weight:${current?700:400};">${p.label}</span>
+                                </div>
+                                ${i < _pasos.length - 1 ? `<div style="flex:1;height:2px;background:${done?color:'#21262d'};margin-bottom:12px;min-width:8px;"></div>` : ''}
+                            </div>`;
+                    }).join('')}
+                </div>` : '';
+
             // Motivo del reclamo
             const tipoLabel = rec?.tipo === 'driver_devolver'
                 ? `<span style="background:#3b1010;color:#f85149;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;">⚠️ CANCELADO — driver debe devolver</span>`
@@ -2047,6 +2196,7 @@
                         ${valStr ? `<span style="color:#3fb950;font-size:14px;font-weight:700;">${valStr}</span>` : ''}
                     </div>
                     ${tipoLabel ? `<div>${tipoLabel}</div>` : ''}
+                    ${_lineaProgreso ? `<div style="background:#0d1117;border-radius:10px;padding:12px 10px 8px;">${_lineaProgreso}</div>` : ''}
                     <div style="background:#0d1117;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;">
                         ${zona      ? `<div style="color:#e6edf3;font-size:14px;font-weight:600;">📍 ${zona}</div>` : ''}
                         ${calle     ? `<div style="color:#8b949e;font-size:13px;">🏠 ${calle} ${numero}</div>` : ''}
@@ -3176,7 +3326,12 @@
                         shippingId: sid,
                         orderId:    String(item.order?.id || ''),
                         comprador:  item.order?.buyer?.nickname || '',
-                        zona:       item.shipping._zona || '',
+                        zona:       item.shipping._zona || (typeof getZonaDetallada === 'function'
+                            ? getZonaDetallada(
+                                item.shipping.receiver_address?.neighborhood?.name || '',
+                                item.shipping.receiver_address?.city?.name || '',
+                                item.shipping.receiver_address?.zip_code || '')
+                            : item.shipping.receiver_address?.city?.name || ''),
                         cuenta:     item.cuentaNombre || '',
                         tipo,
                         valor:      Math.round(item.order?.total_amount || 0),
@@ -4905,53 +5060,61 @@
             if (window.renderNECards) window.renderNECards(window._neCurrentFilter || 'all');
         }
 
-        // ── Ver recibidos ────────────────────────────────────────────────────
+        // ── Ver recibidos — lee de hoja "reclamos" filtrado por estado=recibido ──
         function verRecibidos() {
             const modal = document.getElementById('recibidosModal');
             const list  = document.getElementById('recibidosList');
             modal.style.display = 'flex';
             list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">⏳ Cargando...</div>';
 
-            const cbName = '_rcbList' + Date.now();
-            const sc = document.createElement('script');
-            const timer = setTimeout(() => { cleanup(); list.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">⚠️ Error al cargar</div>'; }, 8000);
-            function cleanup() { clearTimeout(timer); delete window[cbName]; if (sc.parentNode) sc.remove(); }
-            window[cbName] = function(data) {
-                cleanup();
-                const ids = data.ids || [];
-                if (!ids.length) { list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">Sin recibidos aún</div>'; return; }
-                // ids is just an array of shipping_id strings — show with any available info
-                // Try to also fetch from get_recibidos_full if available, else show basic list
-                _mostrarListaRecibidos(ids);
-            };
-            sc.onerror = () => { cleanup(); list.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>'; };
-            sc.src = GAS_TRACKER + '?action=get_recibidos_full&callback=' + cbName;
-            document.head.appendChild(sc);
+            _gasReclamo({ action: 'get_reclamos', estado: 'recibido' })
+                .then(data => {
+                    const records = data?.records || [];
+                    if (!records.length) {
+                        list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">Sin recibidos aún</div>';
+                        return;
+                    }
+                    _mostrarListaRecibidos([...records].reverse());
+                })
+                .catch(() => {
+                    list.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>';
+                });
         }
 
         function _mostrarListaRecibidos(rows) {
             const list = document.getElementById('recibidosList');
             if (!rows.length) { list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">Sin recibidos aún</div>'; return; }
-            const isObjArr = typeof rows[0] === 'object';
             const diasN = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
             let html = '';
-            const reversed = [...rows].reverse();
-            reversed.forEach(row => {
-                const id        = isObjArr ? (row.id || row.shipping_id || '') : row;
-                const cuenta    = isObjArr ? (row.cuenta    || '') : '';
-                const fechaRaw  = isObjArr ? (row.fecha     || row.recibido_en || '') : '';
-                const zona      = isObjArr ? (row.zona      || '') : '';
-                const comprador = isObjArr ? (row.comprador || '') : '';
+            rows.forEach(row => {
+                // Soporta tanto objetos de reclamos como objetos viejos de recibidos
+                const recId     = row.id          || '';
+                const cuenta    = row.cuenta       || row.cuenta    || '';
+                const fechaRaw  = row.fechaRecibido || row.fecha    || row.recibido_en || '';
+                const zona      = row.zona         || '';
+                const comprador = row.comprador    || '';
+                const valor     = row.valor        || 0;
+                const tipo      = row.tipo         || '';
 
                 let fechaPrincipal = '', fechaSecundaria = '';
                 if (fechaRaw) {
                     try {
-                        const d = new Date(fechaRaw);
-                        fechaPrincipal = _tiempoRelativo(fechaRaw);
-                        const hora = d.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-                        const dia  = diasN[d.getDay()];
-                        const num  = d.getDate() + '/' + (d.getMonth()+1);
-                        fechaSecundaria = `${dia} ${num} · ${hora}`;
+                        // Formato "dd/MM/yyyy HH:mm" del GAS
+                        let d;
+                        if (fechaRaw.includes('/')) {
+                            const [datePart, timePart] = fechaRaw.split(' ');
+                            const [dd, mm, yyyy] = datePart.split('/');
+                            d = new Date(`${yyyy}-${mm}-${dd}T${timePart || '00:00'}:00`);
+                        } else {
+                            d = new Date(fechaRaw);
+                        }
+                        if (!isNaN(d)) {
+                            fechaPrincipal = _tiempoRelativo(d.toISOString());
+                            const hora = d.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+                            const dia  = diasN[d.getDay()];
+                            const num  = d.getDate() + '/' + (d.getMonth()+1);
+                            fechaSecundaria = `${dia} ${num} · ${hora}`;
+                        } else { fechaPrincipal = fechaRaw; }
                     } catch(e) { fechaPrincipal = fechaRaw; }
                 }
 
@@ -4961,14 +5124,25 @@
                         ? `<span style="background:#FF6B00;color:white;padding:1px 7px;border-radius:6px;font-size:10px;">Chaya</span>`
                         : '';
 
+                const tipoBadge = tipo === 'driver_devolver'
+                    ? `<span style="background:#3b1010;color:#f85149;padding:1px 6px;border-radius:4px;font-size:10px;">⚠️ devolver</span>`
+                    : tipo === 'demorado'
+                        ? `<span style="background:#2a1f00;color:#e3b341;padding:1px 6px;border-radius:4px;font-size:10px;">⏱️ demorado</span>`
+                        : '';
+
                 html += `<div style="background:#21262d;border-radius:10px;padding:10px 14px;margin-bottom:8px;border:1px solid #30363d;">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                        <span style="color:#00ff88;font-size:16px;">✅</span>
-                        <div style="flex:1;">
-                            ${zona ? `<div style="font-size:13px;font-weight:700;color:#e6edf3;">${zona}</div>` : `<div style="color:#8b949e;font-size:12px;">#${id}</div>`}
+                    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;">
+                        <span style="color:#00ff88;font-size:16px;flex-shrink:0;">✅</span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px;">
+                                ${recId ? `<span style="background:#1f3a1f;color:#3fb950;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;font-family:monospace;">${recId}</span>` : ''}
+                                ${tipoBadge}
+                                ${cuentaBadge}
+                                ${valor > 0 ? `<span style="color:#3fb950;font-size:11px;font-weight:700;">$${Math.round(valor).toLocaleString('es-AR')}</span>` : ''}
+                            </div>
+                            ${zona      ? `<div style="font-size:13px;font-weight:700;color:#e6edf3;">${zona}</div>` : ''}
                             ${comprador ? `<div style="font-size:11px;color:#8b949e;">👤 ${comprador}</div>` : ''}
                         </div>
-                        ${cuentaBadge}
                     </div>
                     <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px;">
                         <span style="font-size:12px;font-weight:700;color:#FFE600;">${fechaPrincipal}</span>
@@ -6233,8 +6407,33 @@
         <div style="color:#e6edf3;font-size:13px;margin-bottom:16px;line-height:1.5;">Apuntá la cámara al QR de la etiqueta y sacá la foto</div>
         <button onclick="_dispararCamara()" style="background:linear-gradient(135deg,#4CAF50,#2d7a31);color:white;border:none;padding:13px 24px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation;width:100%;">📷 Abrir cámara</button>
     </div>
-    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;"></div>
-    <button onclick="cerrarEscaner()" style="background:#f85149;color:white;border:none;padding:11px 32px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;">✕ Cancelar</button>
+    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;max-width:min(88vw,340px);width:100%;"></div>
+
+    <!-- Modo manual (oculto por defecto) -->
+    <div id="qrModoManualWrap" style="display:none;width:min(88vw,340px);">
+        <div style="color:#58a6ff;font-size:13px;font-weight:600;text-align:center;margin-bottom:10px;">⌨️ Ingreso manual</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input id="qrModoManualInput" type="number" inputmode="numeric" pattern="[0-9]*"
+                placeholder="Últimos 4+ dígitos o ID completo"
+                style="flex:1;background:#161b22;border:1.5px solid #58a6ff;color:#e6edf3;padding:11px 12px;border-radius:10px;font-size:16px;outline:none;-moz-appearance:textfield;"
+                onkeydown="if(event.key==='Enter')_buscarManual(this.value)"
+                oninput="document.getElementById('qrManualStatus').textContent=''" />
+            <button onclick="_buscarManual(document.getElementById('qrModoManualInput').value)"
+                style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:11px 18px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation;">
+                🔍
+            </button>
+        </div>
+        <div id="qrManualStatus" style="color:#8b949e;font-size:12px;min-height:16px;"></div>
+        <button onclick="document.getElementById('qrModoManualWrap').style.display='none';abrirEscaner()"
+            style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:8px;border-radius:8px;font-size:12px;cursor:pointer;width:100%;margin-top:8px;">
+            📷 Volver a cámara
+        </button>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+        <button onclick="_activarModoManual()" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:10px 20px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;">⌨️ Ingresar manual</button>
+        <button onclick="cerrarEscaner()" style="background:#f85149;color:white;border:none;padding:10px 24px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;">✕ Cancelar</button>
+    </div>
 </div>
 
 <!-- ══ PIN Modal ══════════════════════════════════════════════════════ -->
