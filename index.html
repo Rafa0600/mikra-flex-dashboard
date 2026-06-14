@@ -1535,20 +1535,21 @@
         .geo-chip {
             flex: 1;
             text-align: center;
-            padding: 3px 4px 4px;
+            padding: 5px 4px 6px;
             border-radius: 10px;
             border: 1px solid transparent;
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
+            letter-spacing: 0.5px;
             line-height: 1.2;
             min-width: 0;
         }
         .geo-chip .geo-num {
-            font-size: 15px;
-            font-weight: 700;
+            font-size: 19px;
+            font-weight: 800;
             display: block;
             line-height: 1;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
         }
         .geo-chip.caba { background: rgba(21,101,192,0.15); border-color: rgba(21,101,192,0.35); color: #64b5f6; }
         .geo-chip.prov { background: rgba(230,81,0,0.12);  border-color: rgba(230,81,0,0.3);   color: #ffab76; }
@@ -1768,17 +1769,15 @@
 </head>
 <body>
     <div class="container">
-        <!-- Fila única: versión + geo-stats + acciones -->
+        <!-- Toolbar: geo-stats (CABA/PROV/LEJ) con aire + acciones compactas -->
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-            <span class="version-badge" style="flex-shrink:0;">v4.0</span>
-            <span id="geoInline">—</span>
+            <span id="geoInline" style="flex:1; display:flex; gap:6px; min-width:0;">—</span>
             <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
-                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" style="background:linear-gradient(135deg,#3483FA,#2563eb); padding:6px 12px; font-size:12px; margin:0; min-height:34px;">🗺️</button>
-                <!-- Acceso directo a últimos 7 días (a devolver / sin entregar) -->
-                <button onclick="cargarNoEntregados()" id="btnNoEntregados" title="A devolver y sin entregar (7 días)" style="background:linear-gradient(135deg,#c62828,#7b1a1a);color:#fff;border:none;padding:6px 13px;font-size:13px;font-weight:800;margin:0;min-height:34px;border-radius:10px;font-family:inherit;cursor:pointer;white-space:nowrap;">⚠️ 7 días</button>
+                <button onclick="mostrarMapa()" id="btnMapa" class="hidden" title="Mapa" style="background:linear-gradient(135deg,#3483FA,#2563eb); width:38px; height:38px; padding:0; font-size:15px; margin:0; border-radius:10px; border:none;">🗺️</button>
+                <button onclick="cargarNoEntregados()" id="btnNoEntregados" title="A devolver y sin entregar (7 días)" style="background:linear-gradient(135deg,#c62828,#7b1a1a);color:#fff;border:none;width:auto;padding:0 10px;height:38px;font-size:13px;font-weight:800;margin:0;border-radius:10px;font-family:inherit;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:3px;">⚠️<span style="font-size:11px;">7d</span></button>
                 <button onclick="compartirWhatsApp()" id="btnCompartir" style="display:none;" title="Compartir resumen del día por WhatsApp">📤</button>
-                <button onclick="window._vistaActual==='ne' ? cargarNoEntregados() : forzarRecarga()" title="Recargar" style="background:#21262d; border:1.5px solid #30363d; padding:6px 10px; font-size:14px; margin:0; min-height:34px; color:#8b949e;">↺</button>
-                <button onclick="abrirMasDrawer()" style="background:#21262d; border:1.5px solid #30363d; padding:6px 14px; font-size:13px; font-weight:700; margin:0; min-height:34px; color:#e6edf3; font-family:inherit; border-radius:10px;">＋ Más</button>
+                <button onclick="window._vistaActual==='ne' ? cargarNoEntregados() : forzarRecarga()" title="Recargar" style="background:#21262d; border:1px solid #30363d; width:38px; height:38px; padding:0; font-size:15px; margin:0; color:#8b949e; border-radius:10px;">↺</button>
+                <button onclick="abrirMasDrawer()" title="Más opciones" style="background:#21262d; border:1px solid #30363d; width:38px; height:38px; padding:0; font-size:18px; margin:0; color:#e6edf3; font-family:inherit; border-radius:10px;">☰</button>
             </div>
         </div>
         <!-- badges ocultos de fecha/caba/prov para compatibilidad interna -->
