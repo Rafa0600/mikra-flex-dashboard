@@ -955,7 +955,7 @@
             letter-spacing: -0.3px;
         }
 
-        /* ── NE mini-cards (colapsables) ──────────────────────────────── */
+        /* ── NE mini-cards (colapsables — paquetes sin entregar normales) ─── */
         .ne-mini-card {
             background: #161b22;
             border-left: 3px solid #484f58;
@@ -967,57 +967,273 @@
         }
         .ne-mini-card:active { background: #1c2128; }
         .ne-mini-cancelada { border-left-color: #f85149 !important; background: #160f0f; }
+        .ne-mini-deposito  { border-left-color: #ffa040 !important; background: #130e00; }
+        /* Cabecera: zona grande en su propia línea */
         .ne-mini-row {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 9px 12px;
-            min-height: 42px;
+            gap: 9px;
+            padding: 10px 12px 4px;
+            min-height: 30px;
+        }
+        .ne-mini-ic {
+            font-size: 16px;
+            flex-shrink: 0;
+            line-height: 1;
         }
         .ne-mini-zona {
             flex: 1;
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 15px;
+            font-weight: 800;
             color: #e6edf3;
+            letter-spacing: -0.2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .ne-mini-badges {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-            flex-shrink: 0;
-            flex-wrap: nowrap;
-        }
         .ne-mini-chev {
-            color: #484f58;
-            font-size: 16px;
+            color: #6e7681;
+            font-size: 18px;
             flex-shrink: 0;
             transition: transform 0.2s;
-            margin-left: 2px;
             line-height: 1;
         }
+        /* Sub-línea: #ID · valor · fecha (datos secundarios) */
+        .ne-mini-sub {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+            padding: 0 12px 10px 33px;
+        }
+        .ne-mini-acc-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: inline-block;
+        }
         .ne-mini-det {
-            padding: 0 12px 10px 12px;
+            padding: 8px 12px 10px;
             border-top: 1px solid #21262d;
         }
         .ne-mini-addr {
             display: block;
-            font-size: 12px;
+            font-size: 13px;
             color: #00b4d8;
-            margin: 8px 0 4px;
+            margin: 2px 0 6px;
             text-decoration: none;
         }
         .ne-mini-buy {
             font-size: 12px;
             color: #8b949e;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         .ne-mini-btns {
             display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+        .ne-mini-btns button {
+            flex: 1 1 calc(33.33% - 7px);
+            min-height: 42px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 700;
+            font-family: inherit;
+            border: 1px solid #30363d;
+            cursor: pointer;
+            padding: 8px 6px;
+            touch-action: manipulation;
+        }
+
+        /* ── Tarjetas grandes para A devolver / En depósito ─────────────── */
+        .ne-big-card {
+            border-radius: 12px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .ne-big-card-devolver {
+            background: #1a0808;
+            border: 1.5px solid #7b1a1a;
+        }
+        .ne-big-card-deposito {
+            background: #130e00;
+            border: 1.5px solid #5a3a00;
+        }
+        .ne-big-hdr {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 14px;
+            gap: 8px;
+        }
+        .ne-big-hdr-devolver { background: linear-gradient(90deg,#3b0a0a,#1a0808); border-bottom: 1px solid #7b1a1a; }
+        .ne-big-hdr-deposito  { background: linear-gradient(90deg,#2a1800,#130e00); border-bottom: 1px solid #5a3a00; }
+        .ne-big-zona {
+            font-size: 15px;
+            font-weight: 800;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            letter-spacing: -0.3px;
+        }
+        .ne-big-zona-devolver { color: #ff6b6b; }
+        .ne-big-zona-deposito { color: #ffb347; }
+        .ne-big-body {
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .ne-big-addr {
+            font-size: 13px;
+            color: #00b4d8;
+            text-decoration: none;
+            display: block;
+        }
+        .ne-big-meta {
+            font-size: 12px;
+            color: #8b949e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .ne-big-val-devolver { color: #ff6b6b; font-size: 16px; font-weight: 800; }
+        .ne-big-val-deposito { color: #ffa040; font-size: 16px; font-weight: 800; }
+        .ne-big-val-tachado  { text-decoration: line-through; opacity: 0.45; font-size: 14px; }
+        .ne-big-btns {
+            display: flex;
             gap: 6px;
             flex-wrap: wrap;
+            padding: 0 14px 12px;
+        }
+        .ne-big-btn {
+            flex: 1;
+            min-width: 80px;
+            padding: 8px 4px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            text-align: center;
+            border: none;
+            touch-action: manipulation;
+        }
+
+        /* ── Cajones por día (SIN ENTREGAR colapsable) ──────────────────── */
+        .ne-dia-drawer {
+            background: #0f1318;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            margin-bottom: 6px;
+            overflow: hidden;
+        }
+        .ne-dia-hdr {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            background: #161b22;
+            border: none;
+            padding: 11px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            color: #e6edf3;
+            touch-action: manipulation;
+            min-height: 46px;
+        }
+        .ne-dia-hdr:active { background: #1c2128; }
+        .ne-dia-chev {
+            color: #8b949e;
+            font-size: 18px;
+            flex-shrink: 0;
+            transition: transform 0.2s;
+            line-height: 1;
+        }
+        .ne-dia-label {
+            font-size: 14px;
+            font-weight: 800;
+            white-space: nowrap;
+            letter-spacing: -0.2px;
+        }
+        .ne-dia-atraso {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .ne-dia-spacer { flex: 1; }
+        .ne-dia-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #3fb950;
+            white-space: nowrap;
+        }
+        .ne-dia-count {
+            background: #21262d;
+            color: #8b949e;
+            font-size: 12px;
+            font-weight: 800;
+            min-width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 7px;
+            flex-shrink: 0;
+        }
+        .ne-dia-body {
+            padding: 8px 8px 4px;
+            border-top: 1px solid #21262d;
+        }
+
+        /* ── Banners de sección (A devolver / En depósito / Sin entregar) ── */
+        .ne-sec {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 11px;
+            margin: 16px 0 8px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+        }
+        .ne-sec:first-child { margin-top: 0; }
+        .ne-sec .ne-sec-count {
+            margin-left: auto;
+            font-size: 12px;
+            font-weight: 700;
+            opacity: 0.9;
+        }
+        .ne-sec-devolver { background: linear-gradient(90deg,#3b0a0a,#160808); color: #ff7a7a; border: 1px solid #7b1a1a; }
+        .ne-sec-deposito { background: linear-gradient(90deg,#2c1a00,#130d00); color: #ffb347; border: 1px solid #5a3a00; }
+        .ne-sec-entregar { background: linear-gradient(90deg,#16240a,#0c1106); color: #9ccc4a; border: 1px solid #2a3a00; }
+
+        /* ── Láser de escaneo QR ────────────────────────────────────────── */
+        .qr-laser {
+            position: absolute;
+            left: 6px;
+            right: 6px;
+            height: 3px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, transparent, #FFE600, transparent);
+            box-shadow: 0 0 12px 2px rgba(255,230,0,0.7);
+            animation: qrLaserMove 2s ease-in-out infinite;
+        }
+        @keyframes qrLaserMove {
+            0%   { top: 6px; }
+            50%  { top: calc(100% - 9px); }
+            100% { top: 6px; }
         }
         .ne-mini-btns button {
             padding: 5px 10px;
@@ -1978,9 +2194,14 @@
         }
 
         // ── PIN modal ─────────────────────────────────────────────────────
-        let _pinCb = null, _pinVal = '';
-        function _mostrarPIN(infoHtml, onConfirm) {
+        // _pinAllowed: array de códigos válidos. Por defecto sólo el código owner.
+        // El código de logística permite únicamente marcar "en depósito".
+        const _PIN_OWNER     = '9148';
+        const _PIN_LOGISTICA = '1234';
+        let _pinCb = null, _pinVal = '', _pinAllowed = [_PIN_OWNER];
+        function _mostrarPIN(infoHtml, onConfirm, allowedPins) {
             _pinCb = onConfirm; _pinVal = '';
+            _pinAllowed = allowedPins || [_PIN_OWNER];
             document.getElementById('pinInfo').innerHTML = infoHtml;
             _actualizarPinDisplay();
             document.getElementById('pinModal').style.display = 'flex';
@@ -2000,7 +2221,7 @@
             if (_pinVal.length === 4) setTimeout(_pinSubmit, 280);
         }
         function _pinSubmit() {
-            if (_pinVal === '9148') {
+            if (_pinAllowed.includes(_pinVal)) {
                 document.getElementById('pinModal').style.display = 'none';
                 const cb = _pinCb; _pinCb = null; _pinVal = '';
                 cb && cb(true);
@@ -2144,27 +2365,28 @@
             }
 
             // ── Datos cargados ────────────────────────────────────────────
-            const estadoColor = { pendiente:'#e3b341', recibido:'#3fb950', descontado:'#58a6ff', reclamado:'#f85149', 'en deposito':'#FF9800' };
+            const estadoColor = { pendiente:'#e3b341', recibido:'#3fb950', descontado:'#58a6ff', reclamado:'#f85149', en_deposito:'#ffa040' };
             const estado  = rec?.estado || '';
             const recId   = rec?.id || '';
             const col     = estadoColor[estado] || '#8b949e';
             const valStr  = valor > 0 ? `$${Math.round(valor).toLocaleString('es-AR')}` : '';
 
-            // ── Línea de progreso del reclamo ─────────────────────────────
-            // Pasos: registrado → descontado → [recibido | archivado]
+            // ── Línea de progreso del reclamo (4 pasos) ──────────────────
+            // registrado → descontado → en depósito → recibido/archivado
             const _pasos = [
-                { key: 'pendiente',   label: '📋 Registrado' },
-                { key: 'descontado',  label: '💸 Descontado' },
-                { key: 'fin',         label: estado === 'recibido' ? '📥 Recibido' : estado === 'archivado' ? '🗃️ Archivado' : '📥 Recibido' },
+                { key: 'pendiente',    label: '📋 Registrado', color: '#e3b341' },
+                { key: 'descontado',   label: '💸 Descontado',  color: '#58a6ff' },
+                { key: 'en_deposito',  label: '📦 Depósito',    color: '#ffa040' },
+                { key: 'fin',          label: estado === 'recibido' ? '📥 Recibido' : estado === 'archivado' ? '🗃️ Archivado' : '📥 Recibido', color: '#3fb950' },
             ];
-            const _ordenEstado = { pendiente: 0, reclamado: 0, descontado: 1, recibido: 2, archivado: 2 };
+            const _ordenEstado = { pendiente: 0, reclamado: 0, descontado: 1, en_deposito: 2, recibido: 3, archivado: 3 };
             const _pasoActual  = estado ? (_ordenEstado[estado] ?? -1) : -1;
             const _lineaProgreso = recId ? `
                 <div style="display:flex;align-items:center;gap:0;margin:2px 0 0;">
                     ${_pasos.map((p, i) => {
                         const done    = i < _pasoActual;
                         const current = i === _pasoActual;
-                        const color   = done || current ? (i === 0 ? '#e3b341' : i === 1 ? '#58a6ff' : '#3fb950') : '#30363d';
+                        const color   = done || current ? p.color : '#30363d';
                         const txtCol  = done || current ? '#e6edf3' : '#484f58';
                         return `
                             <div style="display:flex;align-items:center;flex:1;min-width:0;">
@@ -2214,6 +2436,10 @@
                             ✅ Descontado
                         </button>
                     </div>
+                    <button onclick="document.getElementById('modalInfoEscaneado').style.display='none';window._marcarEnDeposito('${shippingId}',null)"
+                        style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;padding:11px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%;">
+                        📦 En depósito
+                    </button>
                     <button onclick="document.getElementById('modalInfoEscaneado').style.display='none';abrirEscaner()"
                         style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:10px;border-radius:10px;font-size:13px;cursor:pointer;width:100%;">
                         🔄 Escanear otro
@@ -3016,30 +3242,44 @@
 
             // ── Caché: mostrar datos previos de inmediato mientras carga ML ────────
             const neCache = _loadNECache();
+            window._neEsFresco = false;
             if (neCache) {
-                window._neTodos = neCache.items;
-                _renderNEItems(neCache.items, { fromCache: true, cacheAgeMin: neCache.ageMin });
-                _syncReclamosEnBackground(neCache.items); // IDs y precios visibles desde el caché
-                // No mostramos spinner — los datos ya están en pantalla
+                // Cargar reclamos cache para tener #IDs y los huérfanos (+7 días) de inmediato
+                if (!window._reclamosMap?.size) {
+                    const rc = _loadReclamosCacheAny();
+                    if (rc) window._reclamosMap = rc;
+                }
+                let itemsCache = neCache.items;
+                const huerfCache = _construirHuerfanos(itemsCache);
+                if (huerfCache.length) itemsCache = [...huerfCache, ...itemsCache];
+                window._neTodos = itemsCache;
+                _renderNEItems(itemsCache, { fromCache: true, cacheAgeMin: neCache.ageMin });
+                _syncReclamosEnBackground(neCache.items);
             } else {
-                content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
-                    <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
-                        <div class="load-progress-track">
-                            <div class="load-progress-fill" id="neProgressFill"></div>
-                            <div class="load-progress-pct" id="neProgressText">0%</div>
-                        </div>
-                        <div class="load-progress-text" id="neProgressSub"></div>
-                    </div></div>`;
+                // Sin caché NE: cargar reclamos del localStorage y mostrar cancelados/depósito de inmediato
+                const reclamosRapidos = _loadReclamosCacheAny();
+                if (reclamosRapidos && reclamosRapidos.size > 0) {
+                    _mostrarReclamosRapido(reclamosRapidos, content);
+                } else {
+                    content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
+                        <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
+                            <div class="load-progress-track">
+                                <div class="load-progress-fill" id="neProgressFill"></div>
+                                <div class="load-progress-pct" id="neProgressText">0%</div>
+                            </div>
+                        </div></div>`;
+                }
             }
 
             const shippingIdsVistos = new Set();
             const CONC = 35;
 
-            // Pre-fetch tokens e IDs recibidos en paralelo
-            const [tokens, recibidosIds] = await Promise.all([
-                Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c))),
-                cargarRecibidosIds()
-            ]);
+            // Arrancar la carga de IDs recibidos SIN bloquear el fetch de ML
+            // (es una llamada a GAS que puede tardar hasta 6s; la resolvemos al final)
+            const recibidosPromise = cargarRecibidosIds();
+
+            // Sólo esperamos los tokens para empezar a pegarle a ML de inmediato
+            const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c)));
 
             const cuentaResults = await Promise.all(CUENTAS.map(async (cuenta, ci) => {
                 try {
@@ -3110,7 +3350,7 @@
 
                     // Batch fetch shipments — el Worker hace fan-out interno (1 request → 20 paralelos en edge)
                     // BCONC=4: evita rate limit de ML (Worker manda 4×20=80 requests simultáneos máx)
-                    const BSIZ = 20, BCONC = 4;
+                    const BSIZ = 20, BCONC = 6;
                     const sMap = new Map();
                     // Saltar shipments que ya sabemos que están entregados (cache local)
                     const delivCache = _getDeliveredCache();
@@ -3221,6 +3461,10 @@
 
             if (loadGeneration !== myGen) return;
 
+            // Ahora sí resolvemos los recibidos (ya cargó en paralelo mientras pegábamos a ML)
+            const recibidosIds = await recibidosPromise;
+            if (loadGeneration !== myGen) return;
+
             const todos = [];
             cuentaResults.flat().forEach(item => {
                 const sid = item.shipping.id;
@@ -3244,6 +3488,9 @@
                 todos.push(item);
             });
 
+            // Garantizar fecha en todos los items (cancelados sin fecha estimada → date_shipped)
+            todos.forEach(_asegurarFecha);
+
             // Ordenar de más viejo a más nuevo (fecha estimada ascendente)
             todos.sort((a, b) => {
                 const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
@@ -3254,8 +3501,9 @@
             // Exponer todos globalmente para que el escáner pueda encontrar items
             window._neTodos = todos;
 
-            // Guardar en caché localStorage y renderizar
+            // Guardar en caché localStorage y renderizar (datos frescos de ML)
             _saveNECache(todos);
+            window._neEsFresco = true;
             _renderNEItems(todos);
 
             // Auto-registro en Google Sheets (en background, no bloquea el render)
@@ -3307,8 +3555,144 @@
                 return new Map(p.data);
             } catch(e) { return null; }
         }
+        function _loadReclamosCacheAny() {
+            // Igual que _loadReclamosCache pero sin límite de tiempo — para pre-render rápido
+            try {
+                const raw = localStorage.getItem('_reclamosCache');
+                if (!raw) return null;
+                const p = JSON.parse(raw);
+                if (!p?.data) return null;
+                return new Map(p.data);
+            } catch(e) { return null; }
+        }
 
-        // ── Sincronizar reclamos con Google Sheets en background ─────────────
+        // ── Toggles globales (disponibles antes de renderNECards) ────────────
+        window._neToggleCard = window._neToggleCard || function(sid) {
+            const det  = document.getElementById('nedet-' + sid);
+            const chev = document.getElementById('nechev-' + sid);
+            if (!det) return;
+            const open = det.style.display !== 'none';
+            det.style.display = open ? 'none' : 'block';
+            if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+        };
+        window._toggleDia = window._toggleDia || function(key) {
+            const body = document.getElementById('nedia-' + key);
+            const chev = document.getElementById('diachev-' + key);
+            if (!body) return;
+            const open = body.style.display !== 'none';
+            body.style.display = open ? 'none' : 'block';
+            if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+        };
+
+        // ── Render rápido desde reclamos cache (sin datos de ML) ─────────────
+        // Muestra A devolver / En depósito ANTES de que ML termine de cargar
+        function _mostrarReclamosRapido(recMap, container) {
+            const EXCLUIR = new Set(['recibido', 'archivado']);
+            const items = [];
+            recMap.forEach((rec) => {
+                if (rec.tipo !== 'driver_devolver') return;
+                if (EXCLUIR.has(rec.estado)) return;
+                items.push(rec);
+            });
+            if (!items.length) {
+                container.innerHTML = `<div class="loading"><div class="loading-spinner"></div><br>🚫 Buscando viajes sin entregar (7 días)...
+                    <div class="load-progress-wrap" id="neProgressWrap" style="display:none;">
+                        <div class="load-progress-track">
+                            <div class="load-progress-fill" id="neProgressFill"></div>
+                            <div class="load-progress-pct" id="neProgressText">0%</div>
+                        </div>
+                    </div></div>`;
+                return;
+            }
+            const aDevolver = items.filter(r => r.estado !== 'en_deposito');
+            const enDep     = items.filter(r => r.estado === 'en_deposito');
+
+            const _cardRec = (rec, tipo) => {
+                const isDeposito  = tipo === 'deposito';
+                const cardClass   = isDeposito ? 'ne-mini-card ne-mini-deposito' : 'ne-mini-card ne-mini-cancelada';
+                const iconTxt     = isDeposito ? '📦' : '⚠️';
+                const iconCol     = isDeposito ? '#ffa040' : '#f85149';
+                const isDesc      = rec.estado === 'descontado' || rec.estado === 'en_deposito';
+                const sid         = rec.shippingId;
+                const cuentaColor = rec.cuenta === 'Mikra' ? '#9C27B0' : '#FF6B00';
+                const cuentaDot   = rec.cuenta ? `<span style="background:${cuentaColor};color:white;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;">${rec.cuenta}</span>` : '';
+                const recId       = rec.id ? `<span style="background:${isDeposito?'#2a1e00':'#1f3a1f'};color:${isDeposito?'#ffa040':'#3fb950'};padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;">${rec.id}</span>` : '';
+                const valTxt      = rec.valor > 0
+                    ? `<span style="color:${iconCol};font-size:11px;font-weight:800;white-space:nowrap;${isDesc?'text-decoration:line-through;opacity:.5;':''}">$${Math.round(rec.valor).toLocaleString('es-AR')}${isDesc?' ✅':''}</span>`
+                    : '';
+                const btns = isDeposito
+                    ? `<button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
+                       <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1px solid #484f58;">🗃️</button>`
+                    : `<button onclick="event.stopPropagation();window._marcarEnDeposito('${sid}',event)" style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;">📦 Depósito</button>
+                       <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;">✅ Descontado</button>
+                       <button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>`;
+                const cuentaDetQ = rec.cuenta ? `<span style="background:${cuentaColor};color:white;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;">${rec.cuenta}</span>` : '';
+                return `<div class="${cardClass}" data-sid="${sid}" style="border-left-color:${iconCol};" onclick="window._neToggleCard('${sid}')">
+                    <div class="ne-mini-row">
+                        <span class="ne-mini-ic" style="color:${iconCol};">${iconTxt}</span>
+                        <span class="ne-mini-zona" style="color:${isDeposito?'#ffb347':'#ff8a80'};">${rec.zona || '—'}</span>
+                        <span class="ne-mini-chev" id="nechev-${sid}">›</span>
+                    </div>
+                    <div class="ne-mini-sub">
+                        <span class="ne-mini-acc-dot" style="background:${cuentaColor};"></span>
+                        ${recId}${valTxt}
+                    </div>
+                    <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
+                        <div class="ne-mini-buy">${cuentaDetQ}${rec.comprador ? ` <span>👤 ${rec.comprador}</span>` : ''}</div>
+                        <div class="ne-mini-btns">${btns}</div>
+                    </div>
+                </div>`;
+            };
+
+            let html = `<div style="background:#21262d;border:1px solid #388e3c;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#81C784;display:flex;align-items:center;gap:8px;">
+                <div class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:#388e3c transparent #388e3c transparent;"></div>
+                Actualizando desde Mercado Libre...
+            </div>`;
+
+            if (aDevolver.length) {
+                const tot = aDevolver.reduce((s,r)=>s+r.valor,0);
+                html += `<div class="ne-section-hdr" style="margin-bottom:8px;">
+                    <div class="ne-section-hdr-line" style="background:#7b1a1a;"></div>
+                    <div class="ne-section-hdr-pill" style="background:#7b1a1a;color:#f85149;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;">⚠️ A DEVOLVER (${aDevolver.length})${tot>0?' · $'+Math.round(tot).toLocaleString('es-AR'):''}</div>
+                    <div class="ne-section-hdr-line" style="background:#7b1a1a;"></div>
+                </div>`;
+                aDevolver.forEach(r => { html += _cardRec(r, 'devolver'); });
+            }
+            if (enDep.length) {
+                const tot = enDep.reduce((s,r)=>s+r.valor,0);
+                html += `<div class="ne-section-hdr" style="margin-bottom:8px;margin-top:${aDevolver.length?'16px':'0'};">
+                    <div class="ne-section-hdr-line" style="background:#5a3a00;"></div>
+                    <div class="ne-section-hdr-pill" style="background:#3a2200;color:#ffa040;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid #5a3a00;">📦 EN DEPÓSITO (${enDep.length})${tot>0?' · $'+Math.round(tot).toLocaleString('es-AR'):''}</div>
+                    <div class="ne-section-hdr-line" style="background:#5a3a00;"></div>
+                </div>`;
+                enDep.forEach(r => { html += _cardRec(r, 'deposito'); });
+            }
+            // Skeleton para Sin entregar (todavía cargando de ML)
+            html += `<div class="ne-section-hdr" style="margin:16px 0 8px;">
+                <div class="ne-section-hdr-line" style="background:#2a3a00;opacity:.4;"></div>
+                <div class="ne-section-hdr-pill" style="background:#1a2800;color:#8cc04a;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid #2a3a00;opacity:.6;">🔄 Sin entregar — cargando...</div>
+                <div class="ne-section-hdr-line" style="background:#2a3a00;opacity:.4;"></div>
+            </div>
+            <div id="neProgressWrap" style="display:block;padding:0 4px;margin-bottom:8px;">
+                <div class="load-progress-track">
+                    <div class="load-progress-fill" id="neProgressFill" style="width:0%"></div>
+                    <div class="load-progress-pct" id="neProgressText">0%</div>
+                </div>
+            </div>
+            ${[1,2,3].map(()=>`<div style="background:#161b22;border-radius:10px;height:44px;margin-bottom:4px;overflow:hidden;"><div style="height:100%;background:linear-gradient(90deg,#161b22 25%,#1c2128 50%,#161b22 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;"></div></div>`).join('')}`;
+
+            if (!document.getElementById('shimmerStyle')) {
+                const st = document.createElement('style');
+                st.id = 'shimmerStyle';
+                st.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
+                document.head.appendChild(st);
+            }
+            container.innerHTML = html;
+
+            // Registrar el mapa para que los botones funcionen
+            window._reclamosMap = recMap;
+        }
+
         async function _syncReclamosEnBackground(todos) {
             try {
                 // 0. Cargar desde caché local instantáneamente (antes del fetch)
@@ -3386,12 +3770,133 @@
                     }
                 }
 
+                // 3.5 Inyectar reclamos "huérfanos": reclamos pendientes que ML ya
+                //     no devuelve (p.ej. pasaron +7 días) pero siguen sin resolver.
+                //     Se muestran HASTA que se marquen recibido o archivado.
+                const huerfanos = _construirHuerfanos(window._neTodos || todos);
+                if (huerfanos.length) {
+                    const base = window._neTodos || todos;
+                    window._neTodos = [...huerfanos, ...base];
+                    _renderNEItems(window._neTodos, { fromCache: !window._neEsFresco });
+                }
+
                 // 4. Reflejar en DOM
                 _aplicarReclamosAlDOM();
 
             } catch(e) {
                 console.warn('[reclamos] sync error:', e.message);
             }
+        }
+
+        // Parsea fechas en formato ISO o con barras, resolviendo la ambigüedad
+        // día/mes (Argentina dd/MM vs US MM/dd). Como estos paquetes están
+        // SIEMPRE vencidos, se elige la interpretación que cae en el pasado.
+        function _parseFechaFlexible(s) {
+            if (!s) return null;
+            s = String(s).trim();
+            // ISO puro (yyyy-mm-dd...) → sin ambigüedad
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+                const d = new Date(s);
+                return isNaN(d) ? null : d;
+            }
+            const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2}))?/);
+            if (m) {
+                const a = +m[1], b = +m[2], y = +m[3], hh = +(m[4] || 12), mm = +(m[5] || 0);
+                const limite = Date.now() + 2 * 86400000; // tolerancia 2 días
+                const dDM = new Date(y, b - 1, a, hh, mm);   // interpretar como dd/MM (argentino)
+                const dMD = (a >= 1 && a <= 12) ? new Date(y, a - 1, b, hh, mm) : null; // como MM/dd (US)
+                const dmOk = !isNaN(dDM);
+                const mdOk = dMD && !isNaN(dMD);
+                // Preferimos dd/MM (argentino); pero si cae en futuro y MM/dd es pasado, usamos MM/dd
+                if (dmOk && dDM.getTime() > limite && mdOk && dMD.getTime() <= limite) return dMD;
+                if (dmOk) return dDM;
+                if (mdOk) return dMD;
+            }
+            const d2 = new Date(s);
+            return isNaN(d2) ? null : d2;
+        }
+
+        // Corrige fechas futuras: un paquete vencido / a devolver NO puede tener
+        // fecha futura. Si la tiene, casi siempre es un día/mes invertido (US vs AR)
+        // → se intercambian y, si eso lo vuelve pasado, se usa esa fecha.
+        function _corregirFechaFutura(item) {
+            const so = item.shipping?.shipping_option;
+            const cur = so?.estimated_delivery_time?.date || so?.estimated_delivery_final?.date;
+            if (!cur) return;
+            const d = new Date(cur);
+            const limite = Date.now() + 2 * 86400000;
+            if (isNaN(d) || d.getTime() <= limite) return;   // ya es pasada/hoy → ok
+            // Intentar primero date_shipped real (ML)
+            const ds = item.shipping.status_history?.date_shipped;
+            if (ds) { const dd = new Date(ds); if (!isNaN(dd) && dd.getTime() <= limite) { so.estimated_delivery_time = { date: dd.toISOString() }; delete so.estimated_delivery_final; return; } }
+            // Intercambiar día/mes (sólo si el día actual es válido como mes ≤ 12)
+            if (d.getDate() <= 12) {
+                const sw = new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1, 12, 0);
+                if (!isNaN(sw) && sw.getTime() <= limite) {
+                    so.estimated_delivery_time = { date: sw.toISOString() };
+                    delete so.estimated_delivery_final;
+                }
+            }
+        }
+
+        // Parsea una fecha y corrige día/mes invertido si cae en el futuro → Date|null
+        function _fechaSegura(s) {
+            let d = _parseFechaFlexible(s);
+            if (!d || isNaN(d)) return null;
+            const lim = Date.now() + 2 * 86400000;
+            if (d.getTime() > lim && d.getDate() <= 12) {
+                const sw = new Date(d.getFullYear(), d.getDate() - 1, d.getMonth() + 1, d.getHours(), d.getMinutes());
+                if (!isNaN(sw) && sw.getTime() <= lim) d = sw;
+            }
+            return d;
+        }
+
+        // Garantiza que un item tenga fecha estimada: usa date_shipped y, como
+        // último recurso, la fecha del reclamo (fechaEstimada / fechaAlta del sheet).
+        function _asegurarFecha(item) {
+            const so = item.shipping.shipping_option || (item.shipping.shipping_option = {});
+            if (so.estimated_delivery_time?.date || so.estimated_delivery_final?.date) return;
+            const ds = item.shipping.status_history?.date_shipped;
+            if (ds) { so.estimated_delivery_time = { date: ds }; return; }
+            const rec = window._reclamosMap?.get(String(item.shipping.id));
+            const f = _parseFechaFlexible(rec?.fechaEstimada || rec?.fechaAlta);
+            if (f) so.estimated_delivery_time = { date: f.toISOString() };
+        }
+
+        // Construye items sintéticos a partir de reclamos sin resolver que NO
+        // están ya en la lista de ML (para que sigan visibles hasta archivar).
+        function _construirHuerfanos(todosActuales) {
+            if (!window._reclamosMap) return [];
+            const EXCLUIR   = new Set(['recibido', 'archivado']);
+            const presentes = new Set((todosActuales || []).map(t => String(t.shipping.id)));
+            const arch      = _getArchivados();
+            const recibidos = window._neRecibidosIds || new Set();
+            const out = [];
+            window._reclamosMap.forEach((rec, sid) => {
+                const s = String(sid);
+                if (EXCLUIR.has(rec.estado)) return;
+                if (presentes.has(s) || arch.has(s) || recibidos.has(s)) return;
+                // Fecha del reclamo (ya guardada en el sheet) → nunca "sin fecha"
+                const fRec = _parseFechaFlexible(rec.fechaEstimada || rec.fechaAlta);
+                const shipOpt = fRec ? { estimated_delivery_time: { date: fRec.toISOString() } } : {};
+                out.push({
+                    shipping: {
+                        id: s,
+                        status: 'not_delivered',
+                        substatus: '',
+                        logistic_type: 'self_service',
+                        _canceladaDevolver: rec.tipo === 'driver_devolver',
+                        _zonaForce: rec.zona || '',
+                        _esHuerfano: true,
+                        receiver_address: {},
+                        shipping_option: shipOpt,
+                        status_history: {},
+                    },
+                    order: { id: rec.orderId || '', total_amount: rec.valor || 0, buyer: { nickname: rec.comprador || '' } },
+                    cuentaNombre: rec.cuenta || '',
+                });
+            });
+            return out;
         }
 
         function _aplicarReclamosAlDOM() {
@@ -3411,10 +3916,19 @@
                         el.dataset.lastId = rec.id;
                     }
                 }
+                // Visual en_deposito: borde ámbar + ícono 📦
+                const card = document.querySelector(`.ne-mini-card[data-sid="${sid}"]`);
+                if (card && rec.estado === 'en_deposito') {
+                    card.style.borderLeftColor = '#ffa040';
+                    card.classList.add('ne-mini-deposito');
+                    card.classList.remove('ne-mini-cancelada');
+                    const icon = card.querySelector('.ne-devolver-icon');
+                    if (icon) icon.textContent = '📦';
+                }
                 // Monto: tachado si descontado
                 const valEl = document.getElementById('recval-' + sid);
                 if (valEl) {
-                    if (rec.estado === 'descontado') {
+                    if (rec.estado === 'descontado' || rec.estado === 'en_deposito') {
                         valEl.style.color = '#555';
                         valEl.style.textDecoration = 'line-through';
                         if (!valEl.textContent.includes('✅')) valEl.textContent += ' ✅';
@@ -3430,6 +3944,8 @@
             const content = document.getElementById('content');
             if (!content) return;
             const todos = items;
+            // Corregir cualquier fecha futura inválida antes de agrupar/mostrar
+            todos.forEach(_corregirFechaFutura);
 
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             const desde = new Date(hoy); desde.setDate(desde.getDate() - 7);
@@ -3470,9 +3986,11 @@
 
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             const _esArchivado = sid => window._reclamosMap?.get(String(sid))?.estado === 'archivado' || _getArchivados().has(String(sid));
-            const canceladaCount = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
-            const fallidoCount   = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
-            const enCaminoCount  = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount;
+            const _esEnDepositoCount = sid => window._reclamosMap?.get(String(sid))?.estado === 'en_deposito';
+            const canceladaCount    = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id) && !_esEnDepositoCount(t.shipping.id)).length;
+            const enDepositoCount   = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id) && _esEnDepositoCount(t.shipping.id)).length;
+            const fallidoCount      = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
+            const enCaminoCount     = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount - enDepositoCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
             const groups = new Map();
@@ -3530,6 +4048,16 @@
                     if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
                 };
 
+                // Abrir/cerrar el cajón de un día completo
+                window._toggleDia = function(key) {
+                    const body = document.getElementById('nedia-' + key);
+                    const chev = document.getElementById('diachev-' + key);
+                    if (!body) return;
+                    const open = body.style.display !== 'none';
+                    body.style.display = open ? 'none' : 'block';
+                    if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+                };
+
                 function buildCard({ shipping, order, cuentaNombre }, gLabel, gAtraso, gColor) {
                     const sub       = (shipping.substatus || '').toLowerCase();
                     const isEnCamino  = shipping.status === 'shipped';
@@ -3538,7 +4066,7 @@
                     const barrio  = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad  = shipping.receiver_address?.city?.name || '';
                     const zipCode = shipping.receiver_address?.zip_code || '';
-                    const zona    = getZonaDetallada(barrio, ciudad, zipCode);
+                    const zona    = shipping._zonaForce || getZonaDetallada(barrio, ciudad, zipCode);
                     const calle   = shipping.receiver_address?.street_name || '';
                     const numero  = shipping.receiver_address?.street_number || '';
                     const provincia = shipping.receiver_address?.state?.name || '';
@@ -3564,17 +4092,18 @@
                              onclick="event.stopPropagation();window._copiarValorExcel(${-Math.round(valorNum)},'${_fechaCorta}','${sid}')">$${Math.round(valorNum).toLocaleString('es-AR')}${_descontado?' ✅':''}</span>`
                         : '';
 
+                    const cuentaBadgeDet = `<span style="background:${cuentaColor};color:white;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;">${cuentaNombre}</span>`;
                     const detHTML = (extraBtns = '') => `
                         <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
                             <a href="${googleMapsUrl}" target="_blank" onclick="event.stopPropagation()" class="ne-mini-addr">📍 ${calle} ${numero}, ${ciudad}</a>
-                            <div class="ne-mini-buy">👤 ${comprador} · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a>${valorNum > 0 ? ` · <span style="color:#3fb950;font-weight:700;">$${Math.round(valorNum).toLocaleString('es-AR')}</span>` : ''}</div>
+                            <div class="ne-mini-buy">${cuentaBadgeDet} <span>👤 ${comprador}</span> · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a></div>
                             <div class="ne-mini-btns">
-                                <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a73e8;color:white;">🏷️ Etiqueta</button>
+                                <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a2a4a;color:#58a6ff;">🏷️ Etiqueta</button>
                                 ${extraBtns}
-                                <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#25D366;color:white;">📤 Compartir</button>
-                                <button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
-                                <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;">✅ Descontado</button>
-                                <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1.5px solid #484f58;">🗃️ Archivar</button>
+                                <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#13361b;color:#3fb950;">📤 Compartir</button>
+                                <button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border-color:#4CAF50;">📥 Recibido</button>
+                                <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border-color:#58a6ff;">✅ Descontado</button>
+                                <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#161616;color:#8b949e;">🗃️ Archivar</button>
                             </div>
                         </div>`;
 
@@ -3585,16 +4114,44 @@
                         : `<span id="recid-${sid}" style="background:#1f3a1f;color:#3fb950;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;display:none;"></span>`;
 
                     if (isCancelada) {
-                        const idx = window._neDevolver.length;
+                        const recNow      = window._reclamosMap?.get(String(sid));
+                        const isDeposito  = recNow?.estado === 'en_deposito';
+                        const isDescontado = recNow?.estado === 'descontado' || recNow?.estado === 'en_deposito';
                         window._neDevolver.push({ zona, calle, numero, ciudad, comprador, orderId, orderUrl, cuentaNombre, gLabel, gAtraso, shippingId: sid, valor: valorNum });
-                        return `<div class="ne-mini-card ne-mini-cancelada" data-sid="${sid}" onclick="_neToggleCard('${sid}')">
+
+                        const cardClass = isDeposito ? 'ne-mini-card ne-mini-deposito' : 'ne-mini-card ne-mini-cancelada';
+                        const iconTxt   = isDeposito ? '📦' : '⚠️';
+                        const iconCol   = isDeposito ? '#ffa040' : '#f85149';
+                        const valCol    = isDeposito ? '#ffa040' : '#f85149';
+                        const valTxt    = valorNum > 0
+                            ? `<span id="recval-${sid}" style="color:${valCol};font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer;user-select:none;${isDescontado?'text-decoration:line-through;opacity:.5;':''}" title="Copiar al Excel" onclick="event.stopPropagation();window._copiarValorExcel(${-Math.round(valorNum)},'${_fechaCorta}','${sid}')">$${Math.round(valorNum).toLocaleString('es-AR')}${isDescontado?' ✅':''}</span>`
+                            : '';
+                        const btns = isDeposito
+                            ? `<button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
+                               <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a2a4a;color:#58a6ff;">🏷️ Etiqueta</button>
+                               <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#25D366;color:white;">📤</button>
+                               <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1px solid #484f58;">🗃️</button>`
+                            : `<button onclick="event.stopPropagation();window._marcarEnDeposito('${sid}',event)" style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;">📦 Depósito</button>
+                               <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;">✅ Descontado</button>
+                               <button onclick="event.stopPropagation();_recibirManual('${sid}','${cuentaNombre}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
+                               <button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a2a4a;color:#58a6ff;">🏷️ Etiqueta</button>
+                               <button onclick="event.stopPropagation();_compartirItemNE({sid:'${sid}'},event,null)" style="background:#25D366;color:white;">📤</button>`;
+                        const cuentaBadgeDet2 = `<span style="background:${cuentaColor};color:white;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;">${cuentaNombre}</span>`;
+                        return `<div class="${cardClass}" data-sid="${sid}" style="border-left-color:${iconCol};" onclick="_neToggleCard('${sid}')">
                             <div class="ne-mini-row">
-                                <span style="color:#f85149;font-size:13px;flex-shrink:0;">⚠️</span>
-                                <span class="ne-mini-zona">${zona}</span>
-                                <div class="ne-mini-badges">${recIdTxt}${valorTxt}${cuentaDot}${fechaTxt}</div>
+                                <span class="ne-mini-ic ne-devolver-icon" style="color:${iconCol};">${iconTxt}</span>
+                                <span class="ne-mini-zona" style="color:${isDeposito?'#ffb347':'#ff8a80'};">${zona}</span>
                                 <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                             </div>
-                            ${detHTML()}
+                            <div class="ne-mini-sub">
+                                <span class="ne-mini-acc-dot" style="background:${cuentaColor};"></span>
+                                ${recIdTxt}${valTxt}${fechaTxt}
+                            </div>
+                            <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
+                                ${calle ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(calle+' '+numero+', '+ciudad)}" target="_blank" onclick="event.stopPropagation()" class="ne-mini-addr">📍 ${calle} ${numero}, ${ciudad}</a>` : ''}
+                                <div class="ne-mini-buy">${cuentaBadgeDet2} <span>👤 ${comprador}</span>${orderId?` · <a href="${orderUrl}" target="_blank" onclick="event.stopPropagation()" class="order-link" style="font-size:11px;">#${orderId}</a>`:''}</div>
+                                <div class="ne-mini-btns">${btns}</div>
+                            </div>
                         </div>`;
                     }
 
@@ -3606,10 +4163,13 @@
 
                     return `<div class="ne-mini-card" data-sid="${sid}" style="border-left-color:${lineColor};" onclick="_neToggleCard('${sid}')">
                         <div class="ne-mini-row">
-                            <span style="font-size:13px;flex-shrink:0;">${icon}</span>
+                            <span class="ne-mini-ic">${icon}</span>
                             <span class="ne-mini-zona">${zona}</span>
-                            <div class="ne-mini-badges">${recIdTxt}${valorTxt}${cuentaDot}${fechaTxt}</div>
                             <span class="ne-mini-chev" id="nechev-${sid}">›</span>
+                        </div>
+                        <div class="ne-mini-sub">
+                            <span class="ne-mini-acc-dot" style="background:${cuentaColor};"></span>
+                            ${recIdTxt}${valorTxt}${fechaTxt}
                         </div>
                         ${detHTML()}
                     </div>`;
@@ -3620,16 +4180,7 @@
                     if (event) event.stopPropagation();
                     const e = window._neDevolver[idx];
                     if (!e) return;
-                    const etiquetaUrl = `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1`;
-                    const txt = `⚠️ *PAQUETE A DEVOLVER*\n\n` +
-                        `📍 *${e.zona}*\n` +
-                        `🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n` +
-                        `👤 ${e.comprador}\n` +
-                        (e.gLabel ? `📅 Estimada: ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n` : '') +
-                        `🏪 Cuenta: ${e.cuentaNombre}\n` +
-                        `🔢 Venta: #${e.orderId}\n` +
-                        `🏷️ Ver etiqueta: ${etiquetaUrl}\n` +
-                        `🔗 ${e.orderUrl}`;
+                    const txt = `⚠️ *A DEVOLVER*\n` + _buildDevolverTxt(e, 1).trimEnd();
                     if (navigator.share) {
                         navigator.share({ text: txt }).catch(()=>{});
                     } else {
@@ -3640,16 +4191,10 @@
                 window._compartirTodosDevolver = function() {
                     const lista = window._neDevolver;
                     if (!lista.length) return;
-                    let txt = `⚠️ *PAQUETES A DEVOLVER (${lista.length})*\n`;
-                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n\n`;
-                    lista.forEach((e, i) => {
-                        txt += `*${i+1}. ${e.zona}*\n`;
-                        txt += `   🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n`;
-                        txt += `   👤 ${e.comprador}\n`;
-                        if (e.gLabel) txt += `   📅 ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n`;
-                        txt += `   🏪 ${e.cuentaNombre} · #${e.orderId}\n`;
-                        txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1\n\n`;
-                    });
+                    const tot = lista.reduce((s, e) => s + (e.valor || 0), 0);
+                    const totStr = tot > 0 ? ` · $${Math.round(tot).toLocaleString('es-AR')}` : '';
+                    let txt = `⚠️ *A DEVOLVER (${lista.length})${totStr}*\n\n`;
+                    lista.forEach((e, i) => { txt += _buildDevolverTxt(e, i + 1); });
                     if (navigator.share) {
                         navigator.share({ text: txt.trim() }).catch(()=>{});
                     } else {
@@ -3657,39 +4202,41 @@
                     }
                 };
 
-                // Helper: construye bloque de texto para un item
+                // Helper: bloque compacto de texto (3 líneas, sin nombre de usuario)
                 function _buildItemTxt(t, num) {
                     const s = t.shipping, o = t.order;
-                    const barrio    = s.receiver_address?.neighborhood?.name || '';
-                    const ciudad    = s.receiver_address?.city?.name || '';
-                    const zipCode   = s.receiver_address?.zip_code || '';
-                    const zona      = getZonaDetallada(barrio, ciudad, zipCode);
-                    const calle     = s.receiver_address?.street_name || '';
-                    const numero    = s.receiver_address?.street_number || '';
-                    const comprador = o.buyer?.nickname || '';
-                    const orderId   = o.id || '';
-                    const fechaEnt  = s.shipping_option?.estimated_delivery_time?.date
-                                    || s.shipping_option?.estimated_delivery_final?.date;
+                    const zona    = getZonaDetallada(s.receiver_address?.neighborhood?.name || '', s.receiver_address?.city?.name || '', s.receiver_address?.zip_code || '');
+                    const calle   = s.receiver_address?.street_name || '';
+                    const numero  = s.receiver_address?.street_number || '';
+                    const ciudad  = s.receiver_address?.city?.name || '';
+                    const fechaEnt = s.shipping_option?.estimated_delivery_time?.date
+                                   || s.shipping_option?.estimated_delivery_final?.date;
                     let fechaStr = '';
                     if (fechaEnt) {
-                        const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
-                        const diffDias = Math.round((hoy - entrega) / 86400000);
-                        const gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
-                        const gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : '';
-                        fechaStr = `${gLabel}${gAtraso ? ' · '+gAtraso : ''}`;
+                        const e = new Date(fechaEnt); e.setHours(0,0,0,0);
+                        const d = Math.round((hoy - e) / 86400000);
+                        fechaStr = `${diasN[e.getDay()]} ${e.getDate()}/${e.getMonth()+1}${d > 0 ? ` (${d}d)` : ''}`;
                     }
-                    const subKey   = (s.substatus || '').toLowerCase();
-                    const subLabel = grupoLabels[subKey]?.label || (subKey ? subKey.replace(/_/g,' ') : '');
-                    const etiqueta = `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${s.id}&view=1`;
-                    const valor    = o.total_amount ? `$${Math.round(o.total_amount).toLocaleString('es-AR')}` : '';
-                    const recRec   = window._reclamosMap?.get(String(s.id));
-                    let txt = `*${num}. ${zona}*${recRec ? ' '+recRec.id : ''}\n`;
-                    txt += `   🏠 ${calle} ${numero}, ${ciudad}\n`;
-                    txt += `   👤 ${comprador}\n`;
-                    if (fechaStr) txt += `   📅 ${fechaStr}\n`;
-                    if (subLabel) txt += `   ${subLabel}\n`;
-                    txt += `   🏪 ${t.cuentaNombre} · #${orderId}${valor ? ' · '+valor : ''}\n`;
-                    txt += `   🏷️ ${etiqueta}\n\n`;
+                    const valor = o.total_amount ? `$${Math.round(o.total_amount).toLocaleString('es-AR')}` : '';
+                    const rec   = window._reclamosMap?.get(String(s.id));
+                    const idTag = rec?.id ? ` ${rec.id}` : '';
+                    const meta  = [fechaStr, t.cuentaNombre].filter(Boolean).join(' · ');
+                    let txt = `${num}. *${zona}*${idTag}${valor ? ' · ' + valor : ''}\n`;
+                    txt += `   📍 ${calle} ${numero}, ${ciudad}${meta ? ' · ' + meta : ''}\n`;
+                    txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${s.id}&view=1\n\n`;
+                    return txt;
+                }
+
+                // Helper compacto para entradas de _neDevolver (a devolver)
+                function _buildDevolverTxt(e, num) {
+                    const valor = e.valor ? `$${Math.round(e.valor).toLocaleString('es-AR')}` : '';
+                    const fecha = e.gLabel ? `${e.gLabel}${e.gAtraso ? ' ' + e.gAtraso : ''}` : '';
+                    const rec   = window._reclamosMap?.get(String(e.shippingId));
+                    const idTag = rec?.id ? ` ${rec.id}` : '';
+                    const meta  = [fecha, e.cuentaNombre].filter(Boolean).join(' · ');
+                    let txt = `${num}. *${e.zona}*${idTag}${valor ? ' · ' + valor : ''}\n`;
+                    txt += `   📍 ${e.calle} ${e.numero}, ${e.ciudad}${meta ? ' · ' + meta : ''}\n`;
+                    txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1\n\n`;
                     return txt;
                 }
 
@@ -3708,53 +4255,30 @@
                 window._compartirParaReclamar = function() {
                     const items = todos.filter(t => !t.shipping._canceladaDevolver);
                     if (!items.length) return;
-                    // Resumen compacto para el encabezado visible antes del "ver más"
-                    const resumen = items.map((t,i) => `${i+1}. ${_resumenAtraso(t)}`).join(' · ');
-                    let txt = `🚚 *${items.length} PAQUETE${items.length!==1?'S':''} SIN ENTREGAR*\n`;
-                    txt += `📅 ${new Date().toLocaleDateString('es-AR')} · ${resumen}\n`;
-                    txt += `─────────────────────\n\n`;
+                    const tot = items.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                    const totStr = tot > 0 ? ` · $${Math.round(tot).toLocaleString('es-AR')}` : '';
+                    let txt = `🚚 *SIN ENTREGAR (${items.length})${totStr}*\n\n`;
                     items.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
                     if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
                     else { window.open('https://wa.me/?text=' + encodeURIComponent(txt.trim()), '_blank'); }
                 };
 
-                // Compartir todo (a devolver primero, luego en camino/reclamar)
+                // Compartir todo (a devolver primero, luego sin entregar)
                 window._compartirTodo = function() {
                     const devolver = todos.filter(t => t.shipping._canceladaDevolver);
                     const enCamino = todos.filter(t => !t.shipping._canceladaDevolver);
-                    // ── Encabezado compacto (visible antes del "ver más" de WhatsApp) ──
-                    let linResumen = '';
-                    if (devolver.length && enCamino.length)
-                        linResumen = `⚠️ ${devolver.length} a devolver · 🚚 ${enCamino.length} sin entregar`;
-                    else if (devolver.length)
-                        linResumen = `⚠️ ${devolver.length} paquete${devolver.length!==1?'s':''} a devolver`;
-                    else
-                        linResumen = `🚚 ${enCamino.length} paquete${enCamino.length!==1?'s':''} sin entregar`;
-                    // Listado de atrasos en una sola línea
-                    const todosAtraso = [...devolver, ...enCamino].map((t,i) => `${i+1}. ${_resumenAtraso(t)}`).join(' · ');
                     const totalValor = todos.reduce((sum, t) => sum + (t.order?.total_amount || 0), 0);
-                    const totalValorStr = totalValor > 0 ? ` · Total: $${Math.round(totalValor).toLocaleString('es-AR')}` : '';
-                    let txt = `📦 *${todos.length} PAQUETES SIN ENTREGAR${totalValorStr}*\n`;
-                    txt += `${linResumen}\n`;
-                    txt += `${todosAtraso}\n`;
-                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n`;
-                    txt += `─────────────────────\n\n`;
+                    const totStr = totalValor > 0 ? ` · $${Math.round(totalValor).toLocaleString('es-AR')}` : '';
+                    let txt = `📦 *${todos.length} PAQUETES${totStr}*\n\n`;
                     if (devolver.length) {
                         txt += `⚠️ *A DEVOLVER (${devolver.length})*\n\n`;
                         devolver.forEach((t, i) => {
                             const e = window._neDevolver.find(x => x.shippingId == t.shipping.id);
-                            if (e) {
-                                txt += `*${i+1}. ${e.zona}*\n`;
-                                txt += `   🏠 ${e.calle} ${e.numero}, ${e.ciudad}\n`;
-                                txt += `   👤 ${e.comprador}\n`;
-                                if (e.gLabel) txt += `   📅 ${e.gLabel}${e.gAtraso ? ' · '+e.gAtraso : ''}\n`;
-                                txt += `   🏪 ${e.cuentaNombre} · #${e.orderId}\n`;
-                                txt += `   🏷️ https://etiquetas-proxy.rafaelassir.workers.dev/?id=${e.shippingId}&view=1\n\n`;
-                            } else { txt += _buildItemTxt(t, i + 1); }
+                            txt += e ? _buildDevolverTxt(e, i + 1) : _buildItemTxt(t, i + 1);
                         });
                     }
                     if (enCamino.length) {
-                        txt += `🚚 *EN CAMINO / SIN ENTREGAR (${enCamino.length})*\n\n`;
+                        txt += `🚚 *SIN ENTREGAR (${enCamino.length})*\n\n`;
                         enCamino.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
                     }
                     if (navigator.share) { navigator.share({ text: txt.trim() }).catch(()=>{}); }
@@ -3826,21 +4350,14 @@
                     const devolver = selItems.filter(t => t.shipping._canceladaDevolver);
                     const enCamino = selItems.filter(t => !t.shipping._canceladaDevolver);
                     const totalVal = selItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
-                    const totalValStr = totalVal > 0 ? ` · Total: $${Math.round(totalVal).toLocaleString('es-AR')}` : '';
-                    // Resumen compacto: #ID · $valor por item
-                    const resumenLineas = selItems.map(t => {
-                        const rec = window._reclamosMap?.get(String(t.shipping.id));
-                        const id  = rec?.id || '—';
-                        const v   = t.order?.total_amount ? `$${Math.round(t.order.total_amount).toLocaleString('es-AR')}` : '';
-                        return `  ${id}${v ? ' · ' + v : ''}`;
-                    }).join('\n');
-                    let txt = `📦 *${selItems.length} PAQUETES${totalValStr}*\n`;
-                    txt += `📅 ${new Date().toLocaleDateString('es-AR')}\n`;
-                    txt += `📋 *RESUMEN:*\n${resumenLineas}\n`;
-                    txt += `─────────────────────\n\n`;
+                    const totalValStr = totalVal > 0 ? ` · $${Math.round(totalVal).toLocaleString('es-AR')}` : '';
+                    let txt = `📦 *${selItems.length} PAQUETES${totalValStr}*\n\n`;
                     if (devolver.length) {
                         txt += `⚠️ *A DEVOLVER (${devolver.length})*\n\n`;
-                        devolver.forEach((t, i) => { txt += _buildItemTxt(t, i + 1); });
+                        devolver.forEach((t, i) => {
+                            const e = window._neDevolver.find(x => x.shippingId == t.shipping.id);
+                            txt += e ? _buildDevolverTxt(e, i + 1) : _buildItemTxt(t, i + 1);
+                        });
                     }
                     if (enCamino.length) {
                         txt += `🚚 *SIN ENTREGAR (${enCamino.length})*\n\n`;
@@ -3980,84 +4497,153 @@
                                 style="background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:10px 16px;border-radius:10px;font-size:14px;cursor:pointer;white-space:nowrap;">✕ Cerrar</button>
                         </div>
                         <div id="resultadosBuscador" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
-                            <p style="color:#8b949e;text-align:center;margin-top:30px;">Escribí para buscar</p>
+                            <p style="color:#8b949e;text-align:center;margin-top:30px;">⏳ Cargando...</p>
                         </div>`;
                     document.body.appendChild(modal);
                     document.getElementById('inputBuscadorReclamos').focus();
+                    // Mostrar TODOS de entrada (ordenados de mayor a menor #ID)
+                    window._buscarReclamos('');
                 };
 
                 window._buscarReclamos = function(q) {
                     const cont = document.getElementById('resultadosBuscador');
                     if (!cont) return;
                     const trim = (q || '').trim();
-                    if (trim.length < 2) {
-                        cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Escribí para buscar</p>';
-                        return;
-                    }
-                    cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">⏳ Buscando...</p>';
-                    // Primero buscar en el mapa local (instantáneo)
                     const ql = trim.toLowerCase();
-                    const locales = [];
-                    window._reclamosMap?.forEach(r => {
-                        if (r.id?.toLowerCase().includes(ql) || r.comprador?.toLowerCase().includes(ql) ||
-                            r.zona?.toLowerCase().includes(ql) || String(r.orderId).includes(ql) ||
-                            String(r.shippingId).includes(ql)) locales.push(r);
-                    });
-                    if (locales.length) {
-                        _renderResultadosReclamos(locales);
-                    }
-                    // También buscar en GAS (puede tener registros más viejos que ya no están en memoria)
-                    _gasReclamo({ action: 'search_reclamos', q: trim })
-                        .then(d => {
-                            if (d?.records?.length) _renderResultadosReclamos(d.records);
-                            else if (!locales.length) cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Sin resultados</p>';
+                    const token = (window._buscadorToken = (window._buscadorToken || 0) + 1);
+                    const matchLocal = r => !ql ||
+                        r.id?.toLowerCase().includes(ql) || r.comprador?.toLowerCase().includes(ql) ||
+                        r.zona?.toLowerCase().includes(ql) || String(r.orderId).includes(ql) ||
+                        String(r.shippingId).includes(ql);
+
+                    // 1) Instantáneo desde memoria
+                    const mapa = new Map();
+                    window._reclamosMap?.forEach(r => { if (matchLocal(r)) mapa.set(String(r.shippingId), r); });
+                    if (mapa.size) _renderResultadosReclamos([...mapa.values()]);
+                    else cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">⏳ Buscando...</p>';
+
+                    // 2) GAS — unión (nunca muestra menos). Vacío = traer TODOS.
+                    const req = ql
+                        ? _gasReclamo({ action: 'search_reclamos', q: trim })
+                        : _gasReclamo({ action: 'get_reclamos' });
+                    req.then(d => {
+                            if (token !== window._buscadorToken) return;
+                            (d?.records || []).forEach(r => mapa.set(String(r.shippingId), r));
+                            if (mapa.size) _renderResultadosReclamos([...mapa.values()]);
+                            else cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Sin resultados</p>';
                         })
-                        .catch(() => { if (!locales.length) cont.innerHTML = '<p style="color:#f85149;text-align:center;margin-top:30px;">Error al buscar</p>'; });
+                        .catch(() => { if (token === window._buscadorToken && !mapa.size) cont.innerHTML = '<p style="color:#f85149;text-align:center;margin-top:30px;">Error de conexión</p>'; });
                 };
 
                 function _renderResultadosReclamos(records) {
                     const cont = document.getElementById('resultadosBuscador');
                     if (!cont) return;
-                    const estadoColor = { pendiente: '#e3b341', recibido: '#3fb950', descontado: '#58a6ff', reclamado: '#f85149' };
-                    cont.innerHTML = records.map(r => {
-                        const col = estadoColor[r.estado] || '#8b949e';
+                    const estadoMeta = {
+                        pendiente:   { col: '#e3b341', lbl: 'PENDIENTE' },
+                        descontado:  { col: '#58a6ff', lbl: 'DESCONTADO' },
+                        en_deposito: { col: '#ffa040', lbl: 'EN DEPÓSITO' },
+                        recibido:    { col: '#3fb950', lbl: 'RECIBIDO' },
+                        reclamado:   { col: '#f85149', lbl: 'RECLAMADO' },
+                        archivado:   { col: '#8b949e', lbl: 'ARCHIVADO' },
+                    };
+                    // Orden: sin resolver primero, archivados/recibidos al final
+                    const peso = { pendiente:0, reclamado:1, descontado:2, en_deposito:3, recibido:4, archivado:5 };
+                    const ordenados = [...records].sort((a,b) => (peso[a.estado]??9) - (peso[b.estado]??9));
+                    const activos = ordenados.filter(r => r.estado !== 'archivado' && r.estado !== 'recibido').length;
+
+                    const header = `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px 6px;position:sticky;top:0;background:rgba(0,0,0,.85);z-index:1;">
+                        <span style="color:#8b949e;font-size:12px;">${ordenados.length} resultado${ordenados.length!==1?'s':''}${activos?` · <b style="color:#e3b341;">${activos} sin resolver</b>`:''}</span>
+                    </div>`;
+
+                    cont.innerHTML = header + ordenados.map(r => {
+                        const m = estadoMeta[r.estado] || { col: '#8b949e', lbl: (r.estado||'—').toUpperCase() };
                         const valStr = r.valor > 0 ? `$${Math.round(r.valor).toLocaleString('es-AR')}` : '';
-                        return `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;">
+                        const tachado = (r.estado === 'descontado' || r.estado === 'en_deposito');
+                        const tipoLbl = r.tipo === 'driver_devolver'
+                            ? '<span style="color:#f85149;font-size:11px;">⚠️ A devolver</span>'
+                            : r.tipo === 'demorado' ? '<span style="color:#e3b341;font-size:11px;">⏱️ Demorado</span>' : '';
+                        const resuelto = (r.estado === 'recibido' || r.estado === 'archivado');
+                        const botones = resuelto
+                            ? `<button onclick="window._cambiarEstadoReclamo('${r.shippingId}','pendiente',this)" style="background:#21262d;color:#e3b341;border:1px solid #e3b341;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">↩️ Reabrir</button>
+                               <button onclick="verEtiqueta('${r.shippingId}',event)" style="background:#1a2a4a;color:#58a6ff;border:1px solid #1E88E5;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">🏷️ Etiqueta</button>`
+                            : `<button onclick="window._cambiarEstadoReclamo('${r.shippingId}','descontado',this)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">✅ Descontado</button>
+                               <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','recibido',this)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">📥 Recibido</button>
+                               <button onclick="verEtiqueta('${r.shippingId}',event)" style="background:#1a2a4a;color:#58a6ff;border:1px solid #1E88E5;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">🏷️</button>
+                               <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','archivado',this)" style="background:#1a1a1a;color:#8b949e;border:1px solid #484f58;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">🗃️</button>`;
+                        return `<div style="background:#161b22;border:1px solid #30363d;border-left:3px solid ${m.col};border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;${resuelto?'opacity:.65;':''}">
                             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                 <span style="background:#1f3a1f;color:#3fb950;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700;font-family:monospace;">${r.id}</span>
-                                <span style="color:${col};font-size:11px;font-weight:700;text-transform:uppercase;">${r.estado}</span>
-                                ${valStr ? `<span style="color:#3fb950;font-size:12px;font-weight:700;">${valStr}</span>` : ''}
-                                <span style="color:#8b949e;font-size:11px;margin-left:auto;">${r.fechaAlta}</span>
+                                <span style="color:${m.col};font-size:11px;font-weight:700;">${m.lbl}</span>
+                                ${valStr ? `<span style="color:${tachado?'#555':'#3fb950'};font-size:12px;font-weight:700;${tachado?'text-decoration:line-through;':''}">${valStr}</span>` : ''}
+                                <span style="color:#8b949e;font-size:11px;margin-left:auto;">${r.fechaAlta||''}</span>
                             </div>
-                            <div style="color:#e6edf3;font-size:13px;font-weight:600;">${r.comprador || '—'}</div>
-                            <div style="color:#8b949e;font-size:11px;">${r.zona || '—'} · ${r.cuenta || '—'} · <span style="font-family:monospace;">#${r.orderId}</span></div>
-                            ${r.tipo === 'driver_devolver' ? '<div style="color:#f85149;font-size:11px;">⚠️ Driver debe devolver</div>' : '<div style="color:#e3b341;font-size:11px;">⏱️ Demorado</div>'}
-                            ${r.notas ? `<div style="color:#8b949e;font-size:11px;font-style:italic;">${r.notas}</div>` : ''}
-                            ${r.fechaRecibido ? `<div style="color:#3fb950;font-size:11px;">📥 Recibido: ${r.fechaRecibido}</div>` : ''}
-                            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
-                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','descontado',this)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">✅ Descontado</button>
-                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','recibido',this)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">📥 Recibido</button>
-                                <button onclick="window._cambiarEstadoReclamo('${r.shippingId}','reclamado',this)" style="background:#2a1a1a;color:#f85149;border:1.5px solid #f85149;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">🚨 Reclamado</button>
-                                <button onclick="navigator.clipboard?.writeText('${r.shippingId}')" style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:5px 12px;border-radius:7px;font-size:11px;cursor:pointer;">📋 Copiar ID</button>
-                            </div>
+                            <div style="color:#e6edf3;font-size:13px;font-weight:700;">📍 ${r.zona || '—'}</div>
+                            <div style="color:#8b949e;font-size:11px;">${r.cuenta || '—'}${r.orderId?` · <span style="font-family:monospace;">#${r.orderId}</span>`:''}</div>
+                            ${tipoLbl}
+                            ${r.fechaRecibido ? `<div style="color:#3fb950;font-size:11px;">📥 ${r.fechaRecibido}</div>` : ''}
+                            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">${botones}</div>
                         </div>`;
                     }).join('');
                 }
 
                 window._cambiarEstadoReclamo = function(sid, estado, btn) {
-                    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-                    _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado })
-                        .then(d => {
-                            if (d?.ok) {
-                                _showNEToast(`✅ Marcado como ${estado}`);
-                                // Refrescar búsqueda
-                                const q = document.getElementById('inputBuscadorReclamos')?.value || '';
-                                if (q.length >= 2) window._buscarReclamos(q);
-                            } else {
-                                if (btn) { btn.disabled = false; btn.textContent = estado; }
-                                _showNEToast('⚠️ Error al guardar');
+                    // Estados sensibles requieren PIN owner (recibido = saca de la cuenta corriente; archivado = oculta)
+                    const sensible = (estado === 'recibido' || estado === 'archivado');
+                    const ejecutar = () => {
+                        if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+                        _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado })
+                            .then(d => {
+                                if (d?.ok) {
+                                    _showNEToast(`✅ Marcado como ${estado}`);
+                                    const rec = window._reclamosMap?.get(String(sid));
+                                    if (rec) { rec.estado = estado; _saveReclamosCache(window._reclamosMap); }
+                                    if (estado === 'archivado') { const a = _getArchivados(); a.add(String(sid)); _saveArchivados(a); }
+                                    const q = document.getElementById('inputBuscadorReclamos')?.value || '';
+                                    if (q.length >= 2) window._buscarReclamos(q);
+                                } else {
+                                    if (btn) { btn.disabled = false; btn.textContent = estado; }
+                                    _showNEToast('⚠️ Error al guardar');
+                                }
+                            });
+                    };
+                    if (sensible) {
+                        const accion = estado === 'recibido' ? '📥 Marcar RECIBIDO' : '🗃️ Archivar';
+                        _mostrarPIN(`<b>${accion}</b><br><small style="color:#8b949e;">Ingresá tu código</small>`, ok => { if (ok) ejecutar(); });
+                    } else {
+                        ejecutar();
+                    }
+                };
+
+                // ── Marcar en depósito (código de logística u owner) ───
+                window._marcarEnDeposito = function(sid, event) {
+                    if (event) event.stopPropagation();
+                    _mostrarPIN(
+                        `<b style="color:#ffa040;">📦 Marcar en depósito</b><br><small style="color:#8b949e;">Ingresá tu código</small>`,
+                        function(ok) {
+                            if (!ok) return;
+                            const rec = window._reclamosMap?.get(String(sid));
+                            if (rec) { rec.estado = 'en_deposito'; window._reclamosMap.set(String(sid), rec); }
+                            // Feedback visual inmediato
+                            const card = document.querySelector(`.ne-mini-card[data-sid="${sid}"]`);
+                            if (card) {
+                                card.classList.add('ne-mini-deposito');
+                                card.classList.remove('ne-mini-cancelada');
+                                card.style.borderLeftColor = '#ffa040';
+                                const icon = card.querySelector('.ne-devolver-icon');
+                                if (icon) icon.textContent = '📦';
                             }
-                        });
+                            _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado: 'en_deposito' })
+                                .then(d => {
+                                    if (d?.ok) {
+                                        _showNEToast('📦 En depósito guardado');
+                                        if (window.renderNECards) window.renderNECards(window._neCurrentFilter || 'all');
+                                    } else {
+                                        _showNEToast('⚠️ Error al guardar');
+                                    }
+                                });
+                        },
+                        [_PIN_LOGISTICA, _PIN_OWNER]
+                    );
                 };
 
                 // Compartir individual item en-camino (por shipping ID)
@@ -4076,7 +4662,32 @@
                 };
 
                 let html = '';
-                if (filterKey === 'canceladas') {
+                if (filterKey === 'deposito') {
+                    window._neDevolver = [];
+                    const _esEnDep = sid => window._reclamosMap?.get(String(sid))?.estado === 'en_deposito';
+                    const depVis = todosVis.filter(t => t.shipping._canceladaDevolver && _esEnDep(t.shipping.id));
+                    if (!depVis.length) {
+                        html += `<div class="no-results" style="padding:30px;text-align:center;">Sin paquetes en depósito</div>`;
+                    } else {
+                        const totalDep2 = depVis.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                        html += `<div style="background:#130e00;border:1px solid #5a3a00;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                            <span style="color:#ffa040;font-size:14px;font-weight:700;">📦 ${depVis.length} paquete${depVis.length!==1?'s':''} en depósito</span>
+                            ${totalDep2 > 0 ? `<span style="color:#ffa040;font-size:13px;font-weight:700;">$${Math.round(totalDep2).toLocaleString('es-AR')}</span>` : ''}
+                        </div>`;
+                        depVis.forEach(item => {
+                            const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                           || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                            let gLabel = '', gAtraso = '';
+                            if (fechaEnt) {
+                                const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                                const diffDias = Math.round((hoy - entrega) / 86400000);
+                                gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                                gAtraso = diffDias > 0 ? `hace ${diffDias}d` : '';
+                            }
+                            html += buildCard(item, gLabel, gAtraso, '#ffa040');
+                        });
+                    }
+                } else if (filterKey === 'canceladas') {
                     // Limpiar lista para regenerar con índices correctos
                     window._neDevolver = [];
                     const cancelVis = todosVis.filter(t => t.shipping._canceladaDevolver);
@@ -4120,8 +4731,11 @@
                         html += buildCard(item, gLabel, gAtraso, gColor);
                     });
                 } else {
-                    // Resetear para que los índices del botón compartir individual sean correctos
                     window._neDevolver = [];
+
+                    // Helper para separar según estado en reclamos
+                    const _esEnDeposito = sid => window._reclamosMap?.get(String(sid))?.estado === 'en_deposito';
+
                     if (filterKey === 'all' && todosVis.length > 0) {
                         html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap;">
                             <button onclick="window._compartirTodo()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:7px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;">
@@ -4136,44 +4750,83 @@
                         </div>`;
                     }
 
-                    // ── CANCELADAS primero (siempre, independiente del filtro activo) ──
-                    const canceladasVis = todosVis.filter(t => t.shipping._canceladaDevolver);
-                    if (canceladasVis.length) {
-                        html += `<div class="ne-section-hdr">
-                            <div class="ne-section-hdr-line"></div>
-                            <div class="ne-section-hdr-pill" style="background:#7b1a1a;color:#f85149;">⚠️ DRIVER DEBE DEVOLVER (${canceladasVis.length})</div>
-                            <div class="ne-section-hdr-line"></div>
-                        </div>`;
-                        canceladasVis.forEach(item => {
+                    // ── SECCIÓN 1: ⚠️ DRIVER DEBE DEVOLVER (aún no llegaron al depósito) ──
+                    const aDevolver = todosVis.filter(t => t.shipping._canceladaDevolver && !_esEnDeposito(t.shipping.id));
+                    if (aDevolver.length) {
+                        const totalADev = aDevolver.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                        const totalStr  = totalADev > 0 ? `$${Math.round(totalADev).toLocaleString('es-AR')}` : '';
+                        html += `<div class="ne-sec ne-sec-devolver">⚠️ A DEVOLVER · ${aDevolver.length}<span class="ne-sec-count">${totalStr}</span></div>`;
+                        aDevolver.forEach(item => {
                             const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
                                            || item.shipping.shipping_option?.estimated_delivery_final?.date;
-                            let gLabel = '', gAtraso = '', gColor = '#f85149';
+                            let gLabel = '', gAtraso = '';
                             if (fechaEnt) {
                                 const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
                                 const diffDias = Math.round((hoy - entrega) / 86400000);
                                 gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
                                 gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : `en ${Math.abs(diffDias)}d`;
                             }
-                            html += buildCard(item, gLabel, gAtraso, gColor);
+                            html += buildCard(item, gLabel, gAtraso, '#f85149');
                         });
                     }
 
-                    // ── EN CAMINO / REPROGRAMADOS agrupados por fecha ─────────
-                    const hayCaminoOReprog = todosVis.some(t => !t.shipping._canceladaDevolver);
-                    if (hayCaminoOReprog) {
+                    // ── SECCIÓN 2: 📦 EN DEPÓSITO ────────────────────────────
+                    const enDeposito = todosVis.filter(t => t.shipping._canceladaDevolver && _esEnDeposito(t.shipping.id));
+                    if (enDeposito.length) {
+                        const totalDep = enDeposito.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                        const totalDepStr = totalDep > 0 ? `$${Math.round(totalDep).toLocaleString('es-AR')}` : '';
+                        html += `<div class="ne-sec ne-sec-deposito">📦 EN DEPÓSITO · ${enDeposito.length}<span class="ne-sec-count">${totalDepStr}</span></div>`;
+                        enDeposito.forEach(item => {
+                            const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                                           || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                            let gLabel = '', gAtraso = '';
+                            if (fechaEnt) {
+                                const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
+                                const diffDias = Math.round((hoy - entrega) / 86400000);
+                                gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
+                                gAtraso = diffDias > 0 ? `hace ${diffDias}d` : diffDias === 0 ? 'HOY' : '';
+                            }
+                            html += buildCard(item, gLabel, gAtraso, '#ffa040');
+                        });
+                    }
+
+                    // ── SECCIÓN 3: 🔄 SIN ENTREGAR agrupados por fecha ────────
+                    const hayCamino = todosVis.some(t => !t.shipping._canceladaDevolver);
+                    if (hayCamino) {
+                        const topMargin = (aDevolver.length || enDeposito.length) ? 'margin-top:16px;' : '';
+                        const totalCam = todosVis.filter(t => !t.shipping._canceladaDevolver)
+                            .reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                        const totalCamStr = totalCam > 0 ? ` · $${Math.round(totalCam).toLocaleString('es-AR')}` : '';
+                        const countCam = todosVis.filter(t => !t.shipping._canceladaDevolver).length;
+                        if (aDevolver.length || enDeposito.length) {
+                            const totalCamClean = totalCam > 0 ? `$${Math.round(totalCam).toLocaleString('es-AR')}` : '';
+                            html += `<div class="ne-sec ne-sec-entregar">🔄 SIN ENTREGAR · ${countCam}<span class="ne-sec-count">${totalCamClean}</span></div>`;
+                        }
                         groups.forEach(({ label, atraso, color, items }, gKey) => {
                             if (filterKey !== 'all' && gKey !== filterKey) return;
                             const visItems = (acctFilt === 'all' ? items : items.filter(t => t.cuentaNombre === acctFilt))
-                                .filter(t => !t.shipping._canceladaDevolver); // ya se mostraron arriba
+                                .filter(t => !t.shipping._canceladaDevolver);
                             if (!visItems.length) return;
-                            html += `<div class="ne-section-hdr">
-                                <div class="ne-section-hdr-line"></div>
-                                <div class="ne-section-hdr-pill" style="background:${color};color:${color==='#FFE600'?'#000':'white'};">
-                                    📅 ${label}${atraso ? ' · '+atraso : ''} <span style="opacity:0.7;font-weight:400;">(${visItems.length})</span>
+                            const diaTotal = visItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
+                            const diaTotalStr = diaTotal > 0 ? `$${Math.round(diaTotal).toLocaleString('es-AR')}` : '';
+                            // Abrir el cajón sólo si se filtró por ese día puntual; en "Todos" → cerrado
+                            const abierto = filterKey === gKey;
+                            const txtCol  = color === '#FFE600' ? '#000' : '#fff';
+                            let cardsHtml = '';
+                            visItems.forEach(item => cardsHtml += buildCard(item, label, atraso, color));
+                            html += `<div class="ne-dia-drawer">
+                                <button class="ne-dia-hdr" onclick="window._toggleDia('${gKey}')" style="border-left:4px solid ${color};">
+                                    <span class="ne-dia-chev" id="diachev-${gKey}" style="${abierto?'transform:rotate(90deg);':''}">›</span>
+                                    <span class="ne-dia-label">📅 ${label}</span>
+                                    ${atraso ? `<span class="ne-dia-atraso" style="background:${color};color:${txtCol};">${atraso}</span>` : ''}
+                                    <span class="ne-dia-spacer"></span>
+                                    ${diaTotalStr ? `<span class="ne-dia-val">${diaTotalStr}</span>` : ''}
+                                    <span class="ne-dia-count">${visItems.length}</span>
+                                </button>
+                                <div class="ne-dia-body" id="nedia-${gKey}" style="display:${abierto?'block':'none'};">
+                                    ${cardsHtml}
                                 </div>
-                                <div class="ne-section-hdr-line"></div>
                             </div>`;
-                            visItems.forEach(item => html += buildCard(item, label, atraso, color));
                         });
                     }
                 }
@@ -4193,11 +4846,13 @@
             </button>`;
 
             groups.forEach(({ label, atraso, color, items }, gKey) => {
+                const nonCancelled = items.filter(t => !t.shipping._canceladaDevolver);
+                if (nonCancelled.length === 0) return; // no mostrar días vacíos
                 const txtColor = color === '#FFE600' ? '#000' : 'white';
                 btnHtml += `<button class="ne-day-btn" data-key="${gKey}"
                     style="${btnStyle}background:${color};color:${txtColor};opacity:0.6;"
                     onclick="${activarBtn}renderNECards('${gKey}')">
-                    ${label}${atraso ? ' · '+atraso : ''} (${items.filter(t=>!t.shipping._canceladaDevolver).length})
+                    ${label}${atraso ? ' · '+atraso : ''} (${nonCancelled.length})
                 </button>`;
             });
 
@@ -4208,14 +4863,22 @@
                     ⚠️ A devolver (${canceladaCount})
                 </button>`;
             }
+            if (enDepositoCount > 0) {
+                btnHtml += `<button class="ne-day-btn" data-key="deposito"
+                    style="${btnStyle}background:#e65100;color:#ffd0a0;opacity:0.6;"
+                    onclick="${activarBtn}renderNECards('deposito')">
+                    📦 Depósito (${enDepositoCount})
+                </button>`;
+            }
 
             // Construir el contenedor raíz
             const bannerBtn = `border:none;cursor:pointer;flex:1;min-width:120px;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;font-family:inherit;touch-action:manipulation;transition:opacity .15s;`;
             let html = `
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:stretch;">
-                ${enCaminoCount > 0 ? `<button id="neBannerEnCamino" style="${bannerBtn}background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;" onclick="renderNECards('en-camino');document.getElementById('neBannerEnCamino').style.outline=window._neCurrentFilter==='en-camino'?'3px solid white':'none'">🚚 ${enCaminoCount} en camino<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
+                ${canceladaCount > 0 ? `<button id="neBannerDevolver" style="${bannerBtn}background:linear-gradient(135deg,#c62828,#7b1a1a);color:white;" onclick="renderNECards('all');document.getElementById('neBannerDevolver')?.style&&(document.getElementById('neBannerDevolver').style.outline='3px solid white')">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></button>` : ''}
+                ${enDepositoCount > 0 ? `<button id="neBannerDeposito" style="${bannerBtn}background:linear-gradient(135deg,#e65100,#3a2200);color:#ffa040;border:1.5px solid #ffa040;" onclick="renderNECards('all')">📦 ${enDepositoCount} en depósito<br><span style="font-size:10px;font-weight:400;color:#ff8c00;">llegaron al depósito</span></button>` : ''}
+                ${enCaminoCount > 0 ? `<button id="neBannerEnCamino" style="${bannerBtn}background:linear-gradient(135deg,#00b8d4,#0097a7);color:#000;" onclick="renderNECards('en-camino');document.getElementById('neBannerEnCamino').style.outline=window._neCurrentFilter==='en-camino'?'3px solid white':'none'">🔄 ${enCaminoCount} sin entregar<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
                 ${fallidoCount  > 0 ? `<button style="${bannerBtn}background:linear-gradient(135deg,#f85149,#da3633);color:white;" onclick="renderNECards('en-camino')">🚫 ${fallidoCount} fallido${fallidoCount!==1?'s':''}<br><span style="font-size:10px;font-weight:400;">toque para filtrar</span></button>` : ''}
-                ${canceladaCount > 0 ? `<button id="neBannerDevolver" style="${bannerBtn}background:linear-gradient(135deg,#f85149,#7b1a1a);color:white;" onclick="renderNECards('canceladas');document.getElementById('neBannerDevolver').style.outline=window._neCurrentFilter==='canceladas'?'3px solid white':'none'">⚠️ ${canceladaCount} a devolver<br><span style="font-size:10px;font-weight:400;">driver debe devolver</span></button>` : ''}
                 <button onclick="abrirEscaner()" style="${bannerBtn}background:linear-gradient(135deg,#2d5a27,#1a3d16);color:#4CAF50;border:2px solid #4CAF50;flex:0 0 auto;min-width:80px;font-size:22px;">📷<br><span style="font-size:10px;font-weight:600;color:#81C784;">Escanear</span></button>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:12px;">
@@ -4226,15 +4889,29 @@
                 <button onclick="cargarFlexHoy()" style="background:#3483FA;padding:12px 30px;font-size:15px;">🔙 Volver a HOY</button>
             </div>`;
 
-            // Banner de "actualizando" cuando se muestra desde caché
+            // ── Indicador de frescura de datos (caché vs frescos) ──────────
             if (fromCache) {
-                html = `<div style="background:#21262d;border:1px solid #388e3c;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#81C784;display:flex;align-items:center;gap:8px;">
-                    <div class="loading-spinner" style="width:12px;height:12px;border-width:2px;border-color:#388e3c transparent #388e3c transparent;"></div>
-                    Datos de hace ${cacheAgeMin || 0} min — actualizando en fondo...
+                const edad = cacheAgeMin || 0;
+                const edadTxt = edad < 1 ? 'recién' : `hace ${edad} min`;
+                html = `<div id="neFreshBadge" style="background:#2a2410;border:1px solid #7a6020;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#e3b341;display:flex;align-items:center;gap:8px;font-weight:600;">
+                    <div class="loading-spinner" style="width:13px;height:13px;border-width:2px;border-color:#e3b341 transparent #e3b341 transparent;"></div>
+                    🟡 Mostrando caché (${edadTxt}) · actualizando con Mercado Libre…
+                </div>` + html;
+            } else {
+                html = `<div id="neFreshBadge" style="background:#0f2a14;border:1px solid #2e7d32;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#81C784;display:flex;align-items:center;gap:8px;font-weight:600;transition:opacity .5s;">
+                    🟢 Datos frescos · actualizado ${new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}
                 </div>` + html;
             }
 
             content.innerHTML = html;
+
+            // Si son datos frescos, atenuar el cartel verde a los 4s (deja de molestar)
+            if (!fromCache) {
+                setTimeout(() => {
+                    const b = document.getElementById('neFreshBadge');
+                    if (b) { b.style.opacity = '0.45'; }
+                }, 4000);
+            }
 
             // Exponer renderNECards globalmente
             window.renderNECards = renderNECards;
@@ -4942,7 +5619,7 @@
         // ── Tiempo relativo ──────────────────────────────────────────────────
         function _tiempoRelativo(fechaStr) {
             if (!fechaStr) return '';
-            const d = new Date(fechaStr);
+            const d = _parseFechaFlexible(fechaStr) || new Date(fechaStr);
             if (isNaN(d)) return fechaStr;
             const diff = Date.now() - d.getTime();
             const mins = Math.floor(diff / 60000);
@@ -4973,6 +5650,10 @@
             html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verRecibidos();">
                 <span style="font-size:20px;">📋</span>
                 <div><div>Ver últimos recibidos</div><div style="font-size:11px;color:#8b949e;">Historial desde Google Sheets</div></div>
+            </button>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verArchivados();">
+                <span style="font-size:20px;">🗃️</span>
+                <div><div>Ver archivados</div><div style="font-size:11px;color:#8b949e;">Restaurar paquetes archivados</div></div>
             </button>`;
             html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();_mostrarDiagnostico();" style="opacity:.7;">
                 <span style="font-size:20px;">🔍</span>
@@ -5151,6 +5832,66 @@
                 });
         }
 
+        // ── Ver archivados — lee de "reclamos" filtrado por estado=archivado ──
+        function verArchivados() {
+            let modal = document.getElementById('archivadosModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'archivadosModal';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:flex;flex-direction:column;padding:12px;gap:10px;';
+                modal.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="flex:1;font-weight:800;font-size:16px;color:#8b949e;">🗃️ Archivados</span>
+                        <button onclick="document.getElementById('archivadosModal').style.display='none'" style="background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:9px 16px;border-radius:10px;font-size:14px;cursor:pointer;">✕ Cerrar</button>
+                    </div>
+                    <div id="archivadosList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>`;
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            const list = document.getElementById('archivadosList');
+            list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">⏳ Cargando archivados...</div>';
+            _gasReclamo({ action: 'get_reclamos', estado: 'archivado' })
+                .then(data => {
+                    const recs = data?.records || [];
+                    if (!recs.length) { list.innerHTML = '<div style="text-align:center;padding:40px;color:#8b949e;">No hay paquetes archivados</div>'; return; }
+                    list.innerHTML = `<div style="color:#8b949e;font-size:12px;padding:0 4px 4px;">${recs.length} archivado${recs.length!==1?'s':''}</div>` +
+                        [...recs].reverse().map(r => {
+                            const valStr = r.valor > 0 ? `$${Math.round(r.valor).toLocaleString('es-AR')}` : '';
+                            return `<div data-sid="${r.shippingId}" style="background:#101317;border:1px solid #21262d;border-left:3px solid #484f58;border-radius:10px;padding:11px 14px;display:flex;flex-direction:column;gap:4px;">
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <span style="background:#1a1a1a;color:#8b949e;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700;font-family:monospace;">${r.id}</span>
+                                    ${valStr ? `<span style="color:#8b949e;font-size:12px;font-weight:700;">${valStr}</span>` : ''}
+                                    ${r.cuenta ? `<span style="color:#8b949e;font-size:11px;">${r.cuenta}</span>` : ''}
+                                    <span style="color:#484f58;font-size:11px;margin-left:auto;">${r.fechaAlta || ''}</span>
+                                </div>
+                                <div style="color:#c9d1d9;font-size:13px;font-weight:700;">📍 ${r.zona || '—'}</div>
+                                <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                                    <button onclick="window._restaurarArchivado('${r.shippingId}',this)" style="background:#21262d;color:#3fb950;border:1px solid #3fb950;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">↩️ Restaurar</button>
+                                    <button onclick="verEtiqueta('${r.shippingId}',event)" style="background:#1a2a4a;color:#58a6ff;border:1px solid #1E88E5;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🏷️ Etiqueta</button>
+                                </div>
+                            </div>`;
+                        }).join('');
+                })
+                .catch(() => { list.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>'; });
+        }
+
+        // Restaurar archivado → vuelve a estado pendiente (reaparece en la lista)
+        window._restaurarArchivado = function(sid, btn) {
+            if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+            _gasReclamo({ action: 'update_reclamo', shippingId: String(sid), estado: 'pendiente' })
+                .then(d => {
+                    if (d?.ok) {
+                        // limpiar de localStorage y mapa
+                        const a = _getArchivados(); a.delete(String(sid)); _saveArchivados(a);
+                        const rec = window._reclamosMap?.get(String(sid));
+                        if (rec) { rec.estado = 'pendiente'; _saveReclamosCache(window._reclamosMap); }
+                        _showNEToast('↩️ Restaurado');
+                        const card = document.querySelector(`#archivadosList [data-sid="${sid}"]`);
+                        if (card) card.remove();
+                    } else if (btn) { btn.disabled = false; btn.textContent = '↩️ Restaurar'; _showNEToast('⚠️ Error'); }
+                });
+        };
+
         function _mostrarListaRecibidos(rows) {
             const list = document.getElementById('recibidosList');
             if (!rows.length) { list.innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e;">Sin recibidos aún</div>'; return; }
@@ -5169,21 +5910,13 @@
                 let fechaPrincipal = '', fechaSecundaria = '';
                 if (fechaRaw) {
                     try {
-                        // Formato "dd/MM/yyyy HH:mm" del GAS
-                        let d;
-                        if (fechaRaw.includes('/')) {
-                            const [datePart, timePart] = fechaRaw.split(' ');
-                            const [dd, mm, yyyy] = datePart.split('/');
-                            d = new Date(`${yyyy}-${mm}-${dd}T${timePart || '00:00'}:00`);
-                        } else {
-                            d = new Date(fechaRaw);
-                        }
-                        if (!isNaN(d)) {
-                            fechaPrincipal = _tiempoRelativo(d.toISOString());
-                            const hora = d.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-                            const dia  = diasN[d.getDay()];
-                            const num  = d.getDate() + '/' + (d.getMonth()+1);
-                            fechaSecundaria = `${dia} ${num} · ${hora}`;
+                        const d = _fechaSegura(fechaRaw);
+                        if (d && !isNaN(d)) {
+                            // Fecha absoluta: "Martes 3 de junio"
+                            fechaPrincipal = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+                            fechaPrincipal = fechaPrincipal.charAt(0).toUpperCase() + fechaPrincipal.slice(1);
+                            const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                            fechaSecundaria = `${hora} · ${_tiempoRelativo(d.toISOString())}`;
                         } else { fechaPrincipal = fechaRaw; }
                     } catch(e) { fechaPrincipal = fechaRaw; }
                 }
@@ -6464,16 +7197,17 @@
 <canvas id="qrCanvas" style="display:none;"></canvas>
 
 <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;">
-    <div style="color:#FFE600;font-size:17px;font-weight:700;text-align:center;">📷 Escaneá el QR del paquete</div>
+    <div style="color:#FFE600;font-size:19px;font-weight:800;text-align:center;letter-spacing:-0.3px;">📷 Escaneá el QR del paquete</div>
     <!-- Cámara en vivo -->
-    <div id="qrLiveWrap" style="position:relative;width:min(88vw,340px);display:none;">
-        <video id="qrVideo" playsinline autoplay muted style="width:100%;border-radius:14px;display:block;background:#000;max-height:55vh;object-fit:cover;"></video>
+    <div id="qrLiveWrap" style="position:relative;width:min(95vw,460px);display:none;">
+        <video id="qrVideo" playsinline autoplay muted style="width:100%;border-radius:16px;display:block;background:#000;max-height:66vh;object-fit:cover;box-shadow:0 0 0 1px #30363d;"></video>
         <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;">
-            <div style="position:relative;width:180px;height:180px;">
-                <div style="position:absolute;top:0;left:0;width:30px;height:30px;border-top:3px solid #FFE600;border-left:3px solid #FFE600;border-radius:3px 0 0 0;"></div>
-                <div style="position:absolute;top:0;right:0;width:30px;height:30px;border-top:3px solid #FFE600;border-right:3px solid #FFE600;border-radius:0 3px 0 0;"></div>
-                <div style="position:absolute;bottom:0;left:0;width:30px;height:30px;border-bottom:3px solid #FFE600;border-left:3px solid #FFE600;border-radius:0 0 0 3px;"></div>
-                <div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-bottom:3px solid #FFE600;border-right:3px solid #FFE600;border-radius:0 0 3px 0;"></div>
+            <div style="position:relative;width:min(62vw,250px);height:min(62vw,250px);">
+                <div style="position:absolute;top:0;left:0;width:38px;height:38px;border-top:4px solid #FFE600;border-left:4px solid #FFE600;border-radius:4px 0 0 0;"></div>
+                <div style="position:absolute;top:0;right:0;width:38px;height:38px;border-top:4px solid #FFE600;border-right:4px solid #FFE600;border-radius:0 4px 0 0;"></div>
+                <div style="position:absolute;bottom:0;left:0;width:38px;height:38px;border-bottom:4px solid #FFE600;border-left:4px solid #FFE600;border-radius:0 0 0 4px;"></div>
+                <div style="position:absolute;bottom:0;right:0;width:38px;height:38px;border-bottom:4px solid #FFE600;border-right:4px solid #FFE600;border-radius:0 0 4px 0;"></div>
+                <div class="qr-laser"></div>
             </div>
         </div>
     </div>
@@ -6483,10 +7217,10 @@
         <div style="color:#e6edf3;font-size:13px;margin-bottom:16px;line-height:1.5;">Apuntá la cámara al QR de la etiqueta y sacá la foto</div>
         <button onclick="_dispararCamara()" style="background:linear-gradient(135deg,#4CAF50,#2d7a31);color:white;border:none;padding:13px 24px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation;width:100%;">📷 Abrir cámara</button>
     </div>
-    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;max-width:min(88vw,340px);width:100%;"></div>
+    <div id="qrStatus" style="color:#8b949e;font-size:13px;text-align:center;min-height:18px;max-width:min(95vw,460px);width:100%;"></div>
 
     <!-- Modo manual (oculto por defecto) -->
-    <div id="qrModoManualWrap" style="display:none;width:min(88vw,340px);">
+    <div id="qrModoManualWrap" style="display:none;width:min(95vw,460px);">
         <div style="color:#58a6ff;font-size:13px;font-weight:600;text-align:center;margin-bottom:10px;">⌨️ Ingreso manual</div>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
             <input id="qrModoManualInput" type="number" inputmode="numeric" pattern="[0-9]*"
@@ -6514,7 +7248,7 @@
 
 <!-- ══ PIN Modal ══════════════════════════════════════════════════════ -->
 <div id="pinModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10001;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;">
-    <div style="color:#FFE600;font-size:17px;font-weight:700;">🔐 Confirmá recepción</div>
+    <div style="color:#FFE600;font-size:17px;font-weight:700;">🔐 Ingresá tu código</div>
     <div id="pinInfo" style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px 16px;max-width:300px;width:100%;font-size:13px;line-height:1.6;color:#e6edf3;text-align:center;"></div>
     <div id="pinDisplay" style="font-size:32px;letter-spacing:14px;color:#FFE600;font-weight:700;min-height:44px;transition:color .15s;">○ ○ ○ ○</div>
     <div style="display:grid;grid-template-columns:repeat(3,72px);gap:10px;">
