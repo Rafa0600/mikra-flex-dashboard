@@ -3060,6 +3060,47 @@
             try { sessionStorage.removeItem(_cacheKey(date)); } catch {}
         }
 
+        // ── Caché de envíos ENTREGADOS (estado final → no cambia) ───────────
+        // Evita re-consultar al Worker shipments ya entregados. Gran ahorro de
+        // queries en el refresco en segundo plano y al revisitar días.
+        const _SHIP_CACHE_KEY = 'flex_ship_v1';
+        const _SHIP_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 h
+        let _shipCacheMem = null;
+        function _getShipCache() {
+            if (_shipCacheMem) return _shipCacheMem;
+            try {
+                const raw = localStorage.getItem(_SHIP_CACHE_KEY);
+                if (raw) {
+                    const p = JSON.parse(raw);
+                    if (p?.data && Date.now() - p.ts < _SHIP_CACHE_TTL) {
+                        _shipCacheMem = new Map(p.data);
+                        return _shipCacheMem;
+                    }
+                }
+            } catch {}
+            _shipCacheMem = new Map();
+            return _shipCacheMem;
+        }
+        function _esEnvioFinal(s) {
+            return !!(s && s.logistic_type === 'self_service' &&
+                (s.status === 'delivered' || s.status_history?.date_delivered));
+        }
+        function _addToShipCache(shipments) {
+            const finales = shipments.filter(_esEnvioFinal);
+            if (!finales.length) return;
+            const c = _getShipCache();
+            finales.forEach(s => c.set(String(s.id), {
+                id: s.id, status: s.status, substatus: s.substatus,
+                logistic_type: s.logistic_type, status_history: s.status_history,
+                shipping_option: s.shipping_option, receiver_address: s.receiver_address,
+            }));
+            try {
+                const arr = [...c].slice(-3000); // cap para no inflar localStorage
+                _shipCacheMem = new Map(arr);
+                localStorage.setItem(_SHIP_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: arr }));
+            } catch {}
+        }
+
         // ── Rango de fechas inteligente ─────────────────────────────
         // Va hacia atrás hasta encontrar el viernes laboral anterior
         // desde la targetDate (no desde hoy), con mínimo de 3 días
@@ -5574,7 +5615,18 @@
             // Incluir todas las órdenes con shipping (también canceladas a nivel orden).
             const ordersConShipping = allOrders.filter(o => o.shipping?.id);
 
-            if (progress) { progress.total += ordersConShipping.length; if (notify) notify(); }
+            // ── Reusar envíos ENTREGADOS desde caché (no se re-consultan) ──
+            const _shipC = _getShipCache();
+            const shippingMap = new Map();
+            const ordersAFetchear = [];
+            ordersConShipping.forEach(o => {
+                const cached = _shipC.get(String(o.shipping.id));
+                if (cached) shippingMap.set(o.shipping.id, cached);
+                else ordersAFetchear.push(o);
+            });
+            if (shippingMap.size) _diagLog(`[${cuenta.nombre}] ${shippingMap.size} envíos desde caché (entregados) · ${ordersAFetchear.length} a consultar`);
+
+            if (progress) { progress.total += ordersAFetchear.length; if (notify) notify(); }
 
             // ── BATCH FETCH de shipments ─────────────────────────────────
             // En lugar de N requests individuales, agrupamos en batches de 20
@@ -5633,15 +5685,14 @@
                 return results;
             }
 
-            // Dividir en batches
-            _diagLog(`[${cuenta.nombre}] ${ordersConShipping.length} shipments → ${Math.ceil(ordersConShipping.length/BATCH_SIZE)} batches × ${BATCH_SIZE}, BCONC=${BATCH_CONC}`);
+            // Dividir en batches (solo los que NO están en caché)
+            _diagLog(`[${cuenta.nombre}] ${ordersAFetchear.length} shipments a consultar → ${Math.ceil(ordersAFetchear.length/BATCH_SIZE)} batches × ${BATCH_SIZE}, BCONC=${BATCH_CONC}`);
             const batches = [];
-            for (let i = 0; i < ordersConShipping.length; i += BATCH_SIZE) {
-                batches.push(ordersConShipping.slice(i, i + BATCH_SIZE));
+            for (let i = 0; i < ordersAFetchear.length; i += BATCH_SIZE) {
+                batches.push(ordersAFetchear.slice(i, i + BATCH_SIZE));
             }
 
             // Procesar batches con concurrencia limitada
-            const shippingMap = new Map();
             let batchIdx = 0;
             const t0hoy = Date.now();
             async function batchWorker() {
@@ -5664,6 +5715,8 @@
                 }
             }
             await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
+            // Guardar los recién consultados que ya están ENTREGADOS → no se vuelven a pedir
+            _addToShipCache([...shippingMap.values()]);
             _diagLog(`[${cuenta.nombre}] hoy fetch total: ${Date.now()-t0hoy}ms · sMap: ${shippingMap.size}`);
 
 
