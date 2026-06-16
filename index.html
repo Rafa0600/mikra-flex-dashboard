@@ -2990,15 +2990,25 @@
         }
 
         function esEntregaParaFecha(shipping, targetDate) {
-            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date || 
+            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
                                 shipping.shipping_option?.estimated_delivery_final?.date;
-            
+
             if (!fechaEntrega) return false;
-            
+
             const entrega = new Date(fechaEntrega);
             entrega.setHours(0, 0, 0, 0);
-            
+
             return entrega.getTime() === targetDate.getTime();
+        }
+
+        // ¿El paquete fue DESPACHADO (escaneado/sale del depósito) en la fecha?
+        // Señal real de "escaneado ese día" = status_history.date_shipped === targetDate.
+        // Captura paquetes que ML les puso fecha estimada distinta pero salieron ese día.
+        function esDespachadoEnFecha(shipping, targetDate) {
+            const ds = shipping.status_history?.date_shipped;
+            if (!ds) return false;
+            const d = new Date(ds); d.setHours(0, 0, 0, 0);
+            return d.getTime() === targetDate.getTime();
         }
 
         // ══════════════════════════════════════════════════════
@@ -3102,23 +3112,21 @@
         }
 
         // ── Rango de fechas inteligente ─────────────────────────────
-        // Va hacia atrás hasta encontrar el viernes laboral anterior
-        // desde la targetDate (no desde hoy), con mínimo de 3 días
-        // y máximo de 8 días de calendario. Así cubre:
-        //   lunes normal → viernes (3 días)
-        //   martes después de feriado lunes → viernes (4 días)
-        //   martes después de fin de semana largo → viernes (4-5 días)
+        // Las ventas creadas días antes (viernes, fin de semana largo, feriado)
+        // recién se despachan/escanean hoy. Para no perderlas, la ventana de
+        // búsqueda por fecha de CREACIÓN retrocede AMPLIO: mínimo 10 días
+        // calendario, y si hay un viernes más atrás dentro de los 16, hasta ahí.
+        // Ej: martes 16 con feriado lunes 15 → toma ventas desde el viernes 12 y antes.
         function calcularDateFrom(targetDate) {
             const base = new Date(targetDate);
             base.setHours(0,0,0,0);
-            // Retroceder hasta el viernes anterior desde targetDate, mínimo 3 días calendario
             let d = new Date(base);
             let calDays = 0;
             while (true) {
                 d.setDate(d.getDate() - 1);
                 calDays++;
-                if (calDays >= 3 && d.getDay() === 5) break; // encontramos viernes, mín 3 días
-                if (calDays >= 8) break; // tope de seguridad
+                if (calDays >= 10 && d.getDay() === 5) break; // mín 10 días, cortar en un viernes
+                if (calDays >= 16) break; // tope de seguridad (feriados largos)
             }
             return d;
         }
@@ -5574,7 +5582,9 @@
                 const filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
 
                 // filterA (estimated_delivery_time) ignorado por ML como filtro → solo B+C
-                const [ordersB, ordersC] = await Promise.all([fetchAllPages(filterB, 19), fetchAllPages(filterC, 19)]);
+                // filterB con tope alto (50 págs = 2500 órdenes) para no truncar la ventana
+                // ampliada de creación (feriados largos). Los entregados ya cacheados no se re-consultan.
+                const [ordersB, ordersC] = await Promise.all([fetchAllPages(filterB, 50), fetchAllPages(filterC, 19)]);
 
                 if (ordersB.length === 0 && ordersC.length === 0) {
                     _diagLog(`⚠️ [${cuenta.nombre}] B+C vacías → fallback filterA`);
@@ -5715,6 +5725,19 @@
                 }
             }
             await Promise.all(Array.from({ length: BATCH_CONC }, batchWorker));
+            // Reintento: recuperar los que quedaron sin envío (timeouts) — sin esto se perdían del conteo
+            const _faltantes = ordersAFetchear.filter(o => !shippingMap.get(o.shipping.id)).map(o => o.shipping.id);
+            if (_faltantes.length) {
+                _diagLog(`[${cuenta.nombre}] retry ${_faltantes.length} envíos faltantes`);
+                for (let i = 0; i < _faltantes.length; i += BATCH_SIZE) {
+                    try {
+                        const sh = await fetchShipmentBatch(_faltantes.slice(i, i + BATCH_SIZE));
+                        sh.forEach(s => { if (s?.id) shippingMap.set(s.id, s); });
+                    } catch(e) {}
+                }
+                const _aunFalta = ordersAFetchear.filter(o => !shippingMap.get(o.shipping.id)).length;
+                _diagLog(`[${cuenta.nombre}] tras retry: faltan ${_aunFalta}`);
+            }
             // Guardar los recién consultados que ya están ENTREGADOS → no se vuelven a pedir
             _addToShipCache([...shippingMap.values()]);
             _diagLog(`[${cuenta.nombre}] hoy fetch total: ${Date.now()-t0hoy}ms · sMap: ${shippingMap.size}`);
@@ -5735,10 +5758,12 @@
                     shipping.status === 'delivered' &&
                     esEntregaParaFecha(shipping, targetDate);
                 if (order._orderCancelled && !esReclamacion) return;
-                if (esEntregaParaFecha(shipping, targetDate) ||
-                    shipping.status === 'not_delivered' ||
-                    shipping.status === 'cancelled' ||
-                    esReclamacion) {
+                // Pertenece a ESTE día si su entrega estimada O su despacho (date_shipped) caen
+                // en la fecha. Así contamos exactamente lo escaneado ese día, sin arrastrar
+                // not_delivered/cancelled viejos de la ventana ampliada de creación.
+                const relacionadoConFecha = esEntregaParaFecha(shipping, targetDate) ||
+                                            esDespachadoEnFecha(shipping, targetDate);
+                if (relacionadoConFecha || esReclamacion) {
                     if (esReclamacion) shipping._orderCancelled = true;
                     tempOrders2.push({ order, shipping });
                 }
@@ -5794,7 +5819,7 @@
 
         // ── Drawer global ＋ Más ─────────────────────────────────────────────
         function abrirMasDrawer() {
-            const hayOrders  = !!(window.allFlexOrders && window.allFlexOrders.length);
+            const hayOrders  = !!(allFlexOrders && allFlexOrders.length);
             const hayCompart = document.getElementById('btnCompartir')?.getAttribute('data-visible') === '1';
             const neActivo   = !!(window._neTodos);
 
@@ -5842,9 +5867,9 @@
                     <div><div>Exportar CSV de ventas</div><div style="font-size:11px;color:#8b949e;">Descarga el listado del día</div></div>
                 </button>`;
                 // Filtro de cuenta (visible dentro del mismo drawer)
-                const allC  = window.allFlexOrders?.length || 0;
-                const mikC  = window.allFlexOrders?.filter(o=>o.cuentaNombre==='Mikra').length || 0;
-                const chaC  = window.allFlexOrders?.filter(o=>o.cuentaNombre==='Chaya').length || 0;
+                const allC  = allFlexOrders?.length || 0;
+                const mikC  = allFlexOrders?.filter(o=>o.cuentaNombre==='Mikra').length || 0;
+                const chaC  = allFlexOrders?.filter(o=>o.cuentaNombre==='Chaya').length || 0;
                 const curFilt = document.querySelector('.cuenta-btn.active')?.textContent?.trim() || 'Todas';
                 html += `<div style="margin-top:8px;">
                     <div style="font-size:11px;color:#8b949e;margin-bottom:6px;">Filtrar por cuenta</div>
