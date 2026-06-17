@@ -2989,15 +2989,23 @@
             return _fmtHora.format(fecha);
         }
 
+        // ── Fecha de OBLIGACIÓN / promesa de entrega ────────────────────────
+        // Es la fecha que ML fija como compromiso al vender (no la "estimada"
+        // que se va moviendo). Cada venta pertenece SIEMPRE a este día.
+        // Prioridad: límite (obligación) → final → estimada.
+        function _fechaPromesa(shipping) {
+            const so = shipping?.shipping_option || {};
+            return so.estimated_delivery_limit?.date
+                || so.estimated_delivery_final?.date
+                || so.estimated_delivery_time?.date
+                || '';
+        }
+
         function esEntregaParaFecha(shipping, targetDate) {
-            const fechaEntrega = shipping.shipping_option?.estimated_delivery_time?.date ||
-                                shipping.shipping_option?.estimated_delivery_final?.date;
-
+            const fechaEntrega = _fechaPromesa(shipping);
             if (!fechaEntrega) return false;
-
             const entrega = new Date(fechaEntrega);
             entrega.setHours(0, 0, 0, 0);
-
             return entrega.getTime() === targetDate.getTime();
         }
 
@@ -3532,15 +3540,13 @@
                 if (shippingIdsVistos.has(sid)) return;
                 if (recibidosIds.has(String(sid))) return;   // ya fue recibido → excluir
                 shippingIdsVistos.add(sid);
-                // Filtrar por ventana de 7 días (independiente del filtro de ML que no es exacto)
-                const fechaEntItem = item.shipping.shipping_option?.estimated_delivery_time?.date
-                                  || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                // Filtrar por ventana de 7 días usando la fecha de OBLIGACIÓN de entrega
+                const fechaEntItem = _fechaPromesa(item.shipping);
                 if (fechaEntItem) {
                     const entItem = new Date(fechaEntItem); entItem.setHours(0,0,0,0);
                     if (entItem.getTime() === hoy.getTime()) {
-                        // Estimado para HOY: el en-camino normal todavía está a tiempo → excluir.
-                        // PERO si es reprogramado / no-entregado / con problema, SÍ se muestra,
-                        // aunque ML lo siga marcando "shipped". Se detecta por SUBSTATUS.
+                        // Obligación para HOY: el en-camino normal todavía está a tiempo → excluir.
+                        // PERO si es reprogramado / no-entregado / con problema, SÍ se muestra.
                         const sub = (item.shipping.substatus || '').toLowerCase();
                         const esProblema = item.shipping.status === 'not_delivered' ||
                             sub.includes('reschedul') || sub.includes('delay') ||
@@ -3563,12 +3569,8 @@
             // Garantizar fecha en todos los items (cancelados sin fecha estimada → date_shipped)
             todos.forEach(_asegurarFecha);
 
-            // Ordenar de más viejo a más nuevo (fecha estimada ascendente)
-            todos.sort((a, b) => {
-                const fa = a.shipping.shipping_option?.estimated_delivery_time?.date || a.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                const fb = b.shipping.shipping_option?.estimated_delivery_time?.date || b.shipping.shipping_option?.estimated_delivery_final?.date || '';
-                return fa.localeCompare(fb);
-            });
+            // Ordenar de más viejo a más nuevo (fecha de obligación ascendente)
+            todos.sort((a, b) => _fechaPromesa(a.shipping).localeCompare(_fechaPromesa(b.shipping)));
 
             // Exponer todos globalmente para que el escáner pueda encontrar items
             window._neTodos = todos;
@@ -4127,15 +4129,12 @@
             const enCaminoCount     = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount - enDepositoCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
-            // Agrupamos por la fecha de DESPACHO (cuándo se escaneó/salió), no por la
-            // estimada de entrega — que ML reprograma. Así el paquete queda en el día
-            // real en que lo despachaste (consistente con la vista diaria).
+            // Agrupamos por la fecha de OBLIGACIÓN de entrega (compromiso de ML, estable).
+            // Cada venta queda siempre en su día de obligación, no en la estimada que se mueve.
             const _pad2 = n => String(n).padStart(2, '0');
             const groups = new Map();
             todos.forEach(item => {
-                const fechaEnt = item.shipping.status_history?.date_shipped
-                               || item.shipping.shipping_option?.estimated_delivery_time?.date
-                               || item.shipping.shipping_option?.estimated_delivery_final?.date;
+                const fechaEnt = _fechaPromesa(item.shipping);
                 let gKey = 'sin-fecha', gLabel = 'Sin fecha', gAtraso = '', gColor = '#484f58';
                 if (fechaEnt) {
                     const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
@@ -5774,16 +5773,10 @@
                     shipping.status === 'delivered' &&
                     esEntregaParaFecha(shipping, targetDate);
                 if (order._orderCancelled && !esReclamacion) return;
-                // REGLA ANTI-DOBLE-CONTEO:
-                // Un paquete pertenece al día en que se DESPACHÓ/escaneó (date_shipped).
-                // Si ya tiene date_shipped → cuenta SOLO en ese día, aunque ML le haya
-                // movido la fecha estimada de entrega a otro día.
-                // Si todavía NO se despachó → se ubica por su fecha estimada (pendiente de ese día).
-                const tieneDespacho = !!shipping.status_history?.date_shipped;
-                const relacionadoConFecha = tieneDespacho
-                    ? esDespachadoEnFecha(shipping, targetDate)
-                    : esEntregaParaFecha(shipping, targetDate);
-                if (relacionadoConFecha || esReclamacion) {
+                // Cada venta pertenece a su DÍA DE OBLIGACIÓN DE ENTREGA (fecha de
+                // compromiso de ML, estable). No importa la estimada que se mueve ni
+                // el despacho: si su fecha de obligación es este día, cuenta acá. Punto.
+                if (esEntregaParaFecha(shipping, targetDate) || esReclamacion) {
                     if (esReclamacion) shipping._orderCancelled = true;
                     tempOrders2.push({ order, shipping });
                 }
@@ -6250,7 +6243,7 @@
             const cols = [
                 'orden_id', 'envio_id', 'cuenta', 'estado', 'detalle_estado',
                 'shipping_status', 'shipping_substatus',
-                'fecha_entrega_estimada', 'fecha_creacion_orden',
+                'fecha_obligacion', 'fecha_entrega_estimada', 'fecha_despacho', 'fecha_creacion_orden',
                 'zona', 'calle', 'numero', 'barrio', 'ciudad', 'provincia', 'cp',
                 'link_venta'
             ];
@@ -6264,6 +6257,8 @@
                               || shipping.shipping_option?.estimated_delivery_final?.date
                               || '';
                 const fechaOrd = ord.date_created ? ord.date_created.split('T')[0] : '';
+                const dsRaw = shipping.status_history?.date_shipped || '';
+                const fechaDesp = dsRaw ? (_fechaSegura(dsRaw) ? `${_fechaSegura(dsRaw).getFullYear()}-${String(_fechaSegura(dsRaw).getMonth()+1).padStart(2,'0')}-${String(_fechaSegura(dsRaw).getDate()).padStart(2,'0')}` : dsRaw.split('T')[0]) : '';
                 const orderId = ord.id || '';
                 return [
                     orderId,
@@ -6273,7 +6268,9 @@
                     detalle,
                     shipping.status || '',
                     shipping.substatus || '',
+                    (_fechaPromesa(shipping) || '').split('T')[0],
                     fechaEnt ? fechaEnt.split('T')[0] : '',
+                    fechaDesp,
                     fechaOrd,
                     shipping._zona || '',
                     addr.street_name || '',
