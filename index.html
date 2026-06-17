@@ -3537,7 +3537,18 @@
                                   || item.shipping.shipping_option?.estimated_delivery_final?.date;
                 if (fechaEntItem) {
                     const entItem = new Date(fechaEntItem); entItem.setHours(0,0,0,0);
-                    if (entItem.getTime() === hoy.getTime()) return;   // hoy → aún en camino
+                    if (entItem.getTime() === hoy.getTime()) {
+                        // Estimado para HOY: el en-camino normal todavía está a tiempo → excluir.
+                        // PERO si es reprogramado / no-entregado / con problema, SÍ se muestra,
+                        // aunque ML lo siga marcando "shipped". Se detecta por SUBSTATUS.
+                        const sub = (item.shipping.substatus || '').toLowerCase();
+                        const esProblema = item.shipping.status === 'not_delivered' ||
+                            sub.includes('reschedul') || sub.includes('delay') ||
+                            sub.includes('absent') || sub.includes('returning') ||
+                            sub.includes('failed') || sub.includes('out_of_delivery_area') ||
+                            sub === 'stolen' || sub === 'lost' || sub === 'damaged';
+                        if (!esProblema) return;
+                    }
                     if (entItem.getTime() < desde.getTime()) return;   // más viejo que 7d → excluir
                 } else if (item.shipping._canceladaDevolver) {
                     // Canceladas sin fecha estimada (ML la borra): usar date_shipped como referencia
@@ -4116,15 +4127,20 @@
             const enCaminoCount     = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount - enDepositoCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
+            // Agrupamos por la fecha de DESPACHO (cuándo se escaneó/salió), no por la
+            // estimada de entrega — que ML reprograma. Así el paquete queda en el día
+            // real en que lo despachaste (consistente con la vista diaria).
+            const _pad2 = n => String(n).padStart(2, '0');
             const groups = new Map();
             todos.forEach(item => {
-                const fechaEnt = item.shipping.shipping_option?.estimated_delivery_time?.date
+                const fechaEnt = item.shipping.status_history?.date_shipped
+                               || item.shipping.shipping_option?.estimated_delivery_time?.date
                                || item.shipping.shipping_option?.estimated_delivery_final?.date;
                 let gKey = 'sin-fecha', gLabel = 'Sin fecha', gAtraso = '', gColor = '#484f58';
                 if (fechaEnt) {
                     const entrega = new Date(fechaEnt); entrega.setHours(0,0,0,0);
                     const diffDias = Math.round((hoy - entrega) / 86400000);
-                    gKey = fechaEnt.split('T')[0];
+                    gKey = `${entrega.getFullYear()}-${_pad2(entrega.getMonth()+1)}-${_pad2(entrega.getDate())}`;
                     gLabel = `${diasN[entrega.getDay()]} ${entrega.getDate()}/${entrega.getMonth()+1}`;
                     if (diffDias > 0) {
                         gAtraso = `hace ${diffDias}d`;
@@ -5758,11 +5774,15 @@
                     shipping.status === 'delivered' &&
                     esEntregaParaFecha(shipping, targetDate);
                 if (order._orderCancelled && !esReclamacion) return;
-                // Pertenece a ESTE día si su entrega estimada O su despacho (date_shipped) caen
-                // en la fecha. Así contamos exactamente lo escaneado ese día, sin arrastrar
-                // not_delivered/cancelled viejos de la ventana ampliada de creación.
-                const relacionadoConFecha = esEntregaParaFecha(shipping, targetDate) ||
-                                            esDespachadoEnFecha(shipping, targetDate);
+                // REGLA ANTI-DOBLE-CONTEO:
+                // Un paquete pertenece al día en que se DESPACHÓ/escaneó (date_shipped).
+                // Si ya tiene date_shipped → cuenta SOLO en ese día, aunque ML le haya
+                // movido la fecha estimada de entrega a otro día.
+                // Si todavía NO se despachó → se ubica por su fecha estimada (pendiente de ese día).
+                const tieneDespacho = !!shipping.status_history?.date_shipped;
+                const relacionadoConFecha = tieneDespacho
+                    ? esDespachadoEnFecha(shipping, targetDate)
+                    : esEntregaParaFecha(shipping, targetDate);
                 if (relacionadoConFecha || esReclamacion) {
                     if (esReclamacion) shipping._orderCancelled = true;
                     tempOrders2.push({ order, shipping });
@@ -5861,11 +5881,23 @@
                     <div><div>Compartir resumen del día</div><div style="font-size:11px;color:#8b949e;">Cargá el día primero</div></div>
                 </button>`;
             }
-            if (hayOrders) {
-                html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();exportarCSV();">
+            // Exportar CSV — se adapta a la vista actual (7 días o día)
+            const _enNE = window._vistaActual === 'ne';
+            const _puedeExportar = _enNE ? ((window._neTodos || []).length > 0) : hayOrders;
+            if (_puedeExportar) {
+                const _expLbl = _enNE ? 'Exportar CSV (7 días)' : 'Exportar CSV de ventas';
+                const _expSub = _enNE ? 'A devolver + sin entregar + depósito' : 'Descarga el listado del día';
+                html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();exportarInteligente();">
                     <span style="font-size:20px;">⬇️</span>
-                    <div><div>Exportar CSV de ventas</div><div style="font-size:11px;color:#8b949e;">Descarga el listado del día</div></div>
+                    <div><div>${_expLbl}</div><div style="font-size:11px;color:#8b949e;">${_expSub}</div></div>
                 </button>`;
+            } else {
+                html += `<button class="ne-drawer-btn" style="opacity:.45;cursor:default;">
+                    <span style="font-size:20px;">⬇️</span>
+                    <div><div>Exportar CSV</div><div style="font-size:11px;color:#8b949e;">Cargá el día o los 7 días primero</div></div>
+                </button>`;
+            }
+            if (hayOrders) {
                 // Filtro de cuenta (visible dentro del mismo drawer)
                 const allC  = allFlexOrders?.length || 0;
                 const mikC  = allFlexOrders?.filter(o=>o.cuentaNombre==='Mikra').length || 0;
@@ -5879,11 +5911,6 @@
                         <button onclick="filtrarPorCuenta('Chaya')" style="flex:1;background:#21262d;border:1.5px solid #30363d;color:#e6edf3;border-radius:10px;padding:9px 6px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">🟠 Chaya (${chaC})</button>
                     </div>
                 </div>`;
-            } else {
-                html += `<button class="ne-drawer-btn" style="opacity:.45;cursor:default;">
-                    <span style="font-size:20px;">⬇️</span>
-                    <div><div>Exportar CSV de ventas</div><div style="font-size:11px;color:#8b949e;">Cargá el día primero</div></div>
-                </button>`;
             }
 
             // ── Sección: 7 días / NE ──────────────────────────────────────────
@@ -6270,6 +6297,59 @@
             a.download = `flex_${fecha}_${allFlexOrders.length}ordenes.csv`;
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // Exportar según la vista actual: en 7 días → 7 días; en el día → ventas del día.
+        function exportarInteligente() {
+            if (window._vistaActual === 'ne') exportarCSVNoEntregados();
+            else exportarCSV();
+        }
+
+        // ── Exportar CSV de la vista "últimos 7 días" (sin entregar / a devolver) ──
+        function exportarCSVNoEntregados() {
+            const items = window._neTodos || [];
+            if (!items.length) { alert('No hay paquetes cargados. Abrí "7 días" primero.'); return; }
+            const arch = (typeof _getArchivados === 'function') ? _getArchivados() : new Set();
+            const hoyX = new Date(); hoyX.setHours(0,0,0,0);
+            const cols = ['reclamo_id','estado','tipo','envio_id','orden_id','cuenta','dias_atraso',
+                          'fecha_entrega_estimada','fecha_despacho','zona','calle','numero','ciudad','provincia','cp','valor','link_etiqueta','link_venta'];
+            const rows = items
+                .filter(t => {
+                    const e = window._reclamosMap?.get(String(t.shipping.id))?.estado;
+                    return e !== 'archivado' && e !== 'entregado' && !arch.has(String(t.shipping.id));
+                })
+                .map(({ shipping, order, cuentaNombre }) => {
+                    const rec  = window._reclamosMap?.get(String(shipping.id));
+                    const addr = shipping.receiver_address || {};
+                    const fEnt = shipping.shipping_option?.estimated_delivery_time?.date
+                              || shipping.shipping_option?.estimated_delivery_final?.date || '';
+                    const fDesp = shipping.status_history?.date_shipped || '';
+                    let atraso = '';
+                    if (fEnt) { const e = new Date(fEnt); e.setHours(0,0,0,0); const d = Math.round((hoyX - e)/86400000); atraso = d > 0 ? d : 0; }
+                    const tipo = shipping._canceladaDevolver ? 'a_devolver'
+                               : (rec?.estado === 'en_deposito' ? 'en_deposito' : 'sin_entregar');
+                    const orderId = order?.id || '';
+                    return [
+                        rec?.id || '', rec?.estado || 'pendiente', tipo,
+                        shipping.id || '', orderId, cuentaNombre || '', atraso,
+                        fEnt ? fEnt.split('T')[0] : '', fDesp ? fDesp.split('T')[0] : '',
+                        shipping._zonaForce || shipping._zona || '',
+                        addr.street_name || '', addr.street_number || '', addr.city?.name || '', addr.state?.name || '', addr.zip_code || '',
+                        Math.round(order?.total_amount || 0),
+                        `https://etiquetas-proxy.rafaelassir.workers.dev/?id=${shipping.id}&view=1`,
+                        orderId ? `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle` : ''
+                    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+                });
+            if (!rows.length) { alert('No hay paquetes sin resolver para exportar.'); return; }
+            const csv = '﻿' + cols.join(',') + '\n' + rows.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `flex_7dias_${new Date().toISOString().split('T')[0]}_${rows.length}paquetes.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            _showNEToast(`⬇️ ${rows.length} paquetes exportados`);
         }
 
         function toggleVista() {
