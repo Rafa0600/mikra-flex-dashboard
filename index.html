@@ -6859,7 +6859,7 @@
                     `<div class="geo-chip caba${activeCaba}" onclick="filtrarPorGeo('caba')"><span class="geo-num">${geoCaba}</span>CABA</div>` +
                     `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProv}</span>PROV</div>`;
                 // Guardar datos para compartir
-                window._geoShare = { geoCaba, geoProv, geoProvSinLej, geoLej, date: currentNavDate || new Date() };
+                window._geoShare = { geoCaba, geoProv, date: currentNavDate || new Date() };
                 if (btnCompartir) { btnCompartir.classList.remove('hidden'); btnCompartir.setAttribute('data-visible','1'); }
             } else {
                 geoEl.innerHTML = '';
