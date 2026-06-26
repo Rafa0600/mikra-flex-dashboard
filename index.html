@@ -3082,7 +3082,7 @@
         // Evita re-consultar al Worker shipments ya entregados. Gran ahorro de
         // queries en el refresco en segundo plano y al revisitar días.
         const _SHIP_CACHE_KEY = 'flex_ship_v1';
-        const _SHIP_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 h
+        const _SHIP_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 h (entregados no cambian)
         let _shipCacheMem = null;
         function _getShipCache() {
             if (_shipCacheMem) return _shipCacheMem;
@@ -3113,7 +3113,7 @@
                 shipping_option: s.shipping_option, receiver_address: s.receiver_address,
             }));
             try {
-                const arr = [...c].slice(-3000); // cap para no inflar localStorage
+                const arr = [...c].slice(-6000); // cap para cubrir toda la ventana sin inflar localStorage
                 _shipCacheMem = new Map(arr);
                 localStorage.setItem(_SHIP_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: arr }));
             } catch {}
@@ -5658,7 +5658,7 @@
             // y usamos el endpoint /shipments?ids=id1,id2,... (una sola request = 20 shipments)
             // 80 órdenes → 4 requests en lugar de 80. ~20x menos llamadas.
             const BATCH_SIZE = 20;
-            const BATCH_CONC = 4; // 4×20=80 requests simultáneas a ML → sin rate limit
+            const BATCH_CONC = 5; // 5×20=100 envíos en paralelo (más rápido, sin pasar rate limit)
 
             async function fetchShipmentBatch(ids) {
                 const opts = { headers: { 'Authorization': `Bearer ${token}` } };
@@ -6853,14 +6853,11 @@
                     else geoProv++;
                     if (shipping._lejana) geoLej++;
                 });
-                const activeCaba = currentZoneFilter === 'CABA'        ? ' geo-active' : '';
-                const activeProv = currentZoneFilter === '__PROV__'    ? ' geo-active' : '';
-                const activeLej  = currentZoneFilter === '__LEJANAS__' ? ' geo-active' : '';
-                const geoProvSinLej = geoProv - geoLej;
+                const activeCaba = currentZoneFilter === 'CABA'     ? ' geo-active' : '';
+                const activeProv = currentZoneFilter === '__PROV__' ? ' geo-active' : '';
                 geoEl.innerHTML =
                     `<div class="geo-chip caba${activeCaba}" onclick="filtrarPorGeo('caba')"><span class="geo-num">${geoCaba}</span>CABA</div>` +
-                    `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProvSinLej}</span>PROV</div>` +
-                    `<div class="geo-chip lej${activeLej}"  onclick="filtrarPorGeo('lej')"><span class="geo-num">${geoLej}</span>LEJ</div>`;
+                    `<div class="geo-chip prov${activeProv}" onclick="filtrarPorGeo('prov')"><span class="geo-num">${geoProv}</span>PROV</div>`;
                 // Guardar datos para compartir
                 window._geoShare = { geoCaba, geoProv, geoProvSinLej, geoLej, date: currentNavDate || new Date() };
                 if (btnCompartir) { btnCompartir.classList.remove('hidden'); btnCompartir.setAttribute('data-visible','1'); }
@@ -6883,8 +6880,7 @@
             const texto =
                 `${diaNombre} ${diaN} ${mesNombre}\n\n` +
                 `${d.geoCaba} CABA\n` +
-                `${d.geoProvSinLej} Provincia\n` +
-                `${d.geoLej} Lejanos\n\n` +
+                `${d.geoProv} Provincia\n\n` +
                 `Total ${total}`;
             const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
             window.open(url, '_blank');
