@@ -3018,9 +3018,39 @@
                 const d = new Date(str); d.setHours(0,0,0,0);
                 return !isNaN(d) && d.getTime() === targetDate.getTime();
             }
-            // Check 1: fecha de promesa original (shipping_option — estable)
+            // Check 0 — DÍA DE DESPACHO (la regla que define el "Flex del día", igual que
+            // la hoja de etiquetas / el PDF): si el paquete YA se despachó (tiene
+            // date_shipped), pertenece EXACTAMENTE al día en que se despachó. No importa la
+            // promesa de entrega de ML, que se infla varios días cuando cambian el horario de
+            // corte de Flex; ni si después se entregó, falló o se reprogramó: el día operativo
+            // es el del scan de salida. date_shipped es un único día → cada paquete cuenta en
+            // UN solo día, sin duplicar. Como es autoritativo, si el despacho fue OTRO día,
+            // corta acá (no cae a la promesa inflada). Los que TODAVÍA no se despacharon
+            // (ready_to_ship/printed, sin date_shipped) caen a la lógica de promesa de abajo.
+            const _dShip = shipping?.status_history?.date_shipped;
+            if (_dShip) {
+                const _d = new Date(_dShip); _d.setHours(0,0,0,0);
+                return !isNaN(_d) && _d.getTime() === targetDate.getTime();
+            }
+            // Check 1: día de entrega comprometido (shipping_option).
+            // IMPORTANTE: priorizamos 'estimated_delivery_time' — el día REAL de entrega
+            // que ML muestra y que usa TODO el resto del dashboard (display/orden/conteo).
+            // 'estimated_delivery_limit' se usa solo como respaldo cuando no hay 'time',
+            // porque ese campo se DESFASA de día cuando ML cambia el horario de corte de
+            // Flex: ahí el límite salta a otro día mientras la entrega real sigue siendo
+            // hoy. Antes se priorizaba el límite y en esos días sacaba casi todos los
+            // envíos (quedaba 1 solo). En días normales los dos campos coinciden, así que
+            // esto no cambia nada; en el día del cambio de corte, los recupera.
+            const so = shipping?.shipping_option || {};
+            const soTime = so.estimated_delivery_time?.date;
+            if (soTime) {
+                if (_matchDate(soTime)) return true;
+            } else if (_matchDate(so.estimated_delivery_limit?.date) ||
+                       _matchDate(so.estimated_delivery_final?.date)) {
+                return true;
+            }
+            // fechaPromesa (día de obligación estable) — se usa abajo para el gap de checks 3-4.
             const fechaPromesa = _fechaPromesa(shipping);
-            if (_matchDate(fechaPromesa)) return true;
             // Check 2: estimated_delivery_time raíz (ML lo actualiza en reprogramaciones)
             const edt = shipping?.estimated_delivery_time;
             if (edt) {
@@ -3741,33 +3771,40 @@
 
             const _cardRec = (rec, tipo) => {
                 const isDeposito  = tipo === 'deposito';
-                const cardClass   = isDeposito ? 'ne-mini-card ne-mini-deposito' : 'ne-mini-card ne-mini-cancelada';
-                const iconTxt     = isDeposito ? '📦' : '⚠️';
                 const iconCol     = isDeposito ? '#ffa040' : '#f85149';
                 const isDesc      = rec.estado === 'descontado' || rec.estado === 'en_deposito';
                 const sid         = rec.shippingId;
                 const cuentaColor = rec.cuenta === 'Mikra' ? '#9C27B0' : '#FF6B00';
-                const cuentaDot   = rec.cuenta ? `<span style="background:${cuentaColor};color:white;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;">${rec.cuenta}</span>` : '';
                 const recId       = rec.id ? `<span style="background:${isDeposito?'#2a1e00':'#1f3a1f'};color:${isDeposito?'#ffa040':'#3fb950'};padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;">${rec.id}</span>` : '';
                 const valTxt      = rec.valor > 0
                     ? `<span style="color:${iconCol};font-size:11px;font-weight:800;white-space:nowrap;${isDesc?'text-decoration:line-through;opacity:.5;':''}">$${Math.round(rec.valor).toLocaleString('es-AR')}${isDesc?' ✅':''}</span>`
                     : '';
+                // Badge de estado visible en el card face sin tener que abrir
+                const estadoBadge = isDeposito
+                    ? `<span style="background:#2a1e00;color:#ffa040;padding:1px 7px;border-radius:5px;font-size:9px;font-weight:700;white-space:nowrap;">Listo para recibir</span>`
+                    : rec.estado === 'descontado'
+                    ? `<span style="background:#0d1f33;color:#58a6ff;padding:1px 7px;border-radius:5px;font-size:9px;font-weight:700;white-space:nowrap;">Descontado — falta traerlo</span>`
+                    : `<span style="background:#1e1a00;color:#e3b341;padding:1px 7px;border-radius:5px;font-size:9px;font-weight:700;white-space:nowrap;">Pendiente de descontar</span>`;
+                // Botones contextuales: el paso más lógico primero, resto secundario
                 const btns = isDeposito
-                    ? `<button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>
-                       <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1px solid #484f58;">🗃️</button>`
-                    : `<button onclick="event.stopPropagation();window._marcarEnDeposito('${sid}',event)" style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;">📦 Depósito</button>
-                       <button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;">✅ Descontado</button>
-                       <button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;">📥 Recibido</button>`;
+                    ? `<button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;flex:1;font-size:14px;font-weight:800;padding:13px 8px;">📥 Recibir en sede</button>
+                       <button onclick="event.stopPropagation();window._archivarPaquete('${sid}',event)" style="background:#1a1a1a;color:#8b949e;border:1px solid #484f58;padding:13px 14px;" title="Archivar">🗃️</button>`
+                    : rec.estado === 'descontado'
+                    ? `<button onclick="event.stopPropagation();window._marcarEnDeposito('${sid}',event)" style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;flex:1;font-size:14px;font-weight:800;padding:13px 8px;">📦 Ya lo tienen</button>
+                       <button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:13px 14px;" title="Recibir directo">📥</button>`
+                    : `<button onclick="event.stopPropagation();window._marcarDescontado('${sid}',event)" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;flex:1;font-size:14px;font-weight:800;padding:13px 8px;">✂️ Descontar</button>
+                       <button onclick="event.stopPropagation();window._marcarEnDeposito('${sid}',event)" style="background:#1e1800;color:#ffa040;border:1.5px solid #ffa040;padding:13px 12px;" title="Marcar en depósito">📦</button>
+                       <button onclick="event.stopPropagation();_recibirManual('${sid}','${rec.cuenta}',event)" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:13px 12px;" title="Recibir directo">📥</button>`;
                 const cuentaDetQ = rec.cuenta ? `<span style="background:${cuentaColor};color:white;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;">${rec.cuenta}</span>` : '';
-                return `<div class="${cardClass}" data-sid="${sid}" style="border-left-color:${iconCol};" onclick="window._neToggleCard('${sid}')">
+                return `<div class="ne-mini-card ${isDeposito?'ne-mini-deposito':'ne-mini-cancelada'}" data-sid="${sid}" style="border-left-color:${iconCol};" onclick="window._neToggleCard('${sid}')">
                     <div class="ne-mini-row">
-                        <span class="ne-mini-ic" style="color:${iconCol};">${iconTxt}</span>
+                        <span class="ne-mini-ic" style="color:${iconCol};">${isDeposito?'📦':'⚠️'}</span>
                         <span class="ne-mini-zona" style="color:${isDeposito?'#ffb347':'#ff8a80'};">${rec.zona || '—'}</span>
                         <span class="ne-mini-chev" id="nechev-${sid}">›</span>
                     </div>
                     <div class="ne-mini-sub">
                         <span class="ne-mini-acc-dot" style="background:${cuentaColor};"></span>
-                        ${recId}${valTxt}
+                        ${recId}${valTxt}${estadoBadge}
                     </div>
                     <div class="ne-mini-det" id="nedet-${sid}" style="display:none;">
                         <div class="ne-mini-buy">${cuentaDetQ}${rec.comprador ? ` <span>👤 ${rec.comprador}</span>` : ''}</div>
@@ -4743,9 +4780,153 @@
                             if (token !== window._buscadorToken) return;
                             (d?.records || []).forEach(r => mapa.set(String(r.shippingId), r));
                             if (mapa.size) _renderResultadosReclamos([...mapa.values()]);
-                            else cont.innerHTML = '<p style="color:#8b949e;text-align:center;margin-top:30px;">Sin resultados</p>';
+                            else cont.innerHTML = _sinResultadosHTML(trim);
                         })
                         .catch(() => { if (token === window._buscadorToken && !mapa.size) cont.innerHTML = '<p style="color:#f85149;text-align:center;margin-top:30px;">Error de conexión</p>'; });
+                };
+
+                // Estado "sin resultados": si lo buscado es un N° completo, ofrecer
+                // traerlo de ML y registrarlo (cubre ventas viejas que se escaparon de los 7 días).
+                function _sinResultadosHTML(q) {
+                    const num = String(q || '').replace(/\D/g, '');
+                    const btn = num.length >= 10
+                        ? `<button onclick="window._buscarYRegistrarML('${num}')" style="margin-top:16px;background:#3b1010;color:#ff7a7a;border:1.5px solid #7b1a1a;padding:13px 20px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">🔎 Buscar ${num} en Mercado Libre y asignar caso</button>`
+                        : '<div style="color:#484f58;font-size:12px;margin-top:8px;">Para registrar uno nuevo, pegá el N° de venta o de envío completo.</div>';
+                    return `<div style="text-align:center;margin-top:30px;display:flex;flex-direction:column;align-items:center;">
+                        <p style="color:#8b949e;">Sin resultados en tus casos</p>${btn}</div>`;
+                }
+
+                // Clasifica un envío de ML: 'driver_devolver' | 'demorado' | null
+                function _clasificarDevolver(shipping) {
+                    if (!shipping || shipping.logistic_type !== 'self_service') return null;
+                    const sh = shipping.status_history || {};
+                    if (!sh.date_shipped || sh.date_delivered) return null;  // nunca salió, o ya se entregó
+                    if (shipping.status === 'cancelled') return 'driver_devolver';
+                    if (shipping.status === 'shipped' || shipping.status === 'not_delivered') return 'demorado';
+                    return null;
+                }
+
+                // Texto legible de por qué un envío NO es "a devolver"
+                function _estadoEnvioLegible(shipping) {
+                    const s = shipping.status, sh = shipping.status_history || {};
+                    if (s === 'delivered' || sh.date_delivered) return 'ya fue entregado';
+                    if (shipping.logistic_type !== 'self_service') return 'no es un envío Flex';
+                    if (s === 'cancelled' && !sh.date_shipped) return 'se canceló antes de despacharse (el repartidor nunca lo tuvo)';
+                    if (s === 'pending' || s === 'ready_to_ship') return 'todavía no salió a la calle';
+                    return `está en estado "${s}"`;
+                }
+
+                // Trae un envío de ML aceptando N° de ENVÍO o N° de VENTA (orden)
+                async function _fetchEnvioML(num) {
+                    const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c).catch(() => null)));
+                    const _completar = async (shipping, cuenta, token) => {
+                        let order = {};
+                        if (shipping.order_id) {
+                            try {
+                                const ro = await fetch(`${cuenta.proxy}/api/orders/${shipping.order_id}`, { headers: { Authorization: `Bearer ${token}` } });
+                                if (ro.ok) order = await ro.json();
+                            } catch (e) {}
+                        }
+                        return { shipping, order, cuentaNombre: cuenta.nombre, cuenta };
+                    };
+                    // 1) Probar como N° de ENVÍO
+                    for (let i = 0; i < CUENTAS.length; i++) {
+                        if (!tokens[i]) continue;
+                        try {
+                            const r = await fetch(`${CUENTAS[i].proxy}/api/shipments/${num}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                            if (r.ok) { const d = await r.json(); if (d && d.id) return await _completar(d, CUENTAS[i], tokens[i]); }
+                        } catch (e) {}
+                    }
+                    // 2) Probar como N° de VENTA (orden) → sacar el shipping.id
+                    for (let i = 0; i < CUENTAS.length; i++) {
+                        if (!tokens[i]) continue;
+                        try {
+                            const ro = await fetch(`${CUENTAS[i].proxy}/api/orders/${num}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                            if (ro.ok) {
+                                const o = await ro.json();
+                                const shipId = o?.shipping?.id;
+                                if (shipId) {
+                                    const rs = await fetch(`${CUENTAS[i].proxy}/api/shipments/${shipId}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                                    if (rs.ok) { const d = await rs.json(); if (d && d.id) return { shipping: d, order: o, cuentaNombre: CUENTAS[i].nombre, cuenta: CUENTAS[i] }; }
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                    return null;
+                }
+
+                // Registra el caso en el Sheet (asigna #ID imborrable)
+                async function _registrarReclamoManual(item, tipo) {
+                    const sid  = String(item.shipping.id);
+                    const addr = item.shipping.receiver_address || {};
+                    const zona = item.shipping._zona || (typeof getZonaDetallada === 'function'
+                        ? getZonaDetallada(addr.neighborhood?.name || '', addr.city?.name || '', addr.zip_code || '')
+                        : (addr.city?.name || ''));
+                    const fechaEnt = item.shipping.shipping_option?.estimated_delivery_limit?.date
+                                  || item.shipping.shipping_option?.estimated_delivery_time?.date || '';
+                    return _gasReclamo({
+                        action: 'add_reclamo',
+                        shippingId: sid,
+                        fechaEstimada: fechaEnt ? new Date(fechaEnt).toISOString().split('T')[0] : '',
+                        orderId: String(item.order?.id || item.shipping.order_id || ''),
+                        comprador: item.order?.buyer?.nickname || addr.receiver_name || '',
+                        zona,
+                        cuenta: item.cuentaNombre || '',
+                        tipo,
+                        valor: Math.round(item.order?.total_amount || 0),
+                        notas: tipo === 'driver_devolver' ? 'Registrado manual (fuera de 7 días)' : 'Registrado manual',
+                    });
+                }
+
+                // Acción del botón: traer de ML + clasificar + asignar caso si corresponde
+                window._buscarYRegistrarML = async function(numero) {
+                    const cont = document.getElementById('resultadosBuscador');
+                    const num  = String(numero || '').replace(/\D/g, '');
+                    if (num.length < 10) { _showNEToast('Pegá el N° de venta o de envío completo'); return; }
+                    if (cont) cont.innerHTML = '<p style="color:#58a6ff;text-align:center;margin-top:30px;">🔍 Buscando en Mercado Libre…</p>';
+
+                    const item = await _fetchEnvioML(num);
+                    if (!item || !item.shipping) {
+                        if (cont) cont.innerHTML = `<p style="color:#f85149;text-align:center;margin-top:30px;">❌ No encontré el envío/venta ${num}<br><span style="color:#8b949e;font-size:12px;">Verificá el número.</span></p>`;
+                        return;
+                    }
+                    const sid = String(item.shipping.id);
+
+                    // ¿Ya tiene caso? (memoria + Sheet)
+                    let rec = window._reclamosMap?.get(sid);
+                    if (!rec) {
+                        const d = await _gasReclamo({ action: 'search_reclamos', q: sid }).catch(() => null);
+                        rec = d?.records?.find(r => String(r.shippingId) === sid);
+                        if (rec) { (window._reclamosMap = window._reclamosMap || new Map()).set(sid, rec); }
+                    }
+                    if (rec) {
+                        _showNEToast(`Ya tenía caso ${rec.id}`);
+                        window._buscarReclamos(sid);
+                        return;
+                    }
+
+                    const tipo = _clasificarDevolver(item.shipping);
+                    if (!tipo) {
+                        const est = _estadoEnvioLegible(item.shipping);
+                        if (cont) cont.innerHTML = `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;text-align:center;max-width:420px;margin:20px auto 0;">
+                            <div style="color:#e6edf3;font-size:14px;font-weight:700;margin-bottom:6px;">${item.shipping.receiver_address?.receiver_name || '—'} · ${item.shipping.receiver_address?.city?.name || ''}</div>
+                            <div style="color:#8b949e;font-size:13px;margin-bottom:10px;">Este envío <b style="color:#e3b341;">${est}</b>.<br>No corresponde a "a devolver", así que no le asigno caso.</div>
+                            <div style="color:#484f58;font-size:11px;font-family:monospace;">#${sid} · ${item.cuentaNombre}</div>
+                        </div>`;
+                        return;
+                    }
+
+                    if (cont) cont.innerHTML = '<p style="color:#58a6ff;text-align:center;margin-top:30px;">📝 Asignando número de caso…</p>';
+                    const data = await _registrarReclamoManual(item, tipo);
+                    if (data?.ok && data?.record) {
+                        (window._reclamosMap = window._reclamosMap || new Map()).set(sid, data.record);
+                        _saveReclamosCache(window._reclamosMap);
+                        const valTxt = data.record.valor > 0 ? ` · $${Math.round(data.record.valor).toLocaleString('es-AR')}` : '';
+                        _showNEToast(`✅ Caso ${data.record.id} asignado${valTxt}`);
+                        window._buscarReclamos(sid);
+                    } else {
+                        if (cont) cont.innerHTML = '<p style="color:#f85149;text-align:center;margin-top:30px;">⚠️ No se pudo registrar el caso. Reintentá.</p>';
+                    }
                 };
 
                 function _renderResultadosReclamos(records) {
@@ -5928,10 +6109,25 @@
             const _noFlex = ordersConShipping.filter(o => { const s = shippingMap.get(o.shipping.id); return s && s.logistic_type !== 'self_service'; }).length;
             _diagLog(`[${cuenta.nombre}] filtro: ${ordersConShipping.length} órdenes · sin ship:${_noShip} · no-flex:${_noFlex}`);
             const tempOrders2 = [];
+            let _flexTotal = 0, _exclFlex = 0; const _exclSample = [];
+            // Contadores de ANCLAJE: cuántos flex (no cancelados) matchean el día objetivo por
+            // cada criterio posible. Sirve para saber cuál coincide con el conteo del PDF.
+            let _byShipped = 0, _byCreated = 0, _byPromise = 0, _byDeliv = 0;
+            const _dayEqTgt = (str) => { if (!str) return false; const d = new Date(str); d.setHours(0,0,0,0); return !isNaN(d) && d.getTime() === targetDate.getTime(); };
+            _diagLog(`[${cuenta.nombre}] targetDate=${targetDateStr} (ts=${targetDate.getTime()})`);
             ordersConShipping.forEach(order => {
                 const shipping = shippingMap.get(order.shipping.id);
                 if (!shipping) return;
                 if (shipping.logistic_type !== 'self_service') return;
+                _flexTotal++;
+                if (!order._orderCancelled) {
+                    const _sh = shipping.status_history || {};
+                    const _so = shipping.shipping_option || {};
+                    if (_dayEqTgt(_sh.date_shipped)) _byShipped++;
+                    if (_dayEqTgt(order.date_created)) _byCreated++;
+                    if (_dayEqTgt(_so.estimated_delivery_time?.date)) _byPromise++;
+                    if (_dayEqTgt(_sh.date_delivered)) _byDeliv++;
+                }
                 // Si vino de filterCancelled (orden cancelada), solo incluir si es reclamación genuina:
                 // envío realmente entregado Y fecha estimada coincide con targetDate.
                 const esReclamacion = order._orderCancelled &&
@@ -5944,8 +6140,29 @@
                 if (esEntregaParaFecha(shipping, targetDate) || esReclamacion) {
                     if (esReclamacion) shipping._orderCancelled = true;
                     tempOrders2.push({ order, shipping });
+                } else if (!order._orderCancelled) {
+                    // Diagnóstico: envío flex que quedó FUERA del día. Volcamos TODOS los
+                    // campos de fecha relevantes para ver exactamente qué se desfasó.
+                    _exclFlex++;
+                    if (_exclSample.length < 6) {
+                        const so = shipping.shipping_option || {};
+                        const edtRoot = shipping.estimated_delivery_time;
+                        const h = shipping.status_history || {};
+                        _exclSample.push(
+                            `#${shipping.id} st=${shipping.status}/${shipping.substatus||''}` +
+                            ` so.time=${so.estimated_delivery_time?.date||'∅'}` +
+                            ` so.limit=${so.estimated_delivery_limit?.date||'∅'}` +
+                            ` so.final=${so.estimated_delivery_final?.date||'∅'}` +
+                            ` rootEDT=${(edtRoot && (edtRoot.date||edtRoot))||'∅'}` +
+                            ` shipped=${h.date_shipped||'∅'} deliv=${h.date_delivered||'∅'} ndeliv=${h.date_not_delivered||'∅'}`
+                        );
+                    }
                 }
             });
+            // Diagnóstico (queda en el panel escondido "Más → 🔍 Diagnóstico de carga").
+            _diagLog(`[${cuenta.nombre}] flex=${_flexTotal} · incluidos=${tempOrders2.length} · EXCLUIDOS=${_exclFlex}`);
+            _diagLog(`[${cuenta.nombre}] ANCLAJE match ${targetDateStr}: despacho=${_byShipped} · venta=${_byCreated} · promesa=${_byPromise} · entrega=${_byDeliv}`);
+            _exclSample.forEach(s => _diagLog(`  ✗ ${s}`));
             tempOrders = tempOrders2;
 
             // Guardar/actualizar índice de fecha para warm start en cargas futuras.
@@ -6036,28 +6253,28 @@
 
             let html = '';
 
-            // ── Sección: recibir ──────────────────────────────────────────────
-            html += `<div style="font-size:11px;color:#8b949e;font-weight:600;letter-spacing:.5px;margin-bottom:8px;">RECIBIR PAQUETES</div>`;
+            // ── Sección: devoluciones ─────────────────────────────────────────
+            html += `<div style="font-size:11px;color:#8b949e;font-weight:600;letter-spacing:.5px;margin-bottom:8px;">DEVOLUCIONES</div>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer(); if(window._abrirBuscadorReclamos){window._abrirBuscadorReclamos();}else{cargarNoEntregados();setTimeout(()=>window._abrirBuscadorReclamos&&window._abrirBuscadorReclamos(),1500);}">
+                <span style="font-size:20px;">🔎</span>
+                <div><div>Buscar venta / asignar caso</div><div style="font-size:11px;color:#8b949e;">Pegá el N° de venta o envío y registralo</div></div>
+            </button>`;
             html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();abrirEscaner();">
                 <span style="font-size:20px;">📷</span>
-                <div><div>Escanear QR para recibir</div><div style="font-size:11px;color:#8b949e;">Marcá un paquete como recibido</div></div>
-            </button>`;
-            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verRecibidos();">
-                <span style="font-size:20px;">📋</span>
-                <div><div>Ver últimos recibidos</div><div style="font-size:11px;color:#8b949e;">Historial desde Google Sheets</div></div>
+                <div><div>Escanear QR para recibir</div><div style="font-size:11px;color:#8b949e;">Marcá un paquete como recibido en sede</div></div>
             </button>`;
             html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verUltimosCambios();">
-                <span style="font-size:20px;">🕐</span>
-                <div><div>Últimos cambios</div><div style="font-size:11px;color:#8b949e;">Entregados, recibidos, descontados — ordenable</div></div>
+                <span style="font-size:20px;">📋</span>
+                <div><div>Historial de reclamos</div><div style="font-size:11px;color:#8b949e;">Recibidos, descontados, entregados</div></div>
             </button>`;
-            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verArchivados();">
-                <span style="font-size:20px;">🗃️</span>
-                <div><div>Ver archivados</div><div style="font-size:11px;color:#8b949e;">Restaurar paquetes archivados</div></div>
-            </button>`;
-            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();_mostrarDiagnostico();" style="opacity:.7;">
-                <span style="font-size:20px;">🔍</span>
-                <div><div>Diagnóstico de carga</div><div style="font-size:11px;color:#8b949e;">Ver tiempos y errores de última carga</div></div>
-            </button>`;
+            html += `<div style="display:flex;gap:8px;margin:4px 0 8px;">
+                <button onclick="cerrarMasDrawer();verArchivados();" style="flex:1;background:#161b22;border:1px solid #21262d;color:#6e7681;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;gap:7px;align-items:center;touch-action:manipulation;">
+                    🗃️ <span>Archivados</span>
+                </button>
+                <button onclick="cerrarMasDrawer();_mostrarDiagnostico();" style="flex:1;background:#161b22;border:1px solid #21262d;color:#6e7681;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;gap:7px;align-items:center;touch-action:manipulation;">
+                    🔍 <span>Diagnóstico</span>
+                </button>
+            </div>`;
 
             // ── Sección: vista de hoy (si está cargada) ───────────────────────
             html += `<div style="font-size:11px;color:#8b949e;font-weight:600;letter-spacing:.5px;margin:14px 0 8px;">VISTA DE HOY</div>`;
