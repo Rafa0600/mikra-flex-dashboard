@@ -5929,21 +5929,25 @@
                 const esWarm = fbCached.length > 0;
 
                 let filterB, filterBmax;
+                // filterB solo pide ENTREGADAS de días anteriores (reprogramadas que se
+                // entregaron hoy). Los ACTIVOS ya los garantiza al 100% el barrido por
+                // shipping.status, así que no hace falta bajar todas las pagas (mucho más liviano:
+                // Mikra pasa de ~40 págs a ~12).
                 if (esWarm) {
                     const reprogShort = new Date(targetDate); reprogShort.setDate(reprogShort.getDate() - 3);
-                    filterB = `&order.date_created.from=${encodeURIComponent(reprogShort.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(reprogToStr)}&order.status=paid`;
-                    filterBmax = 5;
-                    _diagLog(`[${cuenta.nombre}] FB warm: ${fbCached.length} en caché + filterB 3d (máx ${filterBmax} págs)`);
+                    filterB = `&order.date_created.from=${encodeURIComponent(reprogShort.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(reprogToStr)}&shipping.status=delivered`;
+                    filterBmax = 15;
+                    _diagLog(`[${cuenta.nombre}] FB warm: ${fbCached.length} caché + filterB entregadas 3d (máx ${filterBmax}p)`);
                 } else {
-                    const reprogFrom = calcularDateFrom(targetDate);
-                    filterB = `&order.date_created.from=${encodeURIComponent(reprogFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(reprogToStr)}&order.status=paid`;
-                    filterBmax = isBackground ? 4 : 50;
-                    _diagLog(`[${cuenta.nombre}] FB cold: sin caché, filterB completo (máx ${filterBmax} págs)`);
+                    const reprogFrom = new Date(targetDate); reprogFrom.setDate(reprogFrom.getDate() - 5);
+                    filterB = `&order.date_created.from=${encodeURIComponent(reprogFrom.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(reprogToStr)}&shipping.status=delivered`;
+                    filterBmax = isBackground ? 10 : 30;
+                    _diagLog(`[${cuenta.nombre}] FB cold: filterB entregadas 5d (máx ${filterBmax}p)`);
                 }
 
-                // filterC: date_created = targetDate (mismo día).
+                // filterC: ENTREGADAS creadas hoy (los activos de hoy vienen del barrido).
                 const nextDay = new Date(targetDate); nextDay.setDate(nextDay.getDate() + 1);
-                const filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&order.status=paid`;
+                const filterC = `&order.date_created.from=${encodeURIComponent(targetDate.toISOString().split('.')[0]+'.000-00:00')}&order.date_created.to=${encodeURIComponent(nextDay.toISOString().split('.')[0]+'.000-00:00')}&shipping.status=delivered`;
 
                 const [ordersB, ordersC] = await Promise.all([fetchAllPages(filterB, filterBmax, 'B'), fetchAllPages(filterC, 19, 'C')]);
 
@@ -5963,6 +5967,32 @@
                     });
                 }
                 _diagLog(`[${cuenta.nombre}] FB=${fbCached.length} B:${ordersB.length} C:${ordersC.length} → ${allOrders.length} únicos`);
+            }
+
+            // ── BARRIDO POR ESTADO DE ENVÍO — red de seguridad de completitud ──
+            // Descubrimiento (jul 2026): ML SÍ filtra server-side por shipping.status.
+            // Traemos directo TODOS los envíos activos (impresos, en camino, reprogramados,
+            // fallados) sin depender de ventanas de date_created ni de caps de páginas.
+            // Es señal pura (~15 págs vs 60 de ruido) → rápido Y garantiza que ningún
+            // paquete sin entregar se pierda nunca. Los que no sean del día objetivo se
+            // descartan después en esEntregaParaFecha.
+            if (!esFechaAntigua) {
+                try {
+                    const _sweepStates = ['ready_to_ship', 'shipped', 'not_delivered'];
+                    const _sweepAll = await Promise.all(
+                        _sweepStates.map(st => fetchAllPages(`&shipping.status=${st}&order.status=paid`, 40, 'SW_' + st))
+                    );
+                    const _seenSweep = new Set(allOrders.map(o => o.shipping?.id).filter(Boolean));
+                    let _swAdded = 0;
+                    _sweepAll.flat().forEach(o => {
+                        const sid = o.shipping?.id;
+                        if (!sid || _seenSweep.has(sid)) return;
+                        _seenSweep.add(sid); allOrders.push(o); _swAdded++;
+                    });
+                    _diagLog(`[${cuenta.nombre}] barrido activos (shipping.status): +${_swAdded} nuevos → ${allOrders.length} total`);
+                } catch (e) {
+                    _diagLog(`[${cuenta.nombre}] barrido activos falló: ${e.message}`);
+                }
             }
 
             // Agregar órdenes canceladas del día (order.status=cancelled).
