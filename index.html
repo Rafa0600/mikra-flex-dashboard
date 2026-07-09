@@ -349,13 +349,14 @@
         }
 
         .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            display: flex;
             gap: 6px;
             margin-bottom: 12px;
         }
 
         .stat-item {
+            flex: 1 1 0;
+            min-width: 0;
             text-align: center;
             cursor: pointer;
             padding: 8px 4px;
@@ -367,6 +368,9 @@
             flex-direction: column;
             justify-content: center;
         }
+        /* Números grandes (pisa el font-size inline de cada casilla) */
+        .stat-number { font-size: 28px !important; line-height: 1.05; }
+        .stat-label { letter-spacing: 0.3px; }
 
         .stat-item:hover {
             background: #21262d;
@@ -572,6 +576,14 @@
         .envio-card.cancelado { border-left-color: #f85149; opacity: 0.7; }
 
         .envio-card.reprogramado { border-left-color: #FF9800; }
+        /* Reputación afectada: todo en rojo, para que salte a la vista */
+        .envio-card.rep-afectada,
+        .envio-card-simple.rep-afectada { border-left-color: #f85149 !important; box-shadow: inset 4px 0 0 #f85149, 0 0 0 1px rgba(248,81,73,0.5); background: rgba(248,81,73,0.06); }
+        .envio-card.rep-afectada .estado-badge,
+        .envio-card-simple.rep-afectada .simple-estado {
+            background: #f85149 !important; color: #fff !important;
+            background-image: none !important;
+        }
 
         .envio-header {
             display: flex;
@@ -783,7 +795,6 @@
             border-radius: 10px;
             font-size: 11px;
             font-weight: 700;
-            animation: pulse-rep 2s infinite;
         }
 
         @keyframes pulse-rep {
@@ -801,6 +812,17 @@
             border-radius: 10px;
             font-size: 11px;
         }
+
+        /* Filtro rápido en la vista de Reprogramados */
+        .repro-filtros { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .repro-fbtn {
+            background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
+            border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 700;
+            cursor: pointer; font-family: inherit;
+        }
+        .repro-fbtn.afecta { border-color: #f85149; color: #ff9a94; }
+        .repro-fbtn.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+        .repro-fbtn.afecta.active { background: #f85149; border-color: #f85149; color: #fff; }
 
         .loading {
             text-align: center;
@@ -1274,6 +1296,10 @@
             font-weight: 700;
             font-size: 12px;
             white-space: nowrap;
+            flex-shrink: 0;
+            max-width: 60%;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .simple-estado.pendiente { background: linear-gradient(135deg, #9C27B0, #7b1fa2); }
@@ -1291,6 +1317,8 @@
             display: none;
             animation: expandIn 0.2s ease-out;
         }
+        /* Espaciado parejo entre secciones del detalle (en vez de margins sueltos) */
+        .simple-details > * { margin-bottom: 0 !important; margin-top: 0 !important; }
 
         @keyframes expandIn {
             from { opacity: 0; transform: translateY(-5px); }
@@ -1298,7 +1326,9 @@
         }
 
         .simple-details.expanded {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         /* MAPA MODAL */
@@ -1446,17 +1476,18 @@
             }
 
             .stats-grid {
-                grid-template-columns: repeat(6, 1fr);
-                gap: 3px;
-            }
-            
-            .stat-item {
-                padding: 5px 1px;
+                gap: 4px;
             }
 
-            .stat-number {
-                font-size: 16px;
+            .stat-item {
+                padding: 6px 2px;
             }
+
+            /* Menos casillas (se ocultan las que están en 0) → números bien grandes */
+            .stat-number {
+                font-size: 26px !important;
+            }
+            .stat-icon { font-size: 13px; }
 
             .stat-label {
                 font-size: 8px;
@@ -1862,6 +1893,11 @@
                     <span class="stat-icon">🔄</span>
                     <div class="stat-number" style="color:#FF9800; font-size:20px;">0</div>
                     <div class="stat-label" style="font-size:8px;">REPROG</div>
+                </div>
+                <div class="stat-item" onclick="filtrarPorEstado('rep-afecta')" id="stat-rep-afecta" style="padding:5px 2px;">
+                    <span class="stat-icon">⚠️</span>
+                    <div class="stat-number" style="color:#f85149; font-size:20px;">0</div>
+                    <div class="stat-label" style="font-size:8px;">REPUT</div>
                 </div>
             </div>
             <div class="progress-bar-container">
@@ -2731,6 +2767,7 @@
             'rescheduled':           { t: '🔄 En camino nuevamente',             d: 'c-orange', tc: 't-orange' },
             'rescheduled_by_buyer':  { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
             'buyer_rescheduled':     { t: '📅 Reprogramado por comprador',      d: 'c-orange', tc: 't-orange' },
+            'rescheduled_by_meli':   { t: '📅 Reprogramado por Mercado Libre',  d: 'c-orange', tc: 't-orange' },
             'delayed':               { t: '⏰ Demorado',                         d: 'c-orange', tc: 't-orange' },
             'out_of_delivery_area':  { t: '📍 Fuera de zona',                   d: 'c-red',    tc: 't-red' },
             'delivery_failed':       { t: '❌ Entrega fallida',                  d: 'c-red',    tc: 't-red' },
@@ -2759,6 +2796,7 @@
             'rescheduled': 'Reprogramado',
             'rescheduled_by_buyer': 'Reprogramado por comprador',
             'buyer_rescheduled': 'Reprogramado por comprador',
+            'rescheduled_by_meli': 'Reprogramado por Mercado Libre',
             'delivery_attempted': 'Intento de entrega',
         };
 
@@ -5456,12 +5494,21 @@
             }
 
             const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            let html = `<div style="background:#FF9800; color:#000; padding:12px 20px; border-radius:10px; text-align:center; font-weight:bold; font-size:16px; margin-bottom:20px;">
+            // Contar cuántos afectan reputación (para los botones del filtro rápido)
+            const _nAfecta = todosReprogramados.filter(r => getReprogramadoDetail(r.shipping).afectaReputacion).length;
+            const _nNo = todosReprogramados.length - _nAfecta;
+            let html = `<div class="repro-filtros">
+                <button class="repro-fbtn active" data-f="all" onclick="_filtrarReprog('all')">Todos (${todosReprogramados.length})</button>
+                <button class="repro-fbtn afecta" data-f="afecta" onclick="_filtrarReprog('afecta')">⚠️ Afecta reputación (${_nAfecta})</button>
+                <button class="repro-fbtn" data-f="noafecta" onclick="_filtrarReprog('noafecta')">✓ No afecta (${_nNo})</button>
+            </div>`;
+            html += `<div style="background:#FF9800; color:#000; padding:12px 20px; border-radius:10px; text-align:center; font-weight:bold; font-size:16px; margin-bottom:20px;">
                 🔄 ${todosReprogramados.length} envío${todosReprogramados.length > 1 ? 's' : ''} reprogramado${todosReprogramados.length > 1 ? 's' : ''} en los últimos 15 días
             </div>`;
 
             todosReprogramados.forEach(({ shipping, orders: orderList, cuentaNombre, cuentaColor }) => {
                 const detail = getReprogramadoDetail(shipping);
+                const afectaRep = detail.afectaReputacion;
                 const barrio = shipping.receiver_address?.neighborhood?.name || '';
                 const ciudad = shipping.receiver_address?.city?.name || '';
                 const zona = getZonaDetallada(barrio, ciudad);
@@ -5508,7 +5555,7 @@
                     : '<span style="background:#FF6B00; color:white; padding:3px 10px; border-radius:10px; font-size:11px;">🟠 Chaya</span>';
 
                 html += `
-                    <div class="envio-card reprogramado" style="position:relative;">
+                    <div class="envio-card reprogramado repro-card${afectaRep ? ' rep-afectada' : ''}" data-rep="${afectaRep ? 'afecta' : 'noafecta'}" style="position:relative;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <span class="estado-badge reprogramado">${detail.label}</span>
@@ -5554,6 +5601,14 @@
 
             content.innerHTML = html;
         }
+
+        // Filtro rápido en la vista de Reprogramados: Todos / Afecta reputación / No afecta
+        window._filtrarReprog = function(f) {
+            document.querySelectorAll('.repro-fbtn').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+            document.querySelectorAll('.repro-card').forEach(c => {
+                c.style.display = (f === 'all' || c.dataset.rep === f) ? '' : 'none';
+            });
+        };
 
         // ── Progress de carga ─────────────────────────────────────────
         let _progRafPending = false;
@@ -6818,8 +6873,11 @@
             const tagsLower = tags.map(t => (t || '').toLowerCase());
             
             // Primero: detectar reprogramados (incluye not_delivered con substatus específico)
-            if (substatus === 'rescheduled' || substatus === 'rescheduled_by_buyer' ||
-                substatus === 'buyer_rescheduled' ||
+            // 'reschedul' cubre TODAS las variantes: rescheduled, rescheduled_by_buyer,
+            // rescheduled_by_meli, rescheduled_by_seller, buyer_rescheduled. Antes faltaba
+            // 'rescheduled_by_meli' (ML reprograma tras "comprador ausente") y esos envíos,
+            // que ya volvían a "en camino", se mostraban como en-camino en vez de reprogramado.
+            if (substatus.includes('reschedul') ||
                 substatus === 'delayed' || substatus === 'returning_to_sender' ||
                 substatus === 'waiting_for_withdrawal' || substatus === 'receiver_absent' ||
                 substatus === 'out_of_delivery_area' || substatus === 'not_delivered_and_returning' ||
@@ -6859,16 +6917,73 @@
             return 'pendiente';
         }
 
+        // Flex entrega hasta las 21:00. Un intento de entrega (comprador ausente) a las
+        // 21:00 o más tarde queda FUERA de la ventana → afecta reputación. Antes de las
+        // 21:00 no penaliza (la ausencia del comprador dentro de horario no es culpa
+        // del vendedor). Verificado con datos reales: mismo substatus/fecha, la única
+        // diferencia entre uno que afectó y otro que no fue la hora del date_first_visit.
+        const REPUTACION_HORA_LIMITE = 21;
+
+        function _horaAR(dateStr) {
+            if (!dateStr) return null;
+            try {
+                const s = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23'
+                }).format(new Date(dateStr));
+                return Number(s);
+            } catch (e) { const d = new Date(dateStr); return isNaN(d) ? null : d.getHours(); }
+        }
+
+        // ¿Este envío afecta la reputación?
+        // Verificado con datos reales de 4 casos. Afecta SOLO cuando fue "comprador
+        // ausente" (intento de entrega fallido) a las 21:00 o después. NO afecta:
+        //  • lo reprogramó el COMPRADOR (substatus buyer_rescheduled) → acción del comprador
+        //  • ya se entregó, o quedó cancelado (ej. domicilio incorrecto → ML lo cancela)
+        //  • el intento fallido fue antes de las 21:00 (dentro de ventana)
+        function afectaReputacion(shipping) {
+            const h  = shipping?.status_history || {};
+            const st = (shipping?.status || '').toLowerCase();
+            const sub = (shipping?.substatus || '').toLowerCase();
+            if (h.date_delivered || st === 'cancelled') return false;
+            if (sub.includes('buyer')) return false;           // el comprador reprogramó
+            if (!h.date_first_visit) return false;
+            const hora = _horaAR(h.date_first_visit);
+            return hora !== null && hora >= REPUTACION_HORA_LIMITE;
+        }
+
         function getReprogramadoDetail(shipping) {
             const substatus = (shipping.substatus || '').toLowerCase();
-            if (substatus === 'receiver_absent') return { label: '🚫 Comprador ausente', short: 'Comprador ausente' };
-            if (substatus === 'buyer_rescheduled' || substatus === 'rescheduled_by_buyer' || substatus === 'rescheduled') return { label: '📅 Reprogramado por comprador', short: 'Reprogram. comprador' };
-            if (substatus === 'delayed') return { label: '⏰ Demorado', short: 'Demorado' };
-            if (substatus === 'returning_to_sender' || substatus === 'not_delivered_and_returning') return { label: '↩️ Devolviendo al vendedor', short: 'Devolviendo' };
-            if (substatus === 'out_of_delivery_area') return { label: '📍 Fuera de zona', short: 'Fuera de zona' };
-            if (substatus === 'delivery_failed') return { label: '❌ Entrega fallida', short: 'Entrega fallida' };
-            if (substatus === 'waiting_for_withdrawal') return { label: '📦 Esperando retiro', short: 'Esperando retiro' };
-            return { label: '🔄 Reprogramado', short: 'Reprogramado' };
+            const h = shipping.status_history || {};
+            // 1) Reprogramado por el COMPRADOR (buyer_rescheduled): fue el comprador quien
+            //    pidió otra fecha → NO es ausencia y NO afecta reputación. Se chequea ANTES
+            //    que date_first_visit (que también existe en este caso, con la hora del pedido).
+            if (substatus.includes('buyer')) {
+                return { label: '📅 Reprogramado por comprador', short: '📅 Comprador', afectaReputacion: false };
+            }
+            // 2) Intento de entrega fallido (comprador ausente): date_first_visit sin entregar.
+            //    La hora define si afecta reputación (≥ 21:00). Aunque ML lo marque como
+            //    rescheduled_by_meli, el motivo real es la ausencia del comprador.
+            if (h.date_first_visit && !h.date_delivered) {
+                const afecta = afectaReputacion(shipping);
+                const hora = formatearSoloHora(h.date_first_visit);
+                return {
+                    label: afecta
+                        ? `🚫 Comprador ausente ${hora} · ⚠️ afecta reputación`
+                        : `🚫 Comprador ausente ${hora}`,
+                    // Corto para el celu: ícono + hora (+ ⚠️). El rojo ya indica que afecta.
+                    short: afecta ? `🚫 ${hora} ⚠️` : `🚫 ${hora}`,
+                    afectaReputacion: afecta, hora
+                };
+            }
+            if (substatus === 'receiver_absent') return { label: '🚫 Comprador ausente', short: 'Comprador ausente', afectaReputacion: false };
+            if (substatus === 'rescheduled_by_meli') return { label: '📅 Reprogramado por Mercado Libre', short: 'Reprog. Meli', afectaReputacion: false };
+            if (substatus === 'rescheduled') return { label: '🔄 En camino nuevamente', short: 'En camino nuev.', afectaReputacion: false };
+            if (substatus === 'delayed') return { label: '⏰ Demorado', short: 'Demorado', afectaReputacion: false };
+            if (substatus === 'returning_to_sender' || substatus === 'not_delivered_and_returning') return { label: '↩️ Devolviendo al vendedor', short: 'Devolviendo', afectaReputacion: false };
+            if (substatus === 'out_of_delivery_area') return { label: '📍 Fuera de zona', short: 'Fuera de zona', afectaReputacion: false };
+            if (substatus === 'delivery_failed') return { label: '❌ Entrega fallida', short: 'Entrega fallida', afectaReputacion: false };
+            if (substatus === 'waiting_for_withdrawal') return { label: '📦 Esperando retiro', short: 'Esperando retiro', afectaReputacion: false };
+            return { label: '🔄 Reprogramado', short: 'Reprogramado', afectaReputacion: false };
         }
 
         // === TRACKING DETALLADO - Clasifica eventos del historial de ML ===
@@ -6916,12 +7031,11 @@
             if (!problems || problems.length === 0) return '';
             
             return problems.map(p => {
-                const labelType = p.typeLabel || p.type;
-                const timeStr = p.time ? ` · ${p.time} hs` : '';
+                // Chip corto y limpio: el detalle (motivo + hora) ya está en el timeline.
                 if (p.reputationAffected) {
-                    return `<span class="reputation-warning">⚠️ Reputación afectada · ${labelType}${timeStr}</span>`;
+                    return `<span class="reputation-warning">⚠️ Afecta reputación</span>`;
                 } else {
-                    return `<span class="reputation-ok">✓ Rep. no afectada · ${labelType}${timeStr}</span>`;
+                    return `<span class="reputation-ok">✓ No afecta reputación</span>`;
                 }
             }).join(' ');
         }
@@ -6954,7 +7068,19 @@
             if (events.length > 0) shipping._trackingEvents = events;
 
             const problemSubstatuses = new Set(['delayed', 'delivery_failed', 'receiver_absent', 'lost', 'stolen', 'damaged']);
-            if (shipping.status === 'not_delivered' || problemSubstatuses.has(shipping.substatus)) {
+            // Prioridad: si hubo un intento de entrega fallido (date_first_visit) sin
+            // entregar → "comprador ausente", con impacto real en reputación según la hora
+            // (≥ 21:00 afecta). Esto cubre los rescheduled_by_meli que ML no marca como
+            // problema pero que en realidad son ausencias del comprador.
+            const _subLow = (shipping.substatus || '').toLowerCase();
+            if (history.date_first_visit && !history.date_delivered && !_subLow.includes('buyer')) {
+                shipping._problems = [{
+                    type: 'receiver_absent',
+                    typeLabel: 'Comprador ausente',
+                    reputationAffected: afectaReputacion(shipping),
+                    time: formatearSoloHora(history.date_first_visit)
+                }];
+            } else if (shipping.status === 'not_delivered' || problemSubstatuses.has(shipping.substatus)) {
                 const probSub = shipping.substatus || shipping.status;
                 const probEntry = subHistory.find(e => e.substatus === probSub);
                 const probTime = probEntry?.date ? formatearSoloHora(probEntry.date) : null;
@@ -7083,6 +7209,9 @@
             // Usar _state cacheado en lugar de recalcular
             if (currentStateFilter === 'cancelado') {
                 filtered = filtered.filter(({ shipping }) => shipping._state === 'cancelado');
+            } else if (currentStateFilter === 'rep-afecta') {
+                // Solo los reprogramados que afectan reputación (comprador ausente ≥ 21:00)
+                filtered = filtered.filter(({ shipping }) => shipping._state === 'reprogramado' && afectaReputacion(shipping));
             } else if (currentStateFilter === 'all') {
                 filtered = filtered.filter(({ shipping }) => shipping._state !== 'cancelado');
             } else {
@@ -7152,9 +7281,9 @@
                 else if (s === 'en-camino')    acc.enCamino++;
                 else if (s === 'entregado')    acc.entregado++;
                 else if (s === 'cancelado')    acc.cancelado++;
-                else if (s === 'reprogramado') acc.reprogramado++;
+                else if (s === 'reprogramado') { acc.reprogramado++; if (afectaReputacion(shipping)) acc.repAfecta++; }
                 return acc;
-            }, { pendiente: 0, impreso: 0, enCamino: 0, entregado: 0, cancelado: 0, reprogramado: 0 });
+            }, { pendiente: 0, impreso: 0, enCamino: 0, entregado: 0, cancelado: 0, reprogramado: 0, repAfecta: 0 });
             stats.total = stats.pendiente + stats.impreso + stats.enCamino + stats.entregado + stats.reprogramado;
 
             // Contadores por cuenta en una pasada
@@ -7170,12 +7299,29 @@
             document.getElementById('mikraCount').textContent = cuentaStats.mikra;
             document.getElementById('chayaCount').textContent = cuentaStats.chaya;
 
-            document.querySelector('#stat-all .stat-number').textContent = stats.total;
-            document.querySelector('#stat-pendiente .stat-number').textContent = stats.pendiente;
-            document.querySelector('#stat-impreso .stat-number').textContent = stats.impreso;
-            document.querySelector('#stat-en-camino .stat-number').textContent = stats.enCamino;
-            document.querySelector('#stat-entregado .stat-number').textContent = stats.entregado;
-            document.querySelector('#stat-reprogramado .stat-number').textContent = stats.reprogramado;
+            // Setea el número y OCULTA la casilla si está en 0 (menos casillas → más
+            // grandes y prolijo). "TODOS" siempre visible. Si la casilla activa se oculta,
+            // volvemos el filtro a "TODOS".
+            const _setStat = (id, n, ocultable) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const numEl = el.querySelector('.stat-number');
+                if (numEl) numEl.textContent = n;
+                if (ocultable) {
+                    const mostrar = n > 0;
+                    el.style.display = mostrar ? '' : 'none';
+                    if (!mostrar && currentStateFilter === id.replace('stat-', '')) {
+                        setTimeout(() => filtrarPorEstado('all'), 0); // diferido: evita re-entrancy
+                    }
+                }
+            };
+            _setStat('stat-all', stats.total, false);
+            _setStat('stat-pendiente', stats.pendiente, true);
+            _setStat('stat-impreso', stats.impreso, true);
+            _setStat('stat-en-camino', stats.enCamino, true);
+            _setStat('stat-entregado', stats.entregado, true);
+            _setStat('stat-reprogramado', stats.reprogramado, true);
+            _setStat('stat-rep-afecta', stats.repAfecta, true);
             document.getElementById('canceladasCount').textContent = stats.cancelado;
 
             const cancelBtn = document.getElementById('toggleCanceladasBtn');
@@ -7223,17 +7369,22 @@
                     const orderId = orderList[0]?.id || '';
                     const orderUrl = `https://www.mercadolibre.com.ar/ventas/${orderId}/detalle`;
 
-                    const estadoTexto = state === 'reprogramado' ? getReprogramadoDetail(shipping).label : (ESTADO_LABELS[state] || state);
+                    const _reprDet = state === 'reprogramado' ? getReprogramadoDetail(shipping) : null;
+                    const estadoTexto = _reprDet ? _reprDet.label : (ESTADO_LABELS[state] || state);
+                    // Label corto para el header colapsado de la vista simple (mantiene las
+                    // tarjetas parejas); el completo se ve al desplegar / en la vista normal.
+                    const estadoCorto = _reprDet ? _reprDet.short : (ESTADO_LABELS[state] || state);
+                    const repAfectaCls = (_reprDet && _reprDet.afectaReputacion) ? ' rep-afectada' : '';
 
                     // Timeline y badge — calculados una sola vez por card
                     const utlItems = buildUnifiedTimeline(shipping, fechaEntrega);
                     const repBadge = renderReputationBadge(shipping);
 
                     if (vistaSimple) {
-                        parts.push(`<div class="envio-card-simple ${state}" onclick="toggleSimpleDetails(${index})">
+                        parts.push(`<div class="envio-card-simple ${state}${repAfectaCls}" onclick="toggleSimpleDetails(${index})">
                             <div class="simple-header">
                                 <div class="simple-zona">${zona}</div>
-                                <div class="simple-estado ${state}">${estadoTexto}</div>
+                                <div class="simple-estado ${state}">${estadoCorto}</div>
                             </div>
                             <div class="simple-details" id="simple-details-${index}">
                                 <div class="card-meta" style="margin-top:10px;">
@@ -7257,7 +7408,7 @@
                             </div>
                         </div>`);
                     } else {
-                        parts.push(`<div class="envio-card ${state}">
+                        parts.push(`<div class="envio-card ${state}${repAfectaCls}">
                             <div class="card-meta">
                                 <span class="estado-badge ${state}">${estadoTexto}</span>
                                 ${cantidadItems > 1 ? `<span class="items-count">${cantidadItems} items</span>` : ''}
@@ -7893,6 +8044,23 @@
 
             if (history.date_shipped && !events.some(e => e.label.includes('camino'))) {
                 events.push({ date: history.date_shipped, label: '🚚 En camino', dot: 'c-blue', tc: 't-blue' });
+            }
+            // Intento de entrega fallido / reprogramación (date_first_visit): lo agregamos
+            // como su propio punto con la hora. IMPORTANTE: si el paquete se ENTREGÓ, esa
+            // visita fue la entrega (no una ausencia) → NO mostrar "comprador ausente".
+            // Solo aplica a los que todavía no se entregaron.
+            if (history.date_first_visit && !history.date_delivered &&
+                !events.some(e => e.label.includes('ausente') || e.label.includes('reprogram'))) {
+                const _sub = (shipping.substatus || '').toLowerCase();
+                if (_sub.includes('buyer')) {
+                    events.push({ date: history.date_first_visit, label: '📅 El comprador reprogramó', dot: 'c-orange', tc: 't-orange' });
+                } else {
+                    const _afecta = afectaReputacion(shipping);
+                    events.push({ date: history.date_first_visit, label: _afecta ? '🚫 Comprador ausente · ⚠️ afecta rep.' : '🚫 Comprador ausente', dot: 'c-red', tc: 't-red' });
+                }
+            }
+            if (history.date_not_delivered && !events.some(e => e.label.includes('ausente') || e.label.includes('entregar'))) {
+                events.push({ date: history.date_not_delivered, label: '❌ No se pudo entregar', dot: 'c-red', tc: 't-red' });
             }
             if (history.date_delivered && !events.some(e => e.dot === 'c-green')) {
                 events.push({ date: history.date_delivered, label: '✅ Entregado', dot: 'c-green', tc: 't-green' });
