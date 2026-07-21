@@ -1247,6 +1247,7 @@
         .ne-sec-devolver { background: linear-gradient(90deg,#3b0a0a,#160808); color: #ff7a7a; border: 1px solid #7b1a1a; }
         .ne-sec-deposito { background: linear-gradient(90deg,#2c1a00,#130d00); color: #ffb347; border: 1px solid #5a3a00; }
         .ne-sec-entregar { background: linear-gradient(90deg,#16240a,#0c1106); color: #9ccc4a; border: 1px solid #2a3a00; }
+        .ne-sec-cambios  { background: linear-gradient(90deg,#3d2a12,#1a1206); color: #ffb454; border: 1px solid #7a5216; }
 
         /* ── Láser de escaneo QR ────────────────────────────────────────── */
         .qr-laser {
@@ -2033,11 +2034,55 @@
         };
 
         // ══ QR Scanner (cámara en vivo con fallback a foto) ════════════════
-        let _qrStream = null, _qrRaf = null;
+        let _qrStream = null, _qrRaf = null, _qrDetector = null, _qrAudioCtx = null;
 
-        function abrirEscaner() {
+        // Pip cuando engancha el QR
+        function _initBeep() {
+            try {
+                if (!_qrAudioCtx) _qrAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (_qrAudioCtx.state === 'suspended') _qrAudioCtx.resume();
+            } catch (e) {}
+        }
+        function _beepQR() {
+            try {
+                if (!_qrAudioCtx) _qrAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = _qrAudioCtx;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.type = 'square';
+                osc.frequency.value = 1250;
+                gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.13);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.13);
+            } catch (e) {}
+        }
+
+        // Un solo lugar para "QR detectado": pip + vibra + cierra + procesa
+        function _qrHit(data) {
+            const mode = window._scanMode || 'reclamo';
+            _beepQR();
+            if (navigator.vibrate) navigator.vibrate(70);
+            cerrarEscaner();
+            window._scanMode = 'reclamo'; // reset para no dejar el modo pegado
+            if (mode === 'cambio_entrega') { _procesarCambioEscaneado(data); return; }
+            if (mode === 'recibir_cambio') { _recibirCambioEscaneado(data); return; }
+            _procesarQREscaneado(data);
+        }
+
+        function abrirEscaner(mode) {
+            // mode: undefined/'reclamo' (default, marca recibido) | 'cambio_entrega' (registrar) | 'recibir_cambio'
+            window._scanMode = mode || 'reclamo';
             const modal = document.getElementById('qrModal');
             if (!modal) return;
+            // Título según el modo
+            const tEl = document.getElementById('qrModalTitulo');
+            if (tEl) tEl.textContent = window._scanMode === 'cambio_entrega'
+                ? '📷 Escaneá el código del paquete'
+                : window._scanMode === 'recibir_cambio'
+                ? '📷 Escaneá el cambio que volvió'
+                : '📷 Escaneá el QR del paquete';
             modal.style.display = 'flex';
             // Resetear modo manual
             const mw = document.getElementById('qrModoManualWrap');
@@ -2059,6 +2104,33 @@
                     const video = document.getElementById('qrVideo');
                     video.srcObject = stream;
                     video.play();
+
+                    // Enfoque continuo si el dispositivo lo permite (QR más nítido)
+                    try {
+                        const track = stream.getVideoTracks()[0];
+                        const caps = track.getCapabilities ? track.getCapabilities() : {};
+                        if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                            track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+                        }
+                    } catch (e) {}
+
+                    // Detector nativo del celular: muchísimo más rápido que jsQR.
+                    // Si no existe, _tickQR cae solo a jsQR.
+                    // Detecta QR y también códigos de barra (etiquetas nuevas traen
+                    // código de barra con el N° de venta). Pide solo los formatos que
+                    // el dispositivo soporta; si algo falla, cae a solo QR.
+                    _qrDetector = null;
+                    if ('BarcodeDetector' in window) {
+                        const _wanted = ['qr_code','code_128','ean_13','code_39','itf','ean_8','upc_a','upc_e','codabar'];
+                        const _mkDetector = (fmts) => { try { _qrDetector = new BarcodeDetector({ formats: fmts }); } catch (e) { try { _qrDetector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e2) { _qrDetector = null; } } };
+                        try {
+                            BarcodeDetector.getSupportedFormats()
+                                .then(sup => { const f = _wanted.filter(x => sup.includes(x)); _mkDetector(f.length ? f : ['qr_code']); })
+                                .catch(() => _mkDetector(['qr_code']));
+                        } catch (e) { _mkDetector(['qr_code']); }
+                    }
+
+                    _initBeep();  // prepara el audio dentro del gesto del usuario
                     document.getElementById('qrLiveWrap').style.display = 'block';
                     document.getElementById('qrStatus').textContent = 'Buscando QR...';
                     _tickQR(video);
@@ -2068,6 +2140,16 @@
 
         function _buscarManual(valor) {
             const v = String(valor || '').trim().replace(/\D/g, '');
+            // Modos de cambios/entregas: enrutar al flujo correspondiente
+            const _m = window._scanMode || 'reclamo';
+            if (_m !== 'reclamo') {
+                const st = document.getElementById('qrManualStatus');
+                if (v.length < 10) { if (st) st.textContent = '⚠️ Ingresá el N° de venta/envío completo'; return; }
+                window._scanMode = 'reclamo';
+                _cerrarCamaraManual();
+                if (_m === 'recibir_cambio') { _recibirCambioEscaneado(v); } else { _procesarCambioEscaneado(v); }
+                return;
+            }
             if (v.length < 4) {
                 document.getElementById('qrManualStatus').textContent = '⚠️ Ingresá al menos 4 dígitos';
                 return;
@@ -2170,6 +2252,9 @@
             document.getElementById('qrPhotoWrap').style.display = 'none';
             document.getElementById('qrStatus').textContent = '';
             document.getElementById('qrModoManualWrap').style.display = 'block';
+            // En modo cambio/entrega ofrecer también cargar todo a mano (ventas sin ML)
+            const cargarBtn = document.getElementById('qrManualCargarForm');
+            if (cargarBtn) cargarBtn.style.display = (window._scanMode === 'cambio_entrega') ? 'block' : 'none';
             document.getElementById('qrModoManualInput').focus();
         }
 
@@ -2179,23 +2264,32 @@
             document.getElementById('qrStatus').textContent = '';
         }
 
-        function _tickQR(video) {
+        async function _tickQR(video) {
             if (video.readyState >= 2 && video.videoWidth > 0) {
-                const canvas = document.getElementById('qrCanvas');
-                // Reducir resolución para que jsQR procese más rápido (max 600px)
-                const MAX = 600;
-                const scale = Math.min(1, MAX / Math.max(video.videoWidth, video.videoHeight));
-                canvas.width  = Math.round(video.videoWidth  * scale);
-                canvas.height = Math.round(video.videoHeight * scale);
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                // Intentar con y sin inversión para mayor detección
-                const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
-                if (code) { cerrarEscaner(); _procesarQREscaneado(code.data); return; }
+                // Camino rápido: detector nativo del celular (hardware). Solo Android/Chrome.
+                if (_qrDetector) {
+                    try {
+                        const codes = await _qrDetector.detect(video);
+                        if (codes && codes.length) { _qrHit(codes[0].rawValue); return; }
+                    } catch (e) { /* si falla, seguimos intentando */ }
+                } else {
+                    // jsQR optimizado (esto corre en iPhone/Safari y Chrome de PC):
+                    const canvas = document.getElementById('qrCanvas');
+                    const MAX = 500;
+                    const scale = Math.min(1, MAX / Math.max(video.videoWidth, video.videoHeight));
+                    canvas.width  = Math.round(video.videoWidth  * scale);
+                    canvas.height = Math.round(video.videoHeight * scale);
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    // 'dontInvert': la mitad de trabajo que 'attemptBoth' → escanea el doble
+                    // de veces. Las etiquetas son QR negro sobre blanco, así que alcanza.
+                    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                    if (code) { _qrHit(code.data); return; }
+                }
             }
-            // 150ms entre frames — balance entre velocidad y CPU móvil
-            _qrRaf = setTimeout(() => _tickQR(video), 150);
+            // Ritmo ágil: ~16 lecturas/seg. Fluido pero sin recalentar el celu.
+            _qrRaf = setTimeout(() => _tickQR(video), 60);
         }
 
         function cerrarEscaner() {
@@ -2228,7 +2322,7 @@
                 URL.revokeObjectURL(url);
                 const imgData = ctx.getImageData(0, 0, w, h);
                 const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
-                if (code) { cerrarEscaner(); _procesarQREscaneado(code.data); }
+                if (code) { _qrHit(code.data); }
                 else { document.getElementById('qrStatus').textContent = '⚠️ No se encontró QR. Intentá de nuevo más cerca.'; }
             };
             img.onerror = function() { URL.revokeObjectURL(url); document.getElementById('qrStatus').textContent = '❌ Error al leer la imagen.'; };
@@ -2265,8 +2359,8 @@
         function _pinSubmit() {
             if (_pinAllowed.includes(_pinVal)) {
                 document.getElementById('pinModal').style.display = 'none';
-                const cb = _pinCb; _pinCb = null; _pinVal = '';
-                cb && cb(true);
+                const cb = _pinCb; _pinCb = null; const _pinUsado = _pinVal; _pinVal = '';
+                cb && cb(true, _pinUsado);
             } else {
                 _pinVal = '';
                 _actualizarPinDisplay();
@@ -4100,6 +4194,7 @@
             const out = [];
             window._reclamosMap.forEach((rec, sid) => {
                 const s = String(sid);
+                if (rec.tipo === 'cambio' || rec.tipo === 'entrega') return; // cambios/entregas tienen su propia pizarra
                 if (EXCLUIR.has(rec.estado)) return;
                 if (presentes.has(s) || arch.has(s) || recibidos.has(s)) return;
                 // Fecha del reclamo (ya guardada en el sheet) → nunca "sin fecha"
@@ -5178,6 +5273,29 @@
                             <button onclick="window._activarModoSeleccion()" id="btnSeleccionar" style="${accBtn}background:#16242e;color:#58a6ff;border:1px solid #2b5068;">☑️ Elegir</button>
                             <button onclick="window._abrirBuscadorReclamos()" style="${accBtn}background:#16241a;color:#3fb950;border:1px solid #275232;">🔍 Buscar</button>
                         </div>`;
+                    }
+
+                    // ── SECCIÓN 0: 🔁 CAMBIOS / ENTREGAS (colapsable, inline) ──────
+                    if (typeof _ceEsCambioEntrega === 'function' && window._reclamosMap) {
+                        const ceAct = [];
+                        window._reclamosMap.forEach(r => { if (_ceEsCambioEntrega(r) && !_ceResuelto(r)) ceAct.push(r); });
+                        if (ceAct.length) {
+                            const numId = r => parseInt(String(r.id || '').replace(/\D/g, ''), 10) || 0;
+                            const prio  = r => (r.estado === 'pendiente' && _ceVencido(r)) ? 0 : r.estado === 'descontado' ? 1 : r.estado === 'entregado_repartidor' ? 2 : r.estado === 'pendiente' ? 3 : r.estado === 'en_deposito' ? 4 : 5;
+                            ceAct.sort((a, b) => prio(a) - prio(b) || numId(b) - numId(a));
+                            const totCE = ceAct.reduce((s, r) => s + (r.valor || 0), 0);
+                            const totCEStr = totCE > 0 ? `$${Math.round(totCE).toLocaleString('es-AR')}` : '';
+                            const nVenc = ceAct.filter(r => r.estado === 'pendiente' && _ceVencido(r)).length;
+                            const cardsCE = ceAct.map(_ceCard).join('');
+                            html += `<div class="ne-sec ne-sec-cambios" onclick="window._toggleSec('cambios')" style="cursor:pointer;">
+                                <span class="ne-sec-chev" id="secchev-cambios">›</span>🔁 CAMBIOS / ENTREGAS · ${ceAct.length}${nVenc ? ` · <span style="color:#f85149;">${nVenc} vencido${nVenc !== 1 ? 's' : ''}</span>` : ''}<span class="ne-sec-count">${totCEStr}</span></div>
+                                <div class="ne-sec-body" id="secbody-cambios" style="display:none;">${cardsCE}
+                                    <div style="display:flex;gap:8px;">
+                                        <button onclick="event.stopPropagation();abrirEscaner('cambio_entrega')" style="flex:2;background:#1a3d16;color:#4CAF50;border:1px solid #4CAF50;border-radius:10px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;touch-action:manipulation;">＋ Registrar cambio / entrega</button>
+                                        <button onclick="event.stopPropagation();window._ceHistorial()" style="flex:1;background:#161b22;color:#8b949e;border:1px solid #30363d;border-radius:10px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;touch-action:manipulation;">🕐 Historial</button>
+                                    </div>
+                                </div>`;
+                        }
                     }
 
                     // ── SECCIÓN 1: ⚠️ DRIVER DEBE DEVOLVER (aún no llegaron al depósito) ──
@@ -6311,6 +6429,607 @@
             return Array.from(uniqueShippings.values());
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        //  CAMBIOS / ENTREGAS  (registro manual + pizarra con vencimiento)
+        //  Reutiliza la hoja de reclamos (tipo='cambio' | 'entrega').
+        //  El vencimiento (hoy + siguiente día hábil) se guarda en la columna
+        //  "Fecha Estimada" (fechaEstimada) — NO requiere tocar el backend.
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Vencimiento = hoy + el siguiente día hábil (hoy cuenta como día 1).
+        // Devuelve la fecha (medianoche local) del siguiente día hábil.
+        function _ceVenc(from) {
+            const d = from ? new Date(from) : new Date();
+            d.setHours(0, 0, 0, 0);
+            let added = 0;
+            while (added < 1) {
+                d.setDate(d.getDate() + 1);
+                const dow = d.getDay();
+                if (dow !== 0 && dow !== 6) added++;
+            }
+            return d;
+        }
+        function _ceFmtDMY(d) {
+            const p = n => String(n).padStart(2, '0');
+            return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+        }
+        function _ceFmtCorta(d) {
+            return d ? d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+        }
+        // ¿Venció el plazo? (hoy > fecha de vencimiento, comparando solo fecha)
+        function _ceVencido(rec) {
+            const dl = _parseFechaFlexible(rec && rec.fechaEstimada);
+            if (!dl || isNaN(dl)) return false;
+            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            const d = new Date(dl); d.setHours(0, 0, 0, 0);
+            return hoy.getTime() > d.getTime();
+        }
+        function _ceEsCambioEntrega(rec) { return rec && (rec.tipo === 'cambio' || rec.tipo === 'entrega'); }
+        // Estados que sacan la venta de la pizarra activa
+        function _ceResuelto(rec) { return ['entregado', 'recibido', 'archivado'].includes(rec && rec.estado); }
+
+        // ── Escaneo / búsqueda para REGISTRAR un cambio/entrega ──────────────
+        async function _procesarCambioEscaneado(code) {
+            const nums = String(code).match(/\d{10,}/g);
+            const num  = nums ? nums.sort((a, b) => b.length - a.length)[0] : '';
+            _abrirFormCambio({ cargando: true });
+            if (!num) { _abrirFormCambio({ manual: true }); return; }
+
+            // Buscar el envío en ML (probar como envío y como venta), en ambas cuentas
+            let item = null;
+            try {
+                const tokens = await Promise.all(CUENTAS.map(c => obtenerTokenCuenta(c).catch(() => null)));
+                // a) como N° de ENVÍO
+                for (let i = 0; i < CUENTAS.length && !item; i++) {
+                    if (!tokens[i]) continue;
+                    try {
+                        const r = await fetch(`${CUENTAS[i].proxy}/api/shipments/${num}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                        if (r.ok) { const s = await r.json(); if (s && s.id) item = await _ceCompletar(s, CUENTAS[i], tokens[i]); }
+                    } catch (e) {}
+                }
+                // b) como N° de VENTA (orden)
+                for (let i = 0; i < CUENTAS.length && !item; i++) {
+                    if (!tokens[i]) continue;
+                    try {
+                        const ro = await fetch(`${CUENTAS[i].proxy}/api/orders/${num}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                        if (ro.ok) {
+                            const o = await ro.json();
+                            const shipId = o && o.shipping && o.shipping.id;
+                            if (shipId) {
+                                const rs = await fetch(`${CUENTAS[i].proxy}/api/shipments/${shipId}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                                if (rs.ok) { const s = await rs.json(); if (s && s.id) item = { shipping: s, order: o, cuentaNombre: CUENTAS[i].nombre }; }
+                            }
+                        }
+                    } catch (e) {}
+                }
+                // c) como N° de PACK (compra multi-artículo) → da shipment.id + órdenes
+                for (let i = 0; i < CUENTAS.length && !item; i++) {
+                    if (!tokens[i]) continue;
+                    try {
+                        const rp = await fetch(`${CUENTAS[i].proxy}/api/packs/${num}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                        if (rp.ok) {
+                            const p = await rp.json();
+                            const shipId = p && p.shipment && p.shipment.id;
+                            const ordIds = ((p && p.orders) || []).map(o => o.id).filter(Boolean);
+                            if (shipId) {
+                                const rs = await fetch(`${CUENTAS[i].proxy}/api/shipments/${shipId}`, { headers: { Authorization: `Bearer ${tokens[i]}` } });
+                                if (rs.ok) {
+                                    const s = await rs.json();
+                                    let order = {}, total = 0;
+                                    for (const oid of ordIds) {
+                                        try { const ro = await fetch(`${CUENTAS[i].proxy}/api/orders/${oid}`, { headers: { Authorization: `Bearer ${tokens[i]}` } }); if (ro.ok) { const oo = await ro.json(); if (!order.id) order = oo; total += Number(oo.total_amount || 0); } } catch (e) {}
+                                    }
+                                    if (s && s.id) item = { shipping: s, order: (order.id ? { ...order, total_amount: total || order.total_amount } : { id: ordIds[0] || '', total_amount: total }), cuentaNombre: CUENTAS[i].nombre };
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                }
+            } catch (e) {}
+
+            if (!item || !item.shipping) { _abrirFormCambio({ manual: true, num }); return; }
+
+            const sid  = String(item.shipping.id);
+            const addr = item.shipping.receiver_address || {};
+            const zona = getZonaDetallada(addr.neighborhood && addr.neighborhood.name || '', addr.city && addr.city.name || '', addr.zip_code || '');
+
+            // ¿Ya tiene caso?
+            let rec = window._reclamosMap && window._reclamosMap.get(sid);
+            if (!rec) {
+                const d = await _gasReclamo({ action: 'search_reclamos', q: sid }).catch(() => null);
+                rec = d && d.records && d.records.find(r => String(r.shippingId) === sid);
+                if (rec) (window._reclamosMap = window._reclamosMap || new Map()).set(sid, rec);
+            }
+
+            _abrirFormCambio({
+                shippingId: sid,
+                orderId:    String((item.order && item.order.id) || item.shipping.order_id || ''),
+                comprador:  (item.order && item.order.buyer && item.order.buyer.nickname) || addr.receiver_name || '',
+                cuenta:     item.cuentaNombre || '',
+                zona, calle: addr.street_name || '', numero: addr.street_number || '',
+                valor:      Math.round((item.order && item.order.total_amount) || 0),
+                existente:  rec || null,
+            });
+        }
+        async function _ceCompletar(shipping, cuenta, token) {
+            let order = {};
+            if (shipping.order_id) {
+                try { const ro = await fetch(`${cuenta.proxy}/api/orders/${shipping.order_id}`, { headers: { Authorization: `Bearer ${token}` } }); if (ro.ok) order = await ro.json(); } catch (e) {}
+            }
+            return { shipping, order, cuentaNombre: cuenta.nombre };
+        }
+
+        // ── Formulario de registro ───────────────────────────────────────────
+        function _abrirFormCambio(data) {
+            let modal = document.getElementById('modalFormCambio');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalFormCambio';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:flex-end;justify-content:center;';
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            const box = html => `<div style="background:#161b22;border:1px solid #30363d;border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:20px 16px 32px;display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow-y:auto;">${html}</div>`;
+            const cerrar = `<button onclick="_cerrarFormCambio()" style="background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer;padding:0 4px;">✕</button>`;
+            const header = txt => `<div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:#FFE600;font-size:15px;font-weight:800;">${txt}</span>${cerrar}</div>`;
+
+            if (data.cargando) {
+                modal.innerHTML = box(`${header('🔁 Cambio / Entrega')}
+                    <div style="color:#58a6ff;font-size:15px;font-weight:600;text-align:center;padding:14px 0;">🔍 Buscando en Mercado Libre…</div>
+                    <div style="width:100%;height:3px;background:#21262d;border-radius:2px;overflow:hidden;"><div style="height:100%;background:#58a6ff;border-radius:2px;animation:scanProgress 1.5s ease-in-out infinite;"></div></div>`);
+                return;
+            }
+
+            // Ya tiene caso → informar (no duplicar)
+            if (data.existente) {
+                const r = data.existente;
+                const esCE = _ceEsCambioEntrega(r);
+                modal.innerHTML = box(`${header('Ya tiene caso')}
+                    <div style="background:#0d1117;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;gap:8px;align-items:center;"><span style="background:#1f3a1f;color:#3fb950;padding:2px 10px;border-radius:6px;font-size:15px;font-weight:700;font-family:monospace;">${r.id}</span>
+                        <span style="color:#e3b341;font-size:12px;font-weight:700;text-transform:uppercase;">${r.tipo || ''} · ${r.estado || ''}</span></div>
+                        <div style="color:#e6edf3;font-size:14px;font-weight:600;">📍 ${r.zona || '—'}</div>
+                        <div style="color:#8b949e;font-size:12px;">Esta venta ya está registrada${esCE ? ' como cambio/entrega' : ' como reclamo/devolución'}.</div>
+                    </div>
+                    ${esCE ? `<button onclick="_cerrarFormCambio();verCambiosEntregas()" style="background:#1a2a3a;color:#58a6ff;border:1.5px solid #58a6ff;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">📋 Ver en la pizarra</button>` : ''}
+                    <button onclick="_cerrarFormCambio();abrirEscaner('cambio_entrega')" style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:10px;border-radius:10px;font-size:13px;cursor:pointer;">🔄 Escanear otro</button>`);
+                return;
+            }
+
+            // Formulario (con o sin datos de ML)
+            const manual = !!data.manual;
+            const dirAuto = [data.calle || '', data.numero || ''].join(' ').trim();
+            window._ceForm = {
+                shippingId: data.shippingId || ('MAN-' + Date.now()),
+                orderId:    data.orderId || (data.num ? String(data.num) : ''),
+                comprador:  data.comprador || '',
+                cuenta:     data.cuenta || '',
+                zona:       data.zona || '',
+                dir:        dirAuto,
+                articulo:   '',
+                valor:      data.valor || 0,
+                tipo:       null,
+                manual,
+            };
+            const venc = _ceVenc();
+            const esc = s => String(s || '').replace(/"/g, '&quot;');
+            const infoML = manual
+                ? `<div style="background:#2a1f00;color:#e3b341;border-radius:8px;padding:9px 11px;font-size:12px;">⚠️ Sin datos de ML — cargá zona y valor a mano. Igual se asigna N° de caso.</div>`
+                : `<div style="background:#0d1117;border-radius:10px;padding:11px;display:flex;flex-direction:column;gap:4px;">
+                        ${window._ceForm.comprador ? `<div style="color:#8b949e;font-size:12px;">👤 ${window._ceForm.comprador}</div>` : ''}
+                        ${window._ceForm.cuenta ? `<div style="color:#8b949e;font-size:12px;">🏪 ${window._ceForm.cuenta}</div>` : ''}
+                        <div style="color:#484f58;font-size:11px;font-family:monospace;">${window._ceForm.orderId ? '#' + window._ceForm.orderId : ''}</div>
+                    </div>`;
+            modal.innerHTML = box(`${header('🔁 Registrar cambio / entrega')}
+                ${infoML}
+                <div style="background:#0d2136;border:1px solid #1f4a6b;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+                    <span style="color:#8b949e;font-size:12px;">N° de caso a asignar:</span>
+                    <span id="cePreviewCaso" style="background:#1f3a1f;color:#3fb950;padding:2px 10px;border-radius:6px;font-size:15px;font-weight:700;font-family:monospace;">…</span>
+                </div>
+                <div>
+                    <div style="color:#8b949e;font-size:12px;margin-bottom:6px;">¿Qué es?</div>
+                    <div style="display:flex;gap:8px;">
+                        <button id="ceBtnCambio" onclick="_ceSetTipo('cambio')" style="flex:1;padding:13px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;background:#21262d;color:#e6edf3;border:1.5px solid #30363d;">🔁 CAMBIO</button>
+                        <button id="ceBtnEntrega" onclick="_ceSetTipo('entrega')" style="flex:1;padding:13px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;background:#21262d;color:#e6edf3;border:1.5px solid #30363d;">📦 ENTREGA</button>
+                    </div>
+                    <div id="ceTipoHint" style="color:#8b949e;font-size:11px;margin-top:6px;min-height:14px;"></div>
+                </div>
+                <div>
+                    <div style="color:#e6edf3;font-size:12px;margin-bottom:6px;font-weight:600;">📦 ¿Qué artículo es? <span style="color:#484f58;">(para reconocerlo cuando llega sin etiqueta)</span></div>
+                    <input id="ceArticulo" value="" placeholder="Ej: pollera negra talle 2 / remera blanca M"
+                        style="width:100%;background:#0d1117;border:1.5px solid #30363d;color:#e6edf3;padding:11px 12px;border-radius:10px;font-size:15px;outline:none;font-family:inherit;" />
+                </div>
+                <div>
+                    <div style="color:#e6edf3;font-size:12px;margin-bottom:6px;font-weight:600;">📍 Zona / distrito <span style="color:#f85149;">*obligatorio</span></div>
+                    <input id="ceZona" value="${esc(window._ceForm.zona)}" placeholder="Ej: CABA - San Telmo"
+                        oninput="this.style.borderColor='#30363d'"
+                        style="width:100%;background:#0d1117;border:1.5px solid #30363d;color:#e6edf3;padding:11px 12px;border-radius:10px;font-size:15px;outline:none;font-family:inherit;" />
+                </div>
+                <div>
+                    <div style="color:#8b949e;font-size:12px;margin-bottom:6px;">🏠 Dirección <span style="color:#484f58;">(opcional — se completa sola si viene de ML)</span></div>
+                    <input id="ceDir" value="${esc(window._ceForm.dir)}" placeholder="Calle y número"
+                        style="width:100%;background:#0d1117;border:1.5px solid #30363d;color:#e6edf3;padding:11px 12px;border-radius:10px;font-size:15px;outline:none;font-family:inherit;" />
+                </div>
+                <div>
+                    <div style="color:#e6edf3;font-size:12px;margin-bottom:6px;font-weight:600;">💵 Valor del producto <span style="color:#f85149;">*obligatorio</span> <span style="color:#484f58;">(para descontar si no se resuelve)</span></div>
+                    <input id="ceValor" type="number" inputmode="numeric" value="${window._ceForm.valor || ''}" placeholder="0"
+                        oninput="this.style.borderColor='#30363d'"
+                        style="width:100%;background:#0d1117;border:1.5px solid #30363d;color:#e6edf3;padding:11px 12px;border-radius:10px;font-size:15px;outline:none;font-family:inherit;-moz-appearance:textfield;" />
+                </div>
+                <div style="color:#e3b341;font-size:12px;font-weight:600;">⏱️ Vence: ${_ceFmtCorta(venc)} (2 días hábiles)</div>
+                <button id="ceBtnConfirmar" onclick="_registrarCambioEntrega()" style="background:#1a3d16;color:#4CAF50;border:1.5px solid #4CAF50;padding:14px;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;opacity:.55;">🔐 Confirmar y asignar caso</button>
+                <button onclick="_cerrarFormCambio();abrirEscaner('cambio_entrega')" style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:10px;border-radius:10px;font-size:13px;cursor:pointer;">🔄 Escanear otro</button>`);
+            _ceLlenarProximoCaso();
+        }
+        // Muestra el N° de caso que se asignaría ahora mismo (máximo actual + 1)
+        async function _ceLlenarProximoCaso() {
+            const set = txt => { const el = document.getElementById('cePreviewCaso'); if (el) el.textContent = txt; };
+            const maxDe = recs => recs.reduce((mx, r) => { const n = parseInt(String(r.id || '').replace(/\D/g, ''), 10); return (!isNaN(n) && n > mx) ? n : mx; }, 0);
+            let mx = 0;
+            if (window._reclamosMap && window._reclamosMap.size) { window._reclamosMap.forEach(r => { const n = parseInt(String(r.id || '').replace(/\D/g, ''), 10); if (!isNaN(n) && n > mx) mx = n; }); }
+            if (mx) set('#' + String(mx + 1).padStart(3, '0'));
+            // Refinar contra el Sheet (por si otro cargó casos)
+            const d = await _gasReclamo({ action: 'get_reclamos' }).catch(() => null);
+            if (d && d.records) { const m2 = maxDe(d.records); if (m2 >= mx) set('#' + String(m2 + 1).padStart(3, '0')); }
+            else if (!mx) set('#—');
+        }
+        window._ceSetTipo = function(t) {
+            if (window._ceForm) window._ceForm.tipo = t;
+            const bC = document.getElementById('ceBtnCambio'), bE = document.getElementById('ceBtnEntrega');
+            const on = 'flex:1;padding:13px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;';
+            if (bC) bC.style.cssText = on + (t === 'cambio' ? 'background:#3d2a12;color:#ffb454;border:2px solid #ffb454;' : 'background:#21262d;color:#e6edf3;border:1.5px solid #30363d;');
+            if (bE) bE.style.cssText = on + (t === 'entrega' ? 'background:#12303d;color:#54c7ff;border:2px solid #54c7ff;' : 'background:#21262d;color:#e6edf3;border:1.5px solid #30363d;');
+            const h = document.getElementById('ceTipoHint');
+            if (h) h.textContent = t === 'cambio'
+                ? 'Se entrega el nuevo y se retira el viejo (tiene que volver a la sede).'
+                : 'Solo se entrega el paquete al cliente.';
+            const btn = document.getElementById('ceBtnConfirmar');
+            if (btn) btn.style.opacity = t ? '1' : '.55';
+        };
+        function _cerrarFormCambio() { const m = document.getElementById('modalFormCambio'); if (m) m.style.display = 'none'; }
+
+        async function _registrarCambioEntrega() {
+            const f = window._ceForm;
+            if (!f) return;
+            if (!f.tipo) { _showNEToast('Elegí 🔁 Cambio o 📦 Entrega'); return; }
+            const zEl = document.getElementById('ceZona'), vEl = document.getElementById('ceValor');
+            const zona  = (zEl && zEl.value || '').trim();
+            const valor = Math.round(Number(vEl && vEl.value || 0)) || 0;
+            const dir   = (document.getElementById('ceDir') && document.getElementById('ceDir').value || '').trim();
+            const articulo = (document.getElementById('ceArticulo') && document.getElementById('ceArticulo').value || '').trim();
+            // Validación: zona y valor son obligatorios
+            if (!zona)     { if (zEl) { zEl.style.borderColor = '#f85149'; zEl.focus(); } _showNEToast('📍 Falta la zona / distrito'); return; }
+            if (valor <= 0){ if (vEl) { vEl.style.borderColor = '#f85149'; if (zona) vEl.focus(); } _showNEToast('💵 Falta el valor del producto'); return; }
+            const vencD = _ceVenc();
+            const vencStr = _ceFmtDMY(vencD);
+            const tipoLbl = f.tipo === 'cambio' ? '🔁 CAMBIO' : '📦 ENTREGA';
+            const notas = [articulo, dir].filter(Boolean).join(' · ');
+            _mostrarPIN(
+                `<b>${tipoLbl}</b><br><small style="color:#8b949e;">Asignar N° de caso · vence ${_ceFmtCorta(vencD)}</small>`,
+                async ok => {
+                    if (!ok) return;
+                    const btn = document.getElementById('ceBtnConfirmar');
+                    if (btn) { btn.textContent = '⏳ Asignando…'; btn.disabled = true; }
+                    const data = await _gasReclamo({
+                        action: 'add_reclamo',
+                        shippingId: f.shippingId,
+                        orderId: f.orderId || '',
+                        comprador: f.comprador || '',
+                        zona,
+                        cuenta: f.cuenta || '',
+                        tipo: f.tipo,
+                        valor,
+                        fechaEstimada: vencStr,
+                        notas,
+                    });
+                    if (data && data.ok && data.record) {
+                        (window._reclamosMap = window._reclamosMap || new Map()).set(String(f.shippingId), data.record);
+                        _saveReclamosCache(window._reclamosMap);
+                        _showNEToast(`✅ Caso ${data.record.id} · ${f.tipo}`);
+                        _cerrarFormCambio();
+                        verCambiosEntregas();
+                    } else {
+                        if (btn) { btn.textContent = '🔐 Confirmar y asignar caso'; btn.disabled = false; }
+                        _showNEToast('⚠️ No se pudo registrar. Reintentá.');
+                    }
+                },
+                [_PIN_OWNER]
+            );
+        }
+
+        // ── Escaneo para RECIBIR un cambio que volvió ────────────────────────
+        async function _recibirCambioEscaneado(code) {
+            const nums = String(code).match(/\d{10,}/g);
+            const num  = nums ? nums.sort((a, b) => b.length - a.length)[0] : '';
+            let rec = null;
+            if (num && window._reclamosMap) {
+                window._reclamosMap.forEach(r => { if (!rec && _ceEsCambioEntrega(r) && (String(r.shippingId) === num || String(r.orderId) === num)) rec = r; });
+            }
+            if (!rec && num) {
+                const d = await _gasReclamo({ action: 'search_reclamos', q: num }).catch(() => null);
+                rec = d && d.records && d.records.find(r => _ceEsCambioEntrega(r));
+            }
+            if (!rec) { _showNEToast('No encontré un cambio/entrega con ese código'); verCambiosEntregas(); return; }
+            (window._reclamosMap = window._reclamosMap || new Map()).set(String(rec.shippingId), rec);
+            _ceRecibi(rec.shippingId);
+        }
+
+        // Busca un registro de cambio/entrega por shippingId
+        function _ceGetRec(sid) {
+            return (window._ceRecords || []).find(x => String(x.shippingId) === String(sid))
+                || (window._reclamosMap && window._reclamosMap.get(String(sid))) || null;
+        }
+        // Guarda cambios en el Sheet (estado y/o valor) y refresca UI
+        function _ceGuardar(sid, params, okMsg, after) {
+            _gasReclamo(Object.assign({ action: 'update_reclamo', shippingId: String(sid) }, params)).then(d => {
+                if (d && d.ok) {
+                    _showNEToast(okMsg || '✅ Guardado');
+                    const aplicar = obj => { if (!obj) return; if (params.estado !== undefined) obj.estado = params.estado; if (params.valor !== undefined) obj.valor = Number(params.valor); };
+                    const rec = window._reclamosMap && window._reclamosMap.get(String(sid));
+                    if (rec) { aplicar(rec); _saveReclamosCache(window._reclamosMap); }
+                    if (window._ceRecords) aplicar(window._ceRecords.find(x => String(x.shippingId) === String(sid)));
+                    if (after) { after(); return; }
+                    // Refrescar lo que esté a la vista: pizarra y/o sección inline en 7 días
+                    if (document.getElementById('ceBoardList') && window._ceRender) window._ceRender();
+                    if (document.getElementById('secbody-cambios') && window.renderNECards) {
+                        window.renderNECards(window._neCurrentFilter || 'all');
+                        const b = document.getElementById('secbody-cambios'); if (b) b.style.display = 'flex'; // mantener abierta
+                        const c = document.getElementById('secchev-cambios'); if (c) c.style.transform = 'rotate(90deg)';
+                    }
+                } else { _showNEToast('⚠️ Error al guardar'); }
+            });
+        }
+        // Acción genérica (cambia estado con PIN)
+        window._ceAccion = function(sid, estado, allowedPins, labelHtml, after) {
+            _mostrarPIN(labelHtml, ok => { if (!ok) return; _ceGuardar(sid, { estado }, '✅ ' + estado.replace('_', ' '), after); }, allowedPins);
+        };
+        // "Recibí el cambio" / "Entregado" — el PIN decide el estado:
+        //   1234 (logística) → en logística / entregado por repartidor (sigue en la lista)
+        //   9148 (dueño)     → recibido / entregado definitivo (se archiva, desaparece)
+        window._ceRecibi = function(sid) {
+            const rec = _ceGetRec(sid);
+            const esCambio = rec && rec.tipo === 'cambio';
+            const titulo = esCambio ? '📥 Recibí el cambio' : '📬 Entregado';
+            _mostrarPIN(
+                `<b>${titulo} ${rec ? rec.id : ''}</b><br><small style="color:#8b949e;">Código repartidor (logística lo tiene) · Tu código (lo recibiste vos, se archiva)</small>`,
+                (ok, pin) => {
+                    if (!ok) return;
+                    let estado;
+                    if (pin === _PIN_OWNER) estado = esCambio ? 'recibido' : 'entregado';
+                    else                    estado = esCambio ? 'en_deposito' : 'entregado_repartidor';
+                    _ceGuardar(sid, { estado }, '✅ ' + estado.replace('_', ' '));
+                },
+                [_PIN_LOGISTICA, _PIN_OWNER]
+            );
+        };
+        // Compartir un cambio/entrega (WhatsApp / share nativo)
+        window._ceCompartir = function(sid) {
+            const r = _ceGetRec(sid);
+            if (!r) return;
+            const tipo = r.tipo === 'cambio' ? '🔁 CAMBIO' : '📦 ENTREGA';
+            const dl = _parseFechaFlexible(r.fechaEstimada);
+            const txt = [
+                `${tipo} ${r.id}`,
+                r.zona ? `📍 ${r.zona}` : '',
+                r.notas ? `📦 ${r.notas}` : '',
+                r.comprador ? `👤 ${r.comprador}` : '',
+                r.valor > 0 ? `💵 $${Math.round(r.valor).toLocaleString('es-AR')}` : '',
+                dl ? `⏱️ vence ${_ceFmtCorta(dl)}` : '',
+            ].filter(Boolean).join('\n');
+            if (navigator.share) { navigator.share({ text: txt }).catch(() => {}); }
+            else { window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank'); }
+        };
+
+        // ── Historial de cambios / entregas (los ya resueltos) ───────────────
+        window._ceHistorial = function() {
+            let modal = document.getElementById('ceHistorialModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'ceHistorialModal';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.93);display:flex;flex-direction:column;padding:12px;gap:10px;';
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="flex:1;font-weight:800;font-size:16px;color:#FFE600;">🕐 Historial de cambios / entregas</span>
+                    <button onclick="document.getElementById('ceHistorialModal').style.display='none'" style="background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;">✕</button>
+                </div>
+                <div id="ceHistorialList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+                    <div style="text-align:center;padding:30px;color:#8b949e;">⏳ Cargando…</div>
+                </div>`;
+            const render = (recs) => {
+                const list = document.getElementById('ceHistorialList');
+                if (!list) return;
+                const resueltos = recs.filter(r => _ceEsCambioEntrega(r) && _ceResuelto(r));
+                resueltos.sort((a, b) => ((_fechaCambio(b) ? _fechaCambio(b).getTime() : 0) - (_fechaCambio(a) ? _fechaCambio(a).getTime() : 0)));
+                if (!resueltos.length) { list.innerHTML = '<div style="text-align:center;padding:40px;color:#8b949e;">Todavía no hay cambios/entregas resueltos.</div>'; return; }
+                const meta = { entregado: { c: '#86efac', l: '📬 Entregado' }, recibido: { c: '#3fb950', l: '📥 Recibido' }, archivado: { c: '#8b949e', l: '🗃️ Archivado' } };
+                list.innerHTML = resueltos.map(r => {
+                    const m = meta[r.estado] || { c: '#8b949e', l: r.estado };
+                    const esCambio = r.tipo === 'cambio';
+                    const val = r.valor > 0 ? `$${Math.round(r.valor).toLocaleString('es-AR')}` : '';
+                    const fc = _fechaCambio(r);
+                    const fcTxt = fc ? fc.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+                    const art = (r.notas || '').trim();
+                    return `<div style="background:#161b22;border:1px solid #30363d;border-left:3px solid ${m.c};border-radius:10px;padding:11px 13px;display:flex;flex-direction:column;gap:4px;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <span style="background:#1f3a1f;color:#3fb950;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;font-family:monospace;">${r.id}</span>
+                            <span style="background:${esCambio ? '#3d2a12' : '#12303d'};color:${esCambio ? '#ffb454' : '#54c7ff'};padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">${esCambio ? '🔁 CAMBIO' : '📦 ENTREGA'}</span>
+                            <span style="color:${m.c};font-size:11px;font-weight:700;">${m.l}</span>
+                            ${val ? `<span style="color:#3fb950;font-size:12px;font-weight:700;">${val}</span>` : ''}
+                            <span style="margin-left:auto;color:#8b949e;font-size:11px;">${fcTxt}</span>
+                        </div>
+                        <div style="color:#e6edf3;font-size:13px;font-weight:700;">📍 ${r.zona || '—'}</div>
+                        ${art ? `<div style="color:#ffd27a;font-size:11px;">📦 ${art}</div>` : ''}
+                        <div style="display:flex;gap:6px;margin-top:2px;">
+                            <button onclick="window._ceReabrir('${r.shippingId}')" style="background:#21262d;color:#e3b341;border:1px solid #e3b341;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">↩️ Reabrir</button>
+                            ${String(r.shippingId).startsWith('MAN-') ? '' : `<button onclick="verEtiqueta('${r.shippingId}',event)" style="background:#1a2a4a;color:#58a6ff;border:1px solid #1E88E5;padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🏷️ Etiqueta</button>`}
+                        </div>
+                    </div>`;
+                }).join('');
+            };
+            const mem = [];
+            if (window._reclamosMap) window._reclamosMap.forEach(r => { if (_ceEsCambioEntrega(r) && _ceResuelto(r)) mem.push(r); });
+            if (mem.length) render(mem);
+            _gasReclamo({ action: 'get_reclamos' }).then(d => {
+                if (d && d.records) { d.records.forEach(r => (window._reclamosMap = window._reclamosMap || new Map()).set(String(r.shippingId), r)); render(d.records); }
+                else if (!mem.length) { const l = document.getElementById('ceHistorialList'); if (l) l.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>'; }
+            }).catch(() => { if (!mem.length) { const l = document.getElementById('ceHistorialList'); if (l) l.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>'; } });
+        };
+        // Reabrir un caso resuelto → vuelve a "pendiente" (activos)
+        window._ceReabrir = function(sid) {
+            window._ceAccion(sid, 'pendiente', [_PIN_OWNER], `<b style="color:#e3b341;">↩️ Reabrir caso</b><br><small style="color:#8b949e;">Vuelve a la lista de activos</small>`, () => {
+                window._ceHistorial();
+                if (document.getElementById('secbody-cambios') && window.renderNECards) window.renderNECards(window._neCurrentFilter || 'all');
+                if (document.getElementById('ceBoardList') && window._ceRender) window._ceRender();
+            });
+        };
+
+        // ── Pizarra Cambios / Entregas ───────────────────────────────────────
+        function verCambiosEntregas() {
+            let modal = document.getElementById('ceBoard');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'ceBoard';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;padding:12px;gap:10px;';
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="flex:1;font-weight:800;font-size:16px;color:#FFE600;">🔁 Cambios / Entregas</span>
+                    <button onclick="window._ceHistorial()" style="background:#161b22;color:#8b949e;border:1px solid #30363d;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🕐 Historial</button>
+                    <button onclick="abrirEscaner('cambio_entrega')" style="background:#1a3d16;color:#4CAF50;border:1px solid #4CAF50;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">＋ Nuevo</button>
+                    <button onclick="document.getElementById('ceBoard').style.display='none'" style="background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;">✕</button>
+                </div>
+                <div id="ceBoardList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;">
+                    <div style="text-align:center;padding:30px;color:#8b949e;">⏳ Cargando…</div>
+                </div>`;
+            // Mostrar rápido lo que haya en memoria, y refrescar desde el Sheet
+            const fromMem = [];
+            if (window._reclamosMap) window._reclamosMap.forEach(r => { if (_ceEsCambioEntrega(r)) fromMem.push(r); });
+            if (fromMem.length) { window._ceRecords = fromMem; window._ceRender(); }
+            _gasReclamo({ action: 'get_reclamos' }).then(d => {
+                const recs = (d && d.records || []).filter(_ceEsCambioEntrega);
+                window._ceRecords = recs;
+                // sincronizar memoria
+                recs.forEach(r => (window._reclamosMap = window._reclamosMap || new Map()).set(String(r.shippingId), r));
+                window._ceRender();
+            }).catch(() => { if (!fromMem.length) { const l = document.getElementById('ceBoardList'); if (l) l.innerHTML = '<div style="text-align:center;padding:20px;color:#f85149;">❌ Error de conexión</div>'; } });
+        }
+
+        window._ceRender = function() {
+            const list = document.getElementById('ceBoardList');
+            if (!list) return;
+            const recs = (window._ceRecords || []).filter(_ceEsCambioEntrega);
+            const activos = recs.filter(r => !_ceResuelto(r));
+            const resueltos = recs.length - activos.length;
+            // Orden: vencidos primero, luego pendientes, por confirmar, en logística; dentro por #ID desc
+            const prio = r => {
+                if (r.estado === 'pendiente' && _ceVencido(r)) return 0;
+                if (r.estado === 'descontado') return 1;
+                if (r.estado === 'entregado_repartidor') return 2;
+                if (r.estado === 'pendiente') return 3;
+                if (r.estado === 'en_deposito') return 4;
+                return 5;
+            };
+            const numId = r => parseInt(String(r.id || '').replace(/\D/g, ''), 10) || 0;
+            activos.sort((a, b) => prio(a) - prio(b) || numId(b) - numId(a));
+
+            const nVenc = activos.filter(r => r.estado === 'pendiente' && _ceVencido(r)).length;
+            let html = '';
+            if (nVenc) html += `<div style="background:#3a1414;border:1px solid #7b1a1a;border-radius:10px;padding:9px 12px;color:#f85149;font-size:12px;font-weight:700;">🔴 ${nVenc} vencido${nVenc !== 1 ? 's' : ''} — revisá y descontá si corresponde</div>`;
+            html += activos.map(_ceCard).join('');
+            if (!activos.length) html += `<div style="text-align:center;padding:40px 20px;color:#8b949e;">Sin cambios/entregas activos.<br><span style="font-size:12px;">Tocá <b style="color:#4CAF50;">＋ Nuevo</b> para registrar uno.</span></div>`;
+            if (resueltos) html += `<div style="text-align:center;color:#484f58;font-size:12px;padding:8px 0;">✓ ${resueltos} ya resuelto${resueltos !== 1 ? 's' : ''} (recibido/entregado/archivado)</div>`;
+            list.innerHTML = html;
+        };
+
+        // Desplegar/colapsar el detalle de una mini-card de cambio/entrega
+        window._ceToggleCard = function(sid) {
+            const det  = document.getElementById('cedet-' + sid);
+            const chev = document.getElementById('cechev-' + sid);
+            if (!det) return;
+            const open = det.style.display !== 'none';
+            det.style.display = open ? 'none' : 'block';
+            if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+        };
+
+        // Mini-card compacta (zona + monto + #caso + hace días) que se despliega
+        // al tocarla y muestra tipo, estado, artículo y botones. Mismo look que
+        // las tarjetas de "A DEVOLVER".
+        function _ceCard(r) {
+            const sid = String(r.shippingId);
+            const esCambio = r.tipo === 'cambio';
+            const est = r.estado || 'pendiente';
+            const descontado = est === 'descontado';
+            const vencido = !descontado && est === 'pendiente' && _ceVencido(r);
+            const icon  = esCambio ? '🔁' : '📦';
+            const borde = descontado ? '#58a6ff' : vencido ? '#f85149' : esCambio ? '#ffb454' : '#54c7ff';
+            const zonaCol = vencido ? '#ff8a80' : '#e6edf3';
+
+            // Chip de estado a la derecha (visible sin desplegar)
+            const chipMeta = est === 'pendiente' ? (vencido ? { c: '#f85149', l: '⚠️ Vencido' } : { c: '#e3b341', l: 'Pendiente' })
+                : est === 'en_deposito'          ? { c: '#ffa040', l: 'En logística' }
+                : est === 'entregado_repartidor' ? { c: '#58a6ff', l: 'A confirmar' }
+                : est === 'descontado'           ? { c: '#58a6ff', l: 'Descontado' }
+                : { c: '#8b949e', l: est };
+            const estChip = `<span style="flex-shrink:0;background:${chipMeta.c}22;color:${chipMeta.c};border:1px solid ${chipMeta.c};padding:1px 9px;border-radius:20px;font-size:10px;font-weight:800;white-space:nowrap;">${chipMeta.l}</span>`;
+
+            // Sub-fila compacta: #caso, monto, hace días, flag vencido
+            const valNum = Math.round(r.valor || 0);
+            const valStr = valNum > 0 ? `$${valNum.toLocaleString('es-AR')}` : '';
+            const valTxt = valStr ? `<span style="color:${descontado ? '#6e7681' : '#3fb950'};font-size:11px;font-weight:700;white-space:nowrap;${descontado ? 'text-decoration:line-through;' : ''}">${valStr}${descontado ? ' ✅' : ''}</span>` : '';
+            const fa = _parseFechaFlexible(r.fechaAlta);
+            let hace = '';
+            if (fa && !isNaN(fa)) { const dd = Math.floor((Date.now() - fa.getTime()) / 86400000); hace = dd <= 0 ? 'hoy' : (dd === 1 ? 'hace 1 día' : `hace ${dd} días`); }
+            const idBadge  = `<span style="background:#1f3a1f;color:#3fb950;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;">${r.id}</span>`;
+            const vencFlag = vencido ? `<span style="color:#f85149;font-size:10px;font-weight:700;white-space:nowrap;">⚠️ vencido</span>` : '';
+
+            // Detalle (oculto hasta tocar)
+            const tipoBadge = esCambio
+                ? `<span style="background:#3d2a12;color:#ffb454;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;">🔁 CAMBIO</span>`
+                : `<span style="background:#12303d;color:#54c7ff;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;">📦 ENTREGA</span>`;
+            const estMeta = {
+                pendiente:            { c: vencido ? '#f85149' : '#e3b341', l: vencido ? '⚠️ VENCIDO' : '⏳ Pendiente' },
+                en_deposito:          { c: '#ffa040', l: esCambio ? '🚚 En logística (vuelve a la sede)' : '🚚 En logística' },
+                entregado_repartidor: { c: '#58a6ff', l: '📬 Entregado por repartidor · falta tu confirmación' },
+                descontado:           { c: '#58a6ff', l: '💸 Descontado' },
+            };
+            const m = estMeta[est] || { c: '#8b949e', l: est };
+            const banner = `<div style="background:${m.c}1a;border:1px solid ${m.c};color:${m.c};border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800;text-align:center;margin:4px 0 6px;">${m.l}</div>`;
+            const articulo = (r.notas || '').trim();
+            const dl = _parseFechaFlexible(r.fechaEstimada);
+            const venceTxt = dl ? (vencido ? `venció ${_ceFmtCorta(dl)}` : `vence ${_ceFmtCorta(dl)}`) : '';
+            const recibiLbl = esCambio ? '📥 Recibí el cambio' : '📬 Entregado';
+            const btns = `
+                <button onclick="event.stopPropagation();_ceRecibi('${sid}')" style="background:#1a3d16;color:#4CAF50;">${recibiLbl}</button>
+                ${!descontado ? `<button onclick="event.stopPropagation();window._ceAccion('${sid}','descontado',['${_PIN_OWNER}'],\`💸 Descontar ${r.id}\`)" style="background:#1a2a3a;color:#58a6ff;">💸 Descontar</button>` : ''}
+                <button onclick="event.stopPropagation();_ceCompartir('${sid}')" style="background:#13361b;color:#3fb950;">📤 Compartir</button>
+                <button onclick="event.stopPropagation();window._ceAccion('${sid}','archivado',['${_PIN_OWNER}'],\`🗃️ Archivar ${r.id}\`)" style="background:#161616;color:#8b949e;">🗃️ Archivar</button>
+                ${!sid.startsWith('MAN-') ? `<button onclick="event.stopPropagation();verEtiqueta('${sid}',event)" style="background:#1a2a4a;color:#58a6ff;">🏷️ Etiqueta</button>` : ''}`;
+
+            return `<div class="ne-mini-card" data-sid="ce-${sid}" style="border-left-color:${borde};" onclick="_ceToggleCard('${sid}')">
+                <div class="ne-mini-row">
+                    <span class="ne-mini-ic">${icon}</span>
+                    <span class="ne-mini-zona" style="color:${zonaCol};">${r.zona || '—'}</span>
+                    ${estChip}
+                    <span class="ne-mini-chev" id="cechev-${sid}">›</span>
+                </div>
+                <div class="ne-mini-sub">
+                    ${idBadge}${valTxt}${hace ? `<span style="color:#8b949e;font-size:10px;white-space:nowrap;">🕐 ${hace}</span>` : ''}${vencFlag}
+                </div>
+                <div class="ne-mini-det" id="cedet-${sid}" style="display:none;">
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${tipoBadge}</div>
+                    ${banner}
+                    ${articulo ? `<div style="color:#ffd27a;font-size:12px;font-weight:600;margin-bottom:4px;">📦 ${articulo}</div>` : ''}
+                    <div style="color:#8b949e;font-size:11px;margin-bottom:6px;">${r.cuenta || ''}${r.comprador ? ' · ' + r.comprador : ''}${venceTxt ? ' · ' + venceTxt : ''}</div>
+                    <div class="ne-mini-btns">${btns}</div>
+                </div>
+            </div>`;
+        }
+
         function toggleTools() { abrirMasDrawer(); } // compatibilidad
 
         // ── Tiempo relativo ──────────────────────────────────────────────────
@@ -6360,6 +7079,21 @@
                     🔍 <span>Diagnóstico</span>
                 </button>
             </div>`;
+
+            // ── Sección: cambios / entregas ───────────────────────────────────
+            html += `<div style="font-size:11px;color:#8b949e;font-weight:600;letter-spacing:.5px;margin:14px 0 8px;">CAMBIOS / ENTREGAS</div>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();abrirEscaner('cambio_entrega');">
+                <span style="font-size:20px;">🔁</span>
+                <div><div>Registrar cambio / entrega</div><div style="font-size:11px;color:#8b949e;">Escaneá el código y asigná el caso</div></div>
+            </button>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();verCambiosEntregas();">
+                <span style="font-size:20px;">📋</span>
+                <div><div>Ver cambios / entregas</div><div style="font-size:11px;color:#8b949e;">Pendientes, vencidos y por confirmar</div></div>
+            </button>`;
+            html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();window._ceHistorial();">
+                <span style="font-size:20px;">🕐</span>
+                <div><div>Historial de cambios / entregas</div><div style="font-size:11px;color:#8b949e;">Los ya entregados / recibidos / archivados</div></div>
+            </button>`;
 
             // ── Sección: vista de hoy (si está cargada) ───────────────────────
             html += `<div style="font-size:11px;color:#8b949e;font-weight:600;letter-spacing:.5px;margin:14px 0 8px;">VISTA DE HOY</div>`;
@@ -6924,13 +7658,15 @@
         // diferencia entre uno que afectó y otro que no fue la hora del date_first_visit.
         const REPUTACION_HORA_LIMITE = 21;
 
+        // El formatter se crea UNA sola vez (crear Intl.DateTimeFormat es caro; antes se
+        // creaba en cada llamada a _horaAR).
+        const _fmtHoraARnum = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23'
+        });
         function _horaAR(dateStr) {
             if (!dateStr) return null;
             try {
-                const s = new Intl.DateTimeFormat('en-GB', {
-                    timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23'
-                }).format(new Date(dateStr));
-                return Number(s);
+                return Number(_fmtHoraARnum.format(new Date(dateStr)));
             } catch (e) { const d = new Date(dateStr); return isNaN(d) ? null : d.getHours(); }
         }
 
@@ -8141,7 +8877,7 @@
 <canvas id="qrCanvas" style="display:none;"></canvas>
 
 <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;">
-    <div style="color:#FFE600;font-size:19px;font-weight:800;text-align:center;letter-spacing:-0.3px;">📷 Escaneá el QR del paquete</div>
+    <div id="qrModalTitulo" style="color:#FFE600;font-size:19px;font-weight:800;text-align:center;letter-spacing:-0.3px;">📷 Escaneá el QR del paquete</div>
     <!-- Cámara en vivo -->
     <div id="qrLiveWrap" style="position:relative;width:min(95vw,460px);display:none;">
         <video id="qrVideo" playsinline autoplay muted style="width:100%;border-radius:16px;display:block;background:#000;max-height:66vh;object-fit:cover;box-shadow:0 0 0 1px #30363d;"></video>
@@ -8151,7 +8887,6 @@
                 <div style="position:absolute;top:0;right:0;width:38px;height:38px;border-top:4px solid #FFE600;border-right:4px solid #FFE600;border-radius:0 4px 0 0;"></div>
                 <div style="position:absolute;bottom:0;left:0;width:38px;height:38px;border-bottom:4px solid #FFE600;border-left:4px solid #FFE600;border-radius:0 0 0 4px;"></div>
                 <div style="position:absolute;bottom:0;right:0;width:38px;height:38px;border-bottom:4px solid #FFE600;border-right:4px solid #FFE600;border-radius:0 0 4px 0;"></div>
-                <div class="qr-laser"></div>
             </div>
         </div>
     </div>
@@ -8178,7 +8913,11 @@
             </button>
         </div>
         <div id="qrManualStatus" style="color:#8b949e;font-size:12px;min-height:16px;"></div>
-        <button onclick="document.getElementById('qrModoManualWrap').style.display='none';abrirEscaner()"
+        <button id="qrManualCargarForm" onclick="cerrarEscaner();window._scanMode='reclamo';_abrirFormCambio({manual:true})"
+            style="display:none;background:#3d2a12;color:#ffb454;border:1.5px solid #ffb454;padding:12px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;width:100%;margin-top:4px;touch-action:manipulation;">
+            ✏️ Cargar todo a mano (sin datos de Mercado Libre)
+        </button>
+        <button onclick="document.getElementById('qrModoManualWrap').style.display='none';abrirEscaner(window._scanMode)"
             style="background:#21262d;color:#8b949e;border:1px solid #30363d;padding:8px;border-radius:8px;font-size:12px;cursor:pointer;width:100%;margin-top:8px;">
             📷 Volver a cámara
         </button>
