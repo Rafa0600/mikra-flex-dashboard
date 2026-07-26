@@ -2061,11 +2061,37 @@
                 if (typeof _saveReclamosCache === 'function') _saveReclamosCache(window._reclamosMap);
             }
         }
+        // Un envío va a "A DEVOLVER" si ML lo marcó cancelado O si su reclamo ya se está
+        // manejando como devolución (descontado / reclamado / driver_devolver / en depósito).
+        // Los pendientes/demorados en camino siguen en "SIN ENTREGAR" hasta que se resuelvan.
+        function _sidEsDevolver(sid) {
+            if (_getDevolverForzados().has(String(sid))) return true; // ML lo confirmó cancelado
+            const rec = window._reclamosMap && window._reclamosMap.get(String(sid));
+            return !!rec && (rec.tipo === 'driver_devolver' || rec.estado === 'descontado' || rec.estado === 'en_deposito');
+        }
+        function _esDevolverItem(t) {
+            const sh = t && t.shipping;
+            return !!(sh && sh._canceladaDevolver) || _sidEsDevolver(sh && sh.id);
+        }
         // Botón de emergencia siempre disponible en consola: _desarchivarTodoGlobal()
         window._desarchivarTodoGlobal = function() {
             localStorage.removeItem('_neArchivados');
             alert('✅ Archivados borrados. Recargá la página.');
         };
+
+        // Envíos que ML confirmó CANCELADOS (y estuvieron en camino) → van a "A devolver"
+        // aunque el reclamo siga como demorado/pendiente. Se marca al verificar en ML.
+        let _devolverForzadosSet = null;
+        function _getDevolverForzados() {
+            if (_devolverForzadosSet) return _devolverForzadosSet;
+            try { _devolverForzadosSet = new Set(JSON.parse(localStorage.getItem('_neDevolverForzados') || '[]')); }
+            catch (e) { _devolverForzadosSet = new Set(); }
+            return _devolverForzadosSet;
+        }
+        function _addDevolverForzado(sid) {
+            const s = _getDevolverForzados(); s.add(String(sid));
+            try { localStorage.setItem('_neDevolverForzados', JSON.stringify([...s])); } catch (e) {}
+        }
 
         // ══ QR Scanner (cámara en vivo con fallback a foto) ════════════════
         let _qrStream = null, _qrRaf = null, _qrDetector = null, _qrAudioCtx = null;
@@ -4059,7 +4085,7 @@
                 const nuevos = todos.filter(t => {
                     const sid = String(t.shipping.id);
                     if (window._reclamosMap.has(sid)) return false; // ya registrado
-                    if (t.shipping._canceladaDevolver) return true;  // driver debe devolver → siempre
+                    if (_esDevolverItem(t)) return true;  // driver debe devolver → siempre
                     // Demorados: recién al 2º día HÁBIL de atraso (no cuenta sáb/dom).
                     // Ej: reprogramado viernes → no asigna sáb/dom/lun; recién el martes.
                     const fechaEnt = t.shipping.shipping_option?.estimated_delivery_time?.date
@@ -4259,6 +4285,7 @@
         async function _verificarEntregadosAuto(huerfanos) {
             if (!huerfanos || !huerfanos.length || typeof CUENTAS === 'undefined') return;
             const entregados = [];
+            const devolver   = []; // cancelados por ML que estuvieron en camino → a devolver
             for (const h of huerfanos) {
                 try {
                     const cuenta = CUENTAS.find(c => c.nombre === h.cuentaNombre) || CUENTAS[0];
@@ -4269,22 +4296,31 @@
                         { headers: { Authorization: `Bearer ${token}` } });
                     if (!r.ok) continue;
                     const s = await r.json();
-                    const fueEntregado = s?.status === 'delivered' || !!s?.status_history?.date_delivered;
+                    const hist = s?.status_history || {};
+                    const sid  = String(h.shipping.id);
+                    const fueEntregado = s?.status === 'delivered' || !!hist.date_delivered;
                     if (fueEntregado) {
-                        const sid = String(h.shipping.id);
                         entregados.push(sid);
                         const rec = window._reclamosMap?.get(sid);
                         if (rec) rec.estado = 'entregado';
                         _gasReclamo({ action: 'update_reclamo', shippingId: sid, estado: 'entregado' }).catch(() => {});
+                    } else if (s?.status === 'cancelled' && hist.date_shipped && !hist.date_delivered) {
+                        // Cancelado y estuvo en camino → el transportista debe devolverlo.
+                        if (!_getDevolverForzados().has(sid)) {
+                            _addDevolverForzado(sid);
+                            devolver.push(sid);
+                        }
+                        h.shipping._canceladaDevolver = true; // reclasifica al vuelo
                     }
                 } catch(e) {}
             }
-            if (entregados.length) {
+            if (entregados.length || devolver.length) {
+                if (entregados.length) window._neTodos = (window._neTodos || []).filter(t => !entregados.includes(String(t.shipping.id)));
                 _saveReclamosCache(window._reclamosMap);
-                window._neTodos = (window._neTodos || []).filter(t => !entregados.includes(String(t.shipping.id)));
                 _renderNEItems(window._neTodos, { fromCache: !window._neEsFresco });
                 _aplicarReclamosAlDOM();
-                _showNEToast(`📬 ${entregados.length} ya entregado${entregados.length > 1 ? 's' : ''} → archivado solo`);
+                if (entregados.length) _showNEToast(`📬 ${entregados.length} ya entregado${entregados.length > 1 ? 's' : ''} → archivado solo`);
+                if (devolver.length)   _showNEToast(`↩️ ${devolver.length} cancelado${devolver.length > 1 ? 's' : ''} → movido${devolver.length > 1 ? 's' : ''} a A devolver`);
             }
         }
 
@@ -4376,9 +4412,9 @@
             const diasN = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             const _esArchivado = sid => { const e = window._reclamosMap?.get(String(sid))?.estado; return e === 'archivado' || e === 'entregado' || _getArchivados().has(String(sid)); };
             const _esEnDepositoCount = sid => window._reclamosMap?.get(String(sid))?.estado === 'en_deposito';
-            const canceladaCount    = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id) && !_esEnDepositoCount(t.shipping.id)).length;
-            const enDepositoCount   = todos.filter(t => t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id) && _esEnDepositoCount(t.shipping.id)).length;
-            const fallidoCount      = todos.filter(t => t.shipping.status === 'not_delivered' && !t.shipping._canceladaDevolver && !_esArchivado(t.shipping.id)).length;
+            const canceladaCount    = todos.filter(t => _esDevolverItem(t) && !_esArchivado(t.shipping.id) && !_esEnDepositoCount(t.shipping.id)).length;
+            const enDepositoCount   = todos.filter(t => _esDevolverItem(t) && !_esArchivado(t.shipping.id) && _esEnDepositoCount(t.shipping.id)).length;
+            const fallidoCount      = todos.filter(t => t.shipping.status === 'not_delivered' && !_esDevolverItem(t) && !_esArchivado(t.shipping.id)).length;
             const enCaminoCount     = todos.filter(t => !_esArchivado(t.shipping.id)).length - fallidoCount - canceladaCount - enDepositoCount;
 
             // Construir map de grupos (clave = YYYY-MM-DD)
@@ -4452,7 +4488,7 @@
                 function buildCard({ shipping, order, cuentaNombre }, gLabel, gAtraso, gColor) {
                     const sub       = (shipping.substatus || '').toLowerCase();
                     const isEnCamino  = shipping.status === 'shipped';
-                    const isCancelada = !!shipping._canceladaDevolver;
+                    const isCancelada = !!shipping._canceladaDevolver || _sidEsDevolver(shipping.id);
 
                     const barrio  = shipping.receiver_address?.neighborhood?.name || '';
                     const ciudad  = shipping.receiver_address?.city?.name || '';
@@ -4647,7 +4683,7 @@
 
                 // Compartir todos los no-entregados para reclamar
                 window._compartirParaReclamar = function() {
-                    const items = todos.filter(t => !t.shipping._canceladaDevolver);
+                    const items = todos.filter(t => !_esDevolverItem(t));
                     if (!items.length) return;
                     const tot = items.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                     const totStr = tot > 0 ? ` · $${Math.round(tot).toLocaleString('es-AR')}` : '';
@@ -4659,8 +4695,8 @@
 
                 // Compartir todo (a devolver primero, luego sin entregar)
                 window._compartirTodo = function() {
-                    const devolver = todos.filter(t => t.shipping._canceladaDevolver);
-                    const enCamino = todos.filter(t => !t.shipping._canceladaDevolver);
+                    const devolver = todos.filter(t => _esDevolverItem(t));
+                    const enCamino = todos.filter(t => !_esDevolverItem(t));
                     const totalValor = todos.reduce((sum, t) => sum + (t.order?.total_amount || 0), 0);
                     const totStr = totalValor > 0 ? ` · $${Math.round(totalValor).toLocaleString('es-AR')}` : '';
                     let txt = `📦 *${todos.length} PAQUETES${totStr}*\n\n`;
@@ -4741,8 +4777,8 @@
                 window._compartirSeleccionados = function() {
                     const selItems = todos.filter(t => window._neSeleccionados.has(String(t.shipping.id)));
                     if (!selItems.length) return;
-                    const devolver = selItems.filter(t => t.shipping._canceladaDevolver);
-                    const enCamino = selItems.filter(t => !t.shipping._canceladaDevolver);
+                    const devolver = selItems.filter(t => _esDevolverItem(t));
+                    const enCamino = selItems.filter(t => !_esDevolverItem(t));
                     const totalVal = selItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                     const totalValStr = totalVal > 0 ? ` · $${Math.round(totalVal).toLocaleString('es-AR')}` : '';
                     let txt = `📦 *${selItems.length} PAQUETES${totalValStr}*\n\n`;
@@ -5218,7 +5254,7 @@
                     const item = todos.find(t => String(t.shipping.id) === String(sid));
                     if (!item) return;
                     const txt = _buildItemTxt(item, 1).trimEnd();
-                    const header = item.shipping._canceladaDevolver
+                    const header = _esDevolverItem(item)
                         ? `⚠️ *PAQUETE A DEVOLVER*\n\n`
                         : `🚚 *PAQUETE SIN ENTREGAR*\n\n`;
                     const full = header + txt;
@@ -5230,7 +5266,7 @@
                 if (filterKey === 'deposito') {
                     window._neDevolver = [];
                     const _esEnDep = sid => window._reclamosMap?.get(String(sid))?.estado === 'en_deposito';
-                    const depVis = todosVis.filter(t => t.shipping._canceladaDevolver && _esEnDep(t.shipping.id));
+                    const depVis = todosVis.filter(t => _esDevolverItem(t) && _esEnDep(t.shipping.id));
                     if (!depVis.length) {
                         html += `<div class="no-results" style="padding:30px;text-align:center;">Sin paquetes en depósito</div>`;
                     } else {
@@ -5255,7 +5291,7 @@
                 } else if (filterKey === 'canceladas') {
                     // Limpiar lista para regenerar con índices correctos
                     window._neDevolver = [];
-                    const cancelVis = todosVis.filter(t => t.shipping._canceladaDevolver);
+                    const cancelVis = todosVis.filter(t => _esDevolverItem(t));
                     html += `<div style="text-align:right;margin-bottom:12px;">
                         <button onclick="window._compartirTodosDevolver()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
                             📤 Compartir todos (${cancelVis.length})
@@ -5276,7 +5312,7 @@
                 } else if (filterKey === 'en-camino') {
                     // Solo los en camino sin entregar (excluye canceladas)
                     window._neDevolver = [];
-                    const enCaminoItems = todosVis.filter(t => !t.shipping._canceladaDevolver);
+                    const enCaminoItems = todosVis.filter(t => !_esDevolverItem(t));
                     html += `<div style="text-align:right;margin-bottom:12px;">
                         <button onclick="window._compartirParaReclamar()" style="background:linear-gradient(135deg,#FF6B00,#e85d04);color:white;border:none;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
                             📋 Compartir para reclamar (${enCaminoItems.length})
@@ -5334,7 +5370,7 @@
                     }
 
                     // ── SECCIÓN 1: ⚠️ DRIVER DEBE DEVOLVER (aún no llegaron al depósito) ──
-                    const aDevolver = todosVis.filter(t => t.shipping._canceladaDevolver && !_esEnDeposito(t.shipping.id));
+                    const aDevolver = todosVis.filter(t => _esDevolverItem(t) && !_esEnDeposito(t.shipping.id));
                     if (aDevolver.length) {
                         const totalADev = aDevolver.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                         const totalStr  = totalADev > 0 ? `$${Math.round(totalADev).toLocaleString('es-AR')}` : '';
@@ -5357,7 +5393,7 @@
                     }
 
                     // ── SECCIÓN 2: 📦 EN DEPÓSITO ────────────────────────────
-                    const enDeposito = todosVis.filter(t => t.shipping._canceladaDevolver && _esEnDeposito(t.shipping.id));
+                    const enDeposito = todosVis.filter(t => _esDevolverItem(t) && _esEnDeposito(t.shipping.id));
                     if (enDeposito.length) {
                         const totalDep = enDeposito.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                         const totalDepStr = totalDep > 0 ? `$${Math.round(totalDep).toLocaleString('es-AR')}` : '';
@@ -5380,13 +5416,13 @@
                     }
 
                     // ── SECCIÓN 3: 🔄 SIN ENTREGAR agrupados por fecha ────────
-                    const hayCamino = todosVis.some(t => !t.shipping._canceladaDevolver);
+                    const hayCamino = todosVis.some(t => !_esDevolverItem(t));
                     if (hayCamino) {
                         const topMargin = (aDevolver.length || enDeposito.length) ? 'margin-top:16px;' : '';
-                        const totalCam = todosVis.filter(t => !t.shipping._canceladaDevolver)
+                        const totalCam = todosVis.filter(t => !_esDevolverItem(t))
                             .reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                         const totalCamStr = totalCam > 0 ? ` · $${Math.round(totalCam).toLocaleString('es-AR')}` : '';
-                        const countCam = todosVis.filter(t => !t.shipping._canceladaDevolver).length;
+                        const countCam = todosVis.filter(t => !_esDevolverItem(t)).length;
                         if (aDevolver.length || enDeposito.length) {
                             const totalCamClean = totalCam > 0 ? `$${Math.round(totalCam).toLocaleString('es-AR')}` : '';
                             html += `<div class="ne-sec ne-sec-entregar">🔄 SIN ENTREGAR · ${countCam}<span class="ne-sec-count">${totalCamClean}</span></div>`;
@@ -5394,7 +5430,7 @@
                         groups.forEach(({ label, atraso, color, items }, gKey) => {
                             if (filterKey !== 'all' && gKey !== filterKey) return;
                             const visItems = (acctFilt === 'all' ? items : items.filter(t => t.cuentaNombre === acctFilt))
-                                .filter(t => !t.shipping._canceladaDevolver);
+                                .filter(t => !_esDevolverItem(t));
                             if (!visItems.length) return;
                             const diaTotal = visItems.reduce((s, t) => s + (t.order?.total_amount || 0), 0);
                             const diaTotalStr = diaTotal > 0 ? `$${Math.round(diaTotal).toLocaleString('es-AR')}` : '';
@@ -5435,7 +5471,7 @@
             </button>`;
 
             groups.forEach(({ label, atraso, color, items }, gKey) => {
-                const nonCancelled = items.filter(t => !t.shipping._canceladaDevolver);
+                const nonCancelled = items.filter(t => !_esDevolverItem(t));
                 if (nonCancelled.length === 0) return; // no mostrar días vacíos
                 const txtColor = color === '#FFE600' ? '#000' : 'white';
                 btnHtml += `<button class="ne-day-btn" data-key="${gKey}"
@@ -7246,7 +7282,7 @@
 
             if (neActivo) {
                 const neTodos = window._neTodos || [];
-                const dev = neTodos.filter(t=>t.shipping._canceladaDevolver).length;
+                const dev = neTodos.filter(t=>_esDevolverItem(t)).length;
                 const enc = neTodos.length - dev;
                 if (neTodos.length) {
                     html += `<button class="ne-drawer-btn" onclick="cerrarMasDrawer();window._compartirTodo();">
@@ -7299,7 +7335,7 @@
             const total    = todos.length;
             const mikra    = todos.filter(t => t.cuentaNombre === 'Mikra').length;
             const chaya    = todos.filter(t => t.cuentaNombre === 'Chaya').length;
-            const devolver = todos.filter(t => t.shipping._canceladaDevolver).length;
+            const devolver = todos.filter(t => _esDevolverItem(t)).length;
             const enCamino = total - devolver;
             const cur      = window._neAccountFilter || 'all';
 
