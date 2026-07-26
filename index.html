@@ -2027,6 +2027,40 @@
         function _saveArchivados(set) {
             try { localStorage.setItem('_neArchivados', JSON.stringify([...set])); } catch(e) {}
         }
+        // Auto-archivar reclamos ya DESCONTADOS cuyo ENVÍO tiene más de 15 días,
+        // para que no se acumulen en "A devolver". Usa la edad del envío (lo que se
+        // ve como "hace Xd"), no la fecha del reclamo. No toca cambios/entregas.
+        function _autoArchivarDescontadosViejos(items) {
+            if (!window._reclamosMap || !Array.isArray(items)) return;
+            const LIMITE_DIAS = 15;
+            const hoy = Date.now();
+            const arch = _getArchivados();
+            let hubo = false;
+            items.forEach(t => {
+                const sh = t && t.shipping;
+                if (!sh || !sh.id) return;
+                const sid = String(sh.id);
+                const rec = window._reclamosMap.get(sid);
+                if (!rec || rec.estado !== 'descontado') return;
+                if (rec.tipo === 'cambio' || rec.tipo === 'entrega') return;
+                // Edad del envío (fecha de entrega prometida, viene como string);
+                // respaldo: fechas del reclamo. _parseFechaFlexible → Date real.
+                const raw = (typeof _fechaPromesa === 'function' ? _fechaPromesa(sh) : '')
+                          || rec.fechaEstimada || rec.fechaDescontado || rec.fechaAlta || '';
+                const fEnt = raw ? _parseFechaFlexible(raw) : null;
+                // Si no hay ninguna fecha, igual se archiva (está descontado, ya resuelto).
+                const dias = (fEnt && !isNaN(fEnt.getTime())) ? Math.floor((hoy - fEnt.getTime()) / 86400000) : 999;
+                if (dias <= LIMITE_DIAS) return;
+                rec.estado = 'archivado';
+                arch.add(sid);
+                hubo = true;
+                _gasReclamo({ action: 'update_reclamo', shippingId: sid, estado: 'archivado' }).catch(() => {});
+            });
+            if (hubo) {
+                _saveArchivados(arch);
+                if (typeof _saveReclamosCache === 'function') _saveReclamosCache(window._reclamosMap);
+            }
+        }
         // Botón de emergencia siempre disponible en consola: _desarchivarTodoGlobal()
         window._desarchivarTodoGlobal = function() {
             localStorage.removeItem('_neArchivados');
@@ -4381,6 +4415,7 @@
                 window._neCurrentFilter = filterKey;
                 const container = document.getElementById('neCards');
                 if (!container) return;
+                _autoArchivarDescontadosViejos(todos); // descontados con envío +15 días → archivar solos
                 // Aplicar filtros (cuenta + archivados)
                 const acctFilt = window._neAccountFilter || 'all';
                 const todosVis = todos
@@ -6468,6 +6503,67 @@
         // Estados que sacan la venta de la pizarra activa
         function _ceResuelto(rec) { return ['entregado', 'recibido', 'archivado'].includes(rec && rec.estado); }
 
+        // Día al que se adjudica un cambio/entrega: el día en que se registró,
+        // pero si cae sábado/domingo, se pasa al lunes (siguiente día hábil).
+        function _ceDiaAdjudicado(rec) {
+            let d = _parseFechaFlexible(rec && rec.fechaAlta);
+            if (!d || isNaN(d)) return null;
+            d = new Date(d); d.setHours(0, 0, 0, 0);
+            while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+            return d;
+        }
+        // Asegura que _reclamosMap esté cargado en la vista del día (la repartidora
+        // abre HOY sin pasar por los 7 días). Cache al instante + fetch una vez.
+        let _ceReclamosCargados = false;
+        function _ceAsegurarReclamos() {
+            if ((!window._reclamosMap || window._reclamosMap.size === 0) && typeof _loadReclamosCacheAny === 'function') {
+                const rc = _loadReclamosCacheAny();
+                if (rc && rc.size) window._reclamosMap = rc;
+            }
+            if (_ceReclamosCargados) return;
+            _ceReclamosCargados = true;
+            _gasReclamo({ action: 'get_reclamos' }).then(d => {
+                if (!d || !d.records) return;
+                window._reclamosMap = window._reclamosMap || new Map();
+                d.records.forEach(r => window._reclamosMap.set(String(r.shippingId), r));
+                if (typeof _saveReclamosCache === 'function') _saveReclamosCache(window._reclamosMap);
+                // Re-render solo si estamos en la vista del día (no en NE ni cargando)
+                if (!document.getElementById('neCards') && typeof allFlexOrders !== 'undefined' && allFlexOrders.length && typeof aplicarFiltros === 'function') {
+                    aplicarFiltros();
+                }
+            }).catch(() => {});
+        }
+        // Sección de cambios/entregas "para entregar" que se muestra ARRIBA de la
+        // vista del día (HOY). Aparece desde el día adjudicado en adelante y
+        // persiste hasta que se entrega. '' si no hay ninguno o falta la fecha.
+        function _ceDaySection() {
+            _ceAsegurarReclamos();
+            if (!window._reclamosMap || typeof currentNavDate === 'undefined' || !currentNavDate) return '';
+            const nav = new Date(currentNavDate); nav.setHours(0, 0, 0, 0);
+            const due = [];
+            window._reclamosMap.forEach(r => {
+                if (!_ceEsCambioEntrega(r) || _ceResuelto(r)) return;
+                const ad = _ceDiaAdjudicado(r);
+                if (ad && nav.getTime() >= ad.getTime()) due.push(r);
+            });
+            const acct = (typeof currentCuentaFilter !== 'undefined') ? currentCuentaFilter : 'all';
+            const vis = acct === 'all' ? due : due.filter(r => (r.cuenta || '') === acct);
+            if (!vis.length) return '';
+            const prio  = r => (r.estado === 'pendiente' && _ceVencido(r)) ? 0 : r.estado === 'descontado' ? 1 : r.estado === 'entregado_repartidor' ? 2 : r.estado === 'pendiente' ? 3 : 4;
+            const numId = r => parseInt(String(r.id || '').replace(/\D/g, ''), 10) || 0;
+            vis.sort((a, b) => prio(a) - prio(b) || numId(b) - numId(a));
+            const nVenc = vis.filter(r => r.estado === 'pendiente' && _ceVencido(r)).length;
+            const cards = vis.map(_ceCard).join('');
+            return `<div id="ceDaySec" style="margin-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,#3d2a12,#1a1206);border:1px solid #7a5216;border-radius:11px;padding:10px 14px;margin-bottom:8px;">
+                    <span style="color:#ffb454;font-size:13px;font-weight:800;">🔁 PARA ENTREGAR · cambios / entregas</span>
+                    <span style="background:#ffb45422;color:#ffb454;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;">${vis.length}</span>
+                    ${nVenc ? `<span style="color:#f85149;font-size:11px;font-weight:700;">${nVenc} vencido${nVenc !== 1 ? 's' : ''}</span>` : ''}
+                </div>
+                ${cards}
+            </div>`;
+        }
+
         // ── Escaneo / búsqueda para REGISTRAR un cambio/entrega ──────────────
         async function _procesarCambioEscaneado(code) {
             const nums = String(code).match(/\d{10,}/g);
@@ -6776,6 +6872,7 @@
                         const b = document.getElementById('secbody-cambios'); if (b) b.style.display = 'flex'; // mantener abierta
                         const c = document.getElementById('secchev-cambios'); if (c) c.style.transform = 'rotate(90deg)';
                     }
+                    if (document.getElementById('ceDaySec') && typeof aplicarFiltros === 'function') aplicarFiltros();
                 } else { _showNEToast('⚠️ Error al guardar'); }
             });
         }
@@ -8173,7 +8270,7 @@
                 });
             }
 
-            document.getElementById('content').innerHTML = parts.join('');
+            document.getElementById('content').innerHTML = _ceDaySection() + parts.join('');
 
             // ── Geo-stats inline en el top bar ──
             const geoEl = document.getElementById('geoInline');
