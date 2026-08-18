@@ -872,9 +872,12 @@ function irADiaHabil(delta){
 function updFresh(){
   const el=document.getElementById('freshTxt'); if(!el||!_snap)return;
   const up=_snap.updated_at?new Date(_snap.updated_at):null;
-  if(!up){ el.textContent='—'; return; }
+  if(!up){ el.textContent='—'; el.style.color=''; return; }
   const min=Math.max(0,Math.round((Date.now()-up.getTime())/60000));
-  el.textContent = min<1?'recién':('hace '+min+' min');
+  el.textContent = min<1?'recién':(min<60?'hace '+min+' min':('hace '+Math.round(min/60)+' h'));
+  // Color según antigüedad: amarillo >30 min, rojo >120 min
+  el.style.color = min>120 ? 'var(--devolver)' : (min>30 ? 'var(--amber)' : '');
+  el.style.fontWeight = min>30 ? '800' : '';
 }
 // Merge de snapshots: los envíos del nuevo pisan a los del previo. Los envíos previos
 // que estaban en el rango de refresh pero NO vinieron esta vez se descartan (asumimos
@@ -915,13 +918,20 @@ async function refrescar(){
     // haber quedado sin actualizar en ML tras el rescheduleo). Con 2 días se perdían
     // reprogramaciones y el merge conservaba la versión vieja sin actualizar.
     const REFRESH_DAYS=7;
+    const prevUp = _snap && _snap.updated_at ? new Date(_snap.updated_at).getTime() : 0;
     const [snapFresh]=await Promise.all([fetchSnapshot(REFRESH_DAYS), fetchReclamos()]);
     const snapMerged=_mergeSnap(_snap, snapFresh, REFRESH_DAYS);
     _commitSnapshot(snapMerged); _lsSet(_LS_SNAP,snapMerged);
     autoCerrarViejos(); autoCerrarEntregados();
     updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
     autoDetectarDevoluciones();
-    toast('✅ Actualizado');
+    // Verificar que updated_at realmente avanzó. Si no, avisar al user (worker atascado /
+    // rate limit / etc.) — antes se mostraba "✅ Actualizado" con datos viejos silenciosamente.
+    const nuevoUp = snapMerged && snapMerged.updated_at ? new Date(snapMerged.updated_at).getTime() : 0;
+    const min = nuevoUp ? Math.round((Date.now()-nuevoUp)/60000) : Infinity;
+    if(nuevoUp && nuevoUp > prevUp) toast('✅ Actualizado');
+    else if(min<=5) toast('✅ Datos recientes');
+    else toast('⚠️ Los datos del servidor tienen '+min+' min — reintentando…');
   }catch(e){ if(rBtn)rBtn.classList.remove('spin'); toast('No se pudo refrescar'); return; }
   if(rBtn)rBtn.classList.remove('spin');
 }
@@ -945,6 +955,15 @@ async function cargarTodo(){
   if(csRec){ _reclamosMap=new Map(); csRec.forEach(r=>{ if(r.shippingId)_reclamosMap.set(String(r.shippingId),r); }); }
   if(csSnap||csRec){ autoCerrarViejos(); autoCerrarEntregados(); updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges(); }
 
+  // Si el snapshot cacheado tiene más de 30 min de antigüedad, disparar refresh_hoy en
+  // paralelo para que no dependa de un cron atrasado. Fire-and-forget: no bloquea el fetch
+  // del snapshot; sus cambios llegan en el próximo poll o refresh manual.
+  const _upPrev = csSnap && csSnap.updated_at ? new Date(csSnap.updated_at).getTime() : 0;
+  const _minAge = _upPrev ? (Date.now()-_upPrev)/60000 : Infinity;
+  if(_minAge > 30){
+    fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(30000)}).catch(()=>{});
+  }
+
   // ── 2. Traer datos frescos en paralelo ──
   try{
     const [snapData]=await Promise.all([ fetchSnapshot(14), fetchReclamos() ]);
@@ -954,17 +973,22 @@ async function cargarTodo(){
     _lsSet(_LS_REC, [..._reclamosMap.values()]);
     updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
     autoDetectarDevoluciones();   // detectar cancelados-en-tránsito con datos de hoy
-    // completar ventana (días anteriores) en segundo plano
-    (async()=>{ try{
-      const r=await fetch(SNAPSHOT_URL+'?action=get_snapshot&days=7',{signal:_withTimeout(20000)});
-      if(!r.ok||_fgLoadId!==myId) return;
-      const d=await r.json(); if(_fgLoadId!==myId) return;
-      _commitSnapshot(d); _lsSet(_LS_SNAP,d); autoCerrarEntregados();
-      renderResolver(); renderHistorial(); actualizarBadges();
-      if(TAB==='hoy') renderHoy();
-      if(TAB==='rep') renderReprog();
-      autoDetectarDevoluciones();  // segunda pasada con ventana de 7 días (más cobertura)
-    }catch(e){} })();
+    // Si el snapshot recién bajado sigue viejo (>30 min), tirar un refresh_hoy y volver a
+    // pedir el snapshot cuando termine. Esto arregla el caso "abro app tras horas y sigue viejo".
+    const _upFresh = snapData && snapData.updated_at ? new Date(snapData.updated_at).getTime() : 0;
+    const _minFresh = _upFresh ? (Date.now()-_upFresh)/60000 : Infinity;
+    if(_minFresh > 30){
+      (async()=>{ try{
+        toast('🔄 Datos viejos, actualizando…');
+        await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(30000)});
+        if(_fgLoadId!==myId) return;
+        const s2=await fetchSnapshot(14);
+        if(_fgLoadId!==myId) return;
+        _commitSnapshot(s2); _lsSet(_LS_SNAP,s2);
+        updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
+        autoDetectarDevoluciones();
+      }catch(e){} })();
+    }
   }catch(e){
     if(!csSnap&&!csRec)
       document.getElementById('v-hoy').innerHTML='<div class="empty">⚠️ No se pudieron cargar los datos.<br><small>'+esc(e.message||e)+'</small><br><br><span class="fchip on" onclick="cargarTodo()">Reintentar</span></div>';
@@ -1913,6 +1937,7 @@ function segpick(b){ b.parentElement.querySelectorAll('.seg-b').forEach(x=>x.cla
 function _venc(){ const d=new Date(); d.setHours(0,0,0,0); while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1); let a=0; while(a<2){ d.setDate(d.getDate()+1); const dow=d.getDay(); if(dow!==0&&dow!==6)a++; } return d; }
 function _fmtCorta(d){ return d?d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}):''; }
 function _fmtDMY(d){ const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear(); }
+function _isoDate(d){ const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
 function ncTipoHint(t){ const h=document.getElementById('ncHint'); if(h)h.textContent = t==='cambio'?'Se entrega el nuevo y se retira el viejo (tiene que volver a Mikra).':t==='entrega'?'Solo se entrega el paquete al cliente.':'Cancelado / devolución — el paquete tiene que volver a Mikra.'; }
 function ncPrevCaso(){ let mx=0; _reclamosMap.forEach(r=>{ const n=parseInt(String(r.id||'').replace(/\D/g,''),10); if(!isNaN(n)&&n>mx)mx=n; }); const el=document.getElementById('ncPrev'); if(el)el.textContent=mx?('#'+String(mx+1).padStart(3,'0')):'#—'; }
 function ncForm(data){
@@ -1935,7 +1960,8 @@ function ncForm(data){
     + '<input id="ncDir" class="nc-inp" value="'+esc(f.dir)+'" placeholder="Calle y número">'
     + '<label class="fld-l">💵 Valor del producto <span class="fl-req">obligatorio</span></label>'
     + '<input id="ncVal" class="nc-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="'+(f.valor||'')+'" placeholder="0">'
-    + '<div class="nc-venc">⏱️ Vence: '+_fmtCorta(_venc())+' (2 días hábiles)</div>'
+    + '<label class="fld-l">⏱️ Vence <span class="fl-opt">(por defecto 2 días hábiles; editable para retroactivos)</span></label>'
+    + '<input id="ncVenc" class="nc-inp" type="date" value="'+_isoDate(_venc())+'">'
     + '<button class="save" onclick="ncGuardar()">Guardar caso</button>';
   ncPrevCaso();
 }
@@ -1949,7 +1975,13 @@ async function ncGuardar(){
   if(!zona){ toast('📍 Falta la zona'); zEl.focus(); return; }
   if(valor<=0){ toast('💵 Falta el valor'); vEl.focus(); return; }
   window._ncForm=null;  // guard contra doble submit (solo después de validar)
-  const notas=[art,dir].filter(Boolean).join(' · '); const venc=_fmtDMY(_venc());
+  const notas=[art,dir].filter(Boolean).join(' · ');
+  // Leer fecha de vencimiento del input (editable por el dueño); fallback a 2 días hábiles
+  const vencEl=document.getElementById('ncVenc');
+  let vencDate=null;
+  if(vencEl&&vencEl.value){ const parts=vencEl.value.split('-'); if(parts.length===3) vencDate=new Date(+parts[0], +parts[1]-1, +parts[2]); }
+  if(!vencDate||isNaN(vencDate)) vencDate=_venc();
+  const venc=_fmtDMY(vencDate);
   const res=await _gasReclamo({action:'add_reclamo', shippingId:f.shippingId, orderId:f.orderId||'', comprador:f.comprador||'', zona, cuenta:f.cuenta||'', tipo, valor, fechaEstimada:venc, notas});
   closeSheet('newcase');
   if(res&&res.ok){ await fetchReclamos(); toast('✅ Caso creado '+(res.record?res.record.id:'')+(res.duplicate?' (ya existía)':'')); renderResolver(); renderHistorial(); actualizarBadges(); }
