@@ -179,6 +179,9 @@
   .pk-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
   .pk-dias{font-size:11px;font-family:var(--f-mono);font-weight:700;color:var(--ink-3);white-space:nowrap}
   .pk-cuenta{font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px;white-space:nowrap;letter-spacing:.02em}
+  /* Botón de acción rápida en cambios/entregas del Hoy — un tap y confirma+cierra */
+  .pk-quick{width:38px;height:38px;border-radius:11px;border:1px solid color-mix(in srgb,var(--ok) 50%,transparent);background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok);font-size:18px;font-weight:800;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;margin-left:6px;transition:background .12s}
+  .pk-quick:active{background:var(--ok);color:#fff}
   /* Card A resolver — estilo compacto */
   .pk-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:8px;vertical-align:middle;flex:0 0 auto}
   .pk-caseid{color:var(--ok);font-family:var(--f-mono);font-weight:800;font-size:12.5px}
@@ -831,19 +834,22 @@ function pickHoy(){ _isAutoTarget=true; _autoAdvanceCount=0; TARGET=hoyHabil(); 
 document.addEventListener('click',()=>{ const m=document.getElementById('daymenu'); if(m)m.classList.remove('on'); });
 
 // Set de timestamps (00:00) de días que TIENEN al menos un envío real (no solo reprogramados)
+// Los días "con envíos" son exactamente aquellos donde `esEntregaParaFecha(sh,dia)` matchea
+// al menos un envío Flex. Antes usábamos una heurística que priorizaba date_shipped, lo que
+// dejaba fuera días donde el envío estaba prometido pero no salió a repartir todavía, y
+// mezclaba días de despacho con días de entrega. Ahora consultamos la misma función que
+// filtra la vista del día → el calendario refleja EXACTAMENTE lo que verías al tocar el día.
 function _diasConEnvios(){
   const out=new Set();
   if(!_snap) return out;
-  (_snap.envios||[]).forEach(e=>{
-    const sh=e.shipping; if(!sh||sh.logistic_type!=='self_service') return;
-    // fecha "canónica" del envío = date_shipped o estimated_delivery_time
-    const so=sh.shipping_option||{}; const hist=sh.status_history||{};
-    const raw = hist.date_shipped || (so.estimated_delivery_time&&so.estimated_delivery_time.date)
-             || (so.estimated_delivery_limit&&so.estimated_delivery_limit.date) || '';
-    if(!raw) return;
-    const d=new Date(raw); if(isNaN(d)) return;
-    d.setHours(0,0,0,0); out.add(d.getTime());
-  });
+  const flex=(_snap.envios||[]).filter(e=>e.shipping&&e.shipping.logistic_type==='self_service');
+  if(!flex.length) return out;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  // Ventana: 14 días atrás hasta 3 días adelante (cubre entregas futuras prometidas)
+  for(let i=-14; i<=3; i++){
+    const dia=new Date(hoy.getTime()+i*86400000); dia.setHours(0,0,0,0);
+    if(flex.some(e=>esEntregaParaFecha(e.shipping,dia))) out.add(dia.getTime());
+  }
   return out;
 }
 // Próximo día HÁBIL con envíos (delta = +1 o -1). Skip sáb/dom y días vacíos. Máximo 30 saltos.
@@ -879,31 +885,16 @@ function updFresh(){
   el.style.color = min>120 ? 'var(--devolver)' : (min>30 ? 'var(--amber)' : '');
   el.style.fontWeight = min>30 ? '800' : '';
 }
-// Merge de snapshots: los envíos del nuevo pisan a los del previo. Los envíos previos
-// que estaban en el rango de refresh pero NO vinieron esta vez se descartan (asumimos
-// que su estado cambió y ya no cumplen filtro, o fueron eliminados). Los envíos previos
-// FUERA del rango de refresh se conservan (histórico no re-pedido). Esto evita que envíos
-// entregados/cancelados queden zombies como "en camino" indefinidamente.
+// Merge de snapshots: los envíos del nuevo pisan a los del previo; el resto se conserva.
+// Antes descartábamos previos "que deberían haber vuelto" para evitar zombies, pero eso
+// causaba que días completos desaparecieran del calendario entre refrescos (los envíos
+// se iban y volvían aleatoriamente). Preferimos zombies aislados y estabilidad del calendario;
+// un `cargarTodo` completo (reload) los limpia. `daysNuevo` queda por compat pero se ignora.
 function _mergeSnap(prev, nuevo, daysNuevo){
   if(!prev||!prev.envios) return nuevo;
-  const mNuevo=new Map(); (nuevo.envios||[]).forEach(e=>{ const sh=e.shipping; if(sh&&sh.id!=null) mNuevo.set(String(sh.id),e); });
-  const cutoff = daysNuevo ? (Date.now() - daysNuevo*86400000) : 0;
   const out=[]; const seen=new Set();
   (nuevo.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid) return; out.push(e); seen.add(sid); });
-  (prev.envios||[]).forEach(e=>{
-    const sid=e.shipping&&String(e.shipping.id); if(!sid||seen.has(sid)) return;
-    if(cutoff){
-      const sh=e.shipping||{}, so=sh.shipping_option||{};
-      const dd = so.estimated_delivery_limit&&so.estimated_delivery_limit.date
-              || so.estimated_delivery_final&&so.estimated_delivery_final.date
-              || so.estimated_delivery_time&&so.estimated_delivery_time.date || '';
-      // Sin delivery_date el fresh SÍ lo incluye (worker: OR delivery_date=""); si no vino → murió.
-      if(!dd){ seen.add(sid); return; }
-      const t=new Date(dd).getTime();
-      if(!isNaN(t) && t>=cutoff){ seen.add(sid); return; }   // debería haber estado en fresh, no vino → descartar
-    }
-    out.push(e); seen.add(sid);
-  });
+  (prev.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid||seen.has(sid)) return; out.push(e); seen.add(sid); });
   return { updated_at: nuevo.updated_at||prev.updated_at, count: out.length, envios: out };
 }
 async function refrescar(){
@@ -914,26 +905,49 @@ async function refrescar(){
   // que el snap de 14 días. Mergemos con el snap previo para no perder histórico.
   try{
     await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(20000)}).catch(()=>{});
-    // 7 días de ventana: incluye reprogramados con delivery_date antigua (que puede
-    // haber quedado sin actualizar en ML tras el rescheduleo). Con 2 días se perdían
-    // reprogramaciones y el merge conservaba la versión vieja sin actualizar.
+    // ESTRATEGIA EN 3 CAPAS:
+    // Fase 0 (~500ms): snap_dia del TARGET actual → payload liviano, actualiza HOY al toque.
+    // Fase 1 (~2s):    snap completo de 7 días + reclamos → actualiza resto de pestañas.
+    // Fase 2 (bg 10-30s): refresh_hoy en worker → cuando termina, re-pull silencioso.
     const REFRESH_DAYS=7;
     const prevUp = _snap && _snap.updated_at ? new Date(_snap.updated_at).getTime() : 0;
+    const p=n=>String(n).padStart(2,'0');
+    const targetStr=TARGET.getFullYear()+'-'+p(TARGET.getMonth()+1)+'-'+p(TARGET.getDate());
+    // Fase 0: día del TARGET rápido — solo Hoy se re-renderiza
+    try{
+      const rq=await fetch(SNAPSHOT_URL+'?action=snap_dia&date='+targetStr,{signal:_withTimeout(10000)});
+      if(rq.ok){
+        const snapDia=await rq.json();
+        const mergedDia=_mergeSnap(_snap, snapDia);
+        _commitSnapshot(mergedDia); _lsSet(_LS_SNAP,mergedDia);
+        updFresh(); renderHoy(); actualizarBadges();
+        if(rBtn)rBtn.classList.remove('spin');   // apagamos spinner ya — el user ve Hoy fresco
+      }
+    }catch(e){}
+    // Fase 1: snap 7 días + reclamos → actualiza el resto
     const [snapFresh]=await Promise.all([fetchSnapshot(REFRESH_DAYS), fetchReclamos()]);
-    const snapMerged=_mergeSnap(_snap, snapFresh, REFRESH_DAYS);
+    const snapMerged=_mergeSnap(_snap, snapFresh);
     _commitSnapshot(snapMerged); _lsSet(_LS_SNAP,snapMerged);
     autoCerrarViejos(); autoCerrarEntregados();
     updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
-    autoDetectarDevoluciones();
-    // Verificar que updated_at realmente avanzó. Si no, avisar al user (worker atascado /
-    // rate limit / etc.) — antes se mostraba "✅ Actualizado" con datos viejos silenciosamente.
     const nuevoUp = snapMerged && snapMerged.updated_at ? new Date(snapMerged.updated_at).getTime() : 0;
     const min = nuevoUp ? Math.round((Date.now()-nuevoUp)/60000) : Infinity;
     if(nuevoUp && nuevoUp > prevUp) toast('✅ Actualizado');
     else if(min<=5) toast('✅ Datos recientes');
-    else toast('⚠️ Los datos del servidor tienen '+min+' min — reintentando…');
+    else toast('🔄 Sincronizando en segundo plano…');
+    if(rBtn)rBtn.classList.remove('spin');
+    // Fase 2: sync del worker en background — no bloquea. Cuando termina, re-pull silencioso.
+    (async()=>{ try{
+      await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(60000)});
+      const snap2=await fetchSnapshot(REFRESH_DAYS);
+      const merged2=_mergeSnap(_snap, snap2);
+      _commitSnapshot(merged2); _lsSet(_LS_SNAP,merged2);
+      autoCerrarEntregados();
+      updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
+      autoDetectarDevoluciones();
+    }catch(e){} })();
+    return;
   }catch(e){ if(rBtn)rBtn.classList.remove('spin'); toast('No se pudo refrescar'); return; }
-  if(rBtn)rBtn.classList.remove('spin');
 }
 
 
@@ -1067,7 +1081,10 @@ async function autoDetectarDevoluciones(){
       valor=item.valor||0; cuenta=item.cuenta||''; orderId=item.order_id||'';
     } else {
       zona=zonaDe(sh); comprador=(o.buyer&&o.buyer.nickname)||'';
-      valor=Math.round(o.total_amount||0);
+      // Sumar total_amount de TODOS los orders del envío. Un pack ML son varias orders
+      // en el mismo shipping — antes solo tomábamos la primera y perdíamos el resto (bug 077).
+      const _allOrders = _shipById.get(sid)?.orders || [o];
+      valor=Math.round(_allOrders.reduce((s,x)=>s+(Number(x.total_amount)||0),0));
       cuenta=sellerToCuenta[String(o.seller&&o.seller.id)]||'';
       orderId=String(o.id||sh.order_id||'');
     }
@@ -1907,7 +1924,10 @@ async function ncBuscar(){
     if(ml){ sh=ml.shipping; o=ml.order||{}; cuenta=ml.cuentaNombre||sellerToCuenta[String(o.seller&&o.seller.id)]||''; }
   }
   if(!sh){ done.innerHTML='<div class="empty">No encontré esa venta (ni en los envíos recientes ni en Mercado Libre).<br><small>Revisá el número.</small></div><div style="display:flex;gap:8px;margin-top:12px"><button class="save" style="flex:1;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="ncReset()">↩️ Volver</button><button class="save" style="flex:1" onclick="ncManual()">✍️ Cargar manual</button></div>'; _ncBusy=false; return; }
-  const _pre={ shippingId:String(sh.id), orderId:String(o.id||sh.order_id||''), comprador:(o.buyer&&o.buyer.nickname)||'', cuenta, zona:zonaDe(sh), dir:calleDe(sh), valor:o.total_amount||0 };
+  // Valor = suma de total_amount de TODAS las orders del envío (packs ML tienen múltiples).
+  const _allOrd = e && e.orders && e.orders.length ? e.orders : (o?[o]:[]);
+  const _valorTotal = _allOrd.reduce((s,x)=>s+(Number(x.total_amount)||0),0);
+  const _pre={ shippingId:String(sh.id), orderId:String(o.id||sh.order_id||''), comprador:(o.buyer&&o.buyer.nickname)||'', cuenta, zona:zonaDe(sh), dir:calleDe(sh), valor:_valorTotal };
   const exist=_reclamosMap.get(String(sh.id));
   if(exist && esActivo(exist)){   // ya hay un caso abierto para este envío → ofrecer recibirlo
     const v=vistaReclamo(exist); const tt=exist.tipo==='cambio'?'Cambio':exist.tipo==='entrega'?'Entrega':exist.tipo==='driver_devolver'?'Cancelación':'Demorado';
