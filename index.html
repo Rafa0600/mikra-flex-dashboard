@@ -179,9 +179,15 @@
   .pk-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
   .pk-dias{font-size:11px;font-family:var(--f-mono);font-weight:700;color:var(--ink-3);white-space:nowrap}
   .pk-cuenta{font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px;white-space:nowrap;letter-spacing:.02em}
-  /* Botón de acción rápida en cambios/entregas del Hoy — un tap y confirma+cierra */
-  .pk-quick{width:38px;height:38px;border-radius:11px;border:1px solid color-mix(in srgb,var(--ok) 50%,transparent);background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok);font-size:18px;font-weight:800;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;margin-left:6px;transition:background .12s}
-  .pk-quick:active{background:var(--ok);color:#fff}
+  /* Sección plegable de cambios/entregas en Hoy */
+  .ce-head{display:flex;align-items:center;gap:9px;padding:11px 13px;margin:2px 0 12px;border-radius:12px;cursor:pointer;user-select:none;
+    background:color-mix(in srgb,var(--cambio) 10%,transparent);border:1px solid color-mix(in srgb,var(--cambio) 32%,transparent)}
+  .ce-head .ce-chev{color:var(--cambio);font-weight:800;font-size:15px;display:inline-block;transition:transform .2s}
+  .ce-head.open .ce-chev{transform:rotate(90deg)}
+  .ce-head .ce-t{font-size:12.5px;font-weight:800;color:var(--cambio)}
+  .ce-head .ce-n{font-family:var(--f-mono);font-size:11.5px;font-weight:800;color:var(--cambio);background:color-mix(in srgb,var(--cambio) 20%,transparent);padding:1px 8px;border-radius:9px}
+  .ce-head .ce-venc{margin-left:auto;font-size:11px;font-weight:800;color:var(--devolver)}
+  .ce-list{margin:-4px 0 6px}
   /* Card A resolver — estilo compacto */
   .pk-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:8px;vertical-align:middle;flex:0 0 auto}
   .pk-caseid{color:var(--ok);font-family:var(--f-mono);font-weight:800;font-size:12.5px}
@@ -701,10 +707,12 @@ async function _pedidoRefreshIfLate(){
 
 let _snap=null, _shipById=new Map(), _reclamosMap=new Map();
 function _commitSnapshot(d){ _snap=d; _shipById=new Map(); (d.envios||[]).forEach(e=>{ const sh=e.shipping; if(sh&&sh.id!=null) _shipById.set(String(sh.id),e); }); }
+// Solo DESCARGA. No toca _snap: el que llama decide si reemplaza o mergea. (Antes commiteaba
+// adentro y el merge posterior se hacía contra el snapshot ya pisado → se perdían envíos.)
 async function fetchSnapshot(days=14){
-  const r=await fetch(SNAPSHOT_URL+'?action=get_snapshot&days='+days,{signal:_withTimeout(20000)});
+  const r=await fetch(SNAPSHOT_URL+'?action=get_snapshot&days='+days,{signal:_withTimeout(30000)});
   if(!r.ok) throw new Error('HTTP '+r.status);
-  const d=await r.json(); _commitSnapshot(d); return d;
+  return r.json();
 }
 async function fetchReclamos(){
   const d=await _gasReclamo({action:'get_reclamos'});
@@ -761,7 +769,8 @@ function esActivo(r){
    ESCAPE + helpers UI
 ══════════════════════════════════════════════════════════════════ */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function _withTimeout(ms){ const ac=new AbortController(); setTimeout(()=>ac.abort(),ms); return ac.signal; }
+function _withTimeout(ms){ if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout) return AbortSignal.timeout(ms); const ac=new AbortController(); setTimeout(()=>ac.abort(),ms); return ac.signal; }
+function _minutosDesde(iso){ const t=iso?new Date(iso).getTime():0; return (t&&!isNaN(t))?(Date.now()-t)/60000:Infinity; }
 function fmtMoney(n){ n=Number(n||0); return '$'+n.toLocaleString('es-AR'); }
 let _tt; function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2000); }
 
@@ -877,6 +886,7 @@ function irADiaHabil(delta){
 ══════════════════════════════════════════════════════════════════ */
 function updFresh(){
   const el=document.getElementById('freshTxt'); if(!el||!_snap)return;
+  if(_syncProm){ el.textContent='sincronizando…'; el.style.color='var(--accent)'; el.style.fontWeight='800'; return; }
   const up=_snap.updated_at?new Date(_snap.updated_at):null;
   if(!up){ el.textContent='—'; el.style.color=''; return; }
   const min=Math.max(0,Math.round((Date.now()-up.getTime())/60000));
@@ -885,69 +895,73 @@ function updFresh(){
   el.style.color = min>120 ? 'var(--devolver)' : (min>30 ? 'var(--amber)' : '');
   el.style.fontWeight = min>30 ? '800' : '';
 }
-// Merge de snapshots: los envíos del nuevo pisan a los del previo; el resto se conserva.
-// Antes descartábamos previos "que deberían haber vuelto" para evitar zombies, pero eso
-// causaba que días completos desaparecieran del calendario entre refrescos (los envíos
-// se iban y volvían aleatoriamente). Preferimos zombies aislados y estabilidad del calendario;
-// un `cargarTodo` completo (reload) los limpia. `daysNuevo` queda por compat pero se ignora.
-function _mergeSnap(prev, nuevo, daysNuevo){
+// Fecha más reciente "relevante" de un envío (para descartar los que ya no entran en ninguna vista)
+function _tsRelevante(e){
+  const sh=(e&&e.shipping)||{}, h=sh.status_history||{}, so=sh.shipping_option||{};
+  let mx=0;
+  [h.date_shipped,h.date_delivered,h.date_not_delivered,h.date_first_visit,sh.date_created,
+   so.estimated_delivery_time&&so.estimated_delivery_time.date, so.estimated_delivery_limit&&so.estimated_delivery_limit.date]
+    .forEach(s=>{ if(s){ const t=new Date(s).getTime(); if(!isNaN(t)&&t>mx)mx=t; } });
+  return mx;
+}
+// Merge de snapshots: los envíos del nuevo pisan a los del previo; el resto se conserva
+// (así un snapshot más corto no borra días del calendario). Se descartan los envíos de más
+// de 21 días: ya no aparecen en ninguna vista y harían crecer la caché sin fin.
+function _mergeSnap(prev, nuevo){
   if(!prev||!prev.envios) return nuevo;
+  const corte=Date.now()-21*86400000;
   const out=[]; const seen=new Set();
   (nuevo.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid) return; out.push(e); seen.add(sid); });
-  (prev.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid||seen.has(sid)) return; out.push(e); seen.add(sid); });
+  (prev.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid||seen.has(sid)) return; if(_tsRelevante(e)<corte) return; out.push(e); seen.add(sid); });
   return { updated_at: nuevo.updated_at||prev.updated_at, count: out.length, envios: out };
 }
-async function refrescar(){
-  const rBtn=document.getElementById('freshR'), t=document.getElementById('freshTxt');
-  if(rBtn)rBtn.classList.add('spin'); if(t)t.textContent='actualizando…';
-  // refresh_hoy = sweep activos + auto-crear casos (~2-5s en el worker).
-  // fetchSnapshot(2) baja SOLO los últimos 2 días de delivery_date + sin-fecha → pesa 10x menos
-  // que el snap de 14 días. Mergemos con el snap previo para no perder histórico.
-  try{
-    await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(20000)}).catch(()=>{});
-    // ESTRATEGIA EN 3 CAPAS:
-    // Fase 0 (~500ms): snap_dia del TARGET actual → payload liviano, actualiza HOY al toque.
-    // Fase 1 (~2s):    snap completo de 7 días + reclamos → actualiza resto de pestañas.
-    // Fase 2 (bg 10-30s): refresh_hoy en worker → cuando termina, re-pull silencioso.
-    const REFRESH_DAYS=7;
-    const prevUp = _snap && _snap.updated_at ? new Date(_snap.updated_at).getTime() : 0;
-    const p=n=>String(n).padStart(2,'0');
-    const targetStr=TARGET.getFullYear()+'-'+p(TARGET.getMonth()+1)+'-'+p(TARGET.getDate());
-    // Fase 0: día del TARGET rápido — solo Hoy se re-renderiza
+function _renderTodo(){ updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges(); }
+// Aplica un snapshot recién bajado (mergeado con lo que había) y lo guarda en caché
+function _aplicarSnap(nuevo){
+  const m=_mergeSnap(_snap, nuevo);
+  _commitSnapshot(m); _datosFrescos=true;
+  _guardarSnapCache(m); _lsSet(_LS_REC,[..._reclamosMap.values()]);
+  autoCerrarViejos(); autoCerrarEntregados();
+  _renderTodo();
+}
+
+// ── Sincronización con Mercado Libre (en el servidor, ~15 s) ──
+// Una sola a la vez: si ya hay una corriendo, se reusa. Nunca bloquea la pantalla:
+// mientras corre, el header dice "sincronizando…" y al terminar se re-pinta todo.
+let _syncProm=null;
+function syncEnSegundoPlano(){
+  if(_syncProm) return _syncProm;
+  _syncProm=(async()=>{
+    let res=null;
     try{
-      const rq=await fetch(SNAPSHOT_URL+'?action=snap_dia&date='+targetStr,{signal:_withTimeout(10000)});
-      if(rq.ok){
-        const snapDia=await rq.json();
-        const mergedDia=_mergeSnap(_snap, snapDia);
-        _commitSnapshot(mergedDia); _lsSet(_LS_SNAP,mergedDia);
-        updFresh(); renderHoy(); actualizarBadges();
-        if(rBtn)rBtn.classList.remove('spin');   // apagamos spinner ya — el user ve Hoy fresco
-      }
-    }catch(e){}
-    // Fase 1: snap 7 días + reclamos → actualiza el resto
-    const [snapFresh]=await Promise.all([fetchSnapshot(REFRESH_DAYS), fetchReclamos()]);
-    const snapMerged=_mergeSnap(_snap, snapFresh);
-    _commitSnapshot(snapMerged); _lsSet(_LS_SNAP,snapMerged);
-    autoCerrarViejos(); autoCerrarEntregados();
-    updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
-    const nuevoUp = snapMerged && snapMerged.updated_at ? new Date(snapMerged.updated_at).getTime() : 0;
-    const min = nuevoUp ? Math.round((Date.now()-nuevoUp)/60000) : Infinity;
-    if(nuevoUp && nuevoUp > prevUp) toast('✅ Actualizado');
-    else if(min<=5) toast('✅ Datos recientes');
-    else toast('🔄 Sincronizando en segundo plano…');
-    if(rBtn)rBtn.classList.remove('spin');
-    // Fase 2: sync del worker en background — no bloquea. Cuando termina, re-pull silencioso.
-    (async()=>{ try{
-      await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(60000)});
-      const snap2=await fetchSnapshot(REFRESH_DAYS);
-      const merged2=_mergeSnap(_snap, snap2);
-      _commitSnapshot(merged2); _lsSet(_LS_SNAP,merged2);
-      autoCerrarEntregados();
-      updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
+      await null;   // dejar que _syncProm quede asignado antes de pintar "sincronizando…"
+      updFresh();
+      const r=await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(90000)});
+      res=r.ok?await r.json():null;
+      const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]);
+      _syncProm=null;
+      _aplicarSnap(s);
       autoDetectarDevoluciones();
-    }catch(e){} })();
-    return;
-  }catch(e){ if(rBtn)rBtn.classList.remove('spin'); toast('No se pudo refrescar'); return; }
+    }catch(e){}
+    finally{ _syncProm=null; updFresh(); }
+    return res;
+  })();
+  return _syncProm;
+}
+
+// Botón 🔄 / deslizar hacia abajo:
+//  1) trae al toque lo último que tiene el servidor (1-2 s) y apaga el spinner
+//  2) le pide al servidor que consulte ML ahora, en segundo plano (~15 s) y re-pinta al terminar
+async function refrescar(){
+  const rBtn=document.getElementById('freshR');
+  if(rBtn)rBtn.classList.add('spin');
+  try{
+    const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]);
+    _aplicarSnap(s);
+  }catch(e){ toast('No se pudo refrescar (¿sin internet?)'); }
+  if(rBtn)rBtn.classList.remove('spin');
+  const res=await syncEnSegundoPlano();
+  if(res&&res.ok!==undefined) toast(res.casos?`✅ Actualizado · ${res.casos} caso(s) nuevo(s)`:'✅ Actualizado con Mercado Libre');
 }
 
 
@@ -955,54 +969,40 @@ async function refrescar(){
    CARGA INICIAL
 ══════════════════════════════════════════════════════════════════ */
 let _resCount=0, _fgLoadId=0, _isAutoTarget=true, _autoAdvanceCount=0;
+// true recién cuando llegan datos del servidor: el salto automático de día (feriados)
+// no se decide con la caché vieja del celular.
+let _datosFrescos=false;
 const _LS_SNAP='_v2_snap', _LS_REC='_v2_rec';
 function _lsGet(k){ try{ const s=localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){return null;} }
 function _lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+// Guarda el snapshot en el celular. Si no entra (límite ~5 MB del navegador), guarda solo
+// la última semana; antes fallaba en silencio y la caché nunca funcionaba.
+function _guardarSnapCache(s){
+  try{ localStorage.setItem(_LS_SNAP,JSON.stringify(s)); return; }catch(e){}
+  try{
+    const corte=Date.now()-7*86400000;
+    localStorage.setItem(_LS_SNAP,JSON.stringify(Object.assign({},s,{envios:(s.envios||[]).filter(e=>_tsRelevante(e)>=corte)})));
+  }catch(e){ try{ localStorage.removeItem(_LS_SNAP); }catch(_){} }
+}
 
 async function cargarTodo(){
   const myId=++_fgLoadId;
-  sincronizarCatalogoBg();   // catálogo + imágenes para el modal de pedido (siempre — es cache compartida con resumen.html)
+  if(ROL==='owner') sincronizarCatalogoBg();   // catálogo + imágenes para el bloque "Pedido" (solo dueño)
 
-  // ── 1. Mostrar caché guardada instantáneamente (stale-while-revalidate) ──
+  // ── 1. Mostrar caché guardada instantáneamente ──
   const csSnap=_lsGet(_LS_SNAP), csRec=_lsGet(_LS_REC);
-  if(csSnap){ _commitSnapshot(csSnap); }
-  if(csRec){ _reclamosMap=new Map(); csRec.forEach(r=>{ if(r.shippingId)_reclamosMap.set(String(r.shippingId),r); }); }
-  if(csSnap||csRec){ autoCerrarViejos(); autoCerrarEntregados(); updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges(); }
+  if(csSnap&&csSnap.envios){ _commitSnapshot(csSnap); }
+  if(Array.isArray(csRec)){ _reclamosMap=new Map(); csRec.forEach(r=>{ if(r.shippingId)_reclamosMap.set(String(r.shippingId),r); }); }
+  if(csSnap||csRec){ autoCerrarViejos(); autoCerrarEntregados(); _renderTodo(); }
 
-  // Si el snapshot cacheado tiene más de 30 min de antigüedad, disparar refresh_hoy en
-  // paralelo para que no dependa de un cron atrasado. Fire-and-forget: no bloquea el fetch
-  // del snapshot; sus cambios llegan en el próximo poll o refresh manual.
-  const _upPrev = csSnap && csSnap.updated_at ? new Date(csSnap.updated_at).getTime() : 0;
-  const _minAge = _upPrev ? (Date.now()-_upPrev)/60000 : Infinity;
-  if(_minAge > 30){
-    fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(30000)}).catch(()=>{});
-  }
-
-  // ── 2. Traer datos frescos en paralelo ──
+  // ── 2. Datos del servidor ──
   try{
     const [snapData]=await Promise.all([ fetchSnapshot(14), fetchReclamos() ]);
     if(_fgLoadId!==myId) return;
-    autoCerrarViejos(); autoCerrarEntregados();
-    _lsSet(_LS_SNAP, snapData);
-    _lsSet(_LS_REC, [..._reclamosMap.values()]);
-    updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
-    autoDetectarDevoluciones();   // detectar cancelados-en-tránsito con datos de hoy
-    // Si el snapshot recién bajado sigue viejo (>30 min), tirar un refresh_hoy y volver a
-    // pedir el snapshot cuando termine. Esto arregla el caso "abro app tras horas y sigue viejo".
-    const _upFresh = snapData && snapData.updated_at ? new Date(snapData.updated_at).getTime() : 0;
-    const _minFresh = _upFresh ? (Date.now()-_upFresh)/60000 : Infinity;
-    if(_minFresh > 30){
-      (async()=>{ try{
-        toast('🔄 Datos viejos, actualizando…');
-        await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(30000)});
-        if(_fgLoadId!==myId) return;
-        const s2=await fetchSnapshot(14);
-        if(_fgLoadId!==myId) return;
-        _commitSnapshot(s2); _lsSet(_LS_SNAP,s2);
-        updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges();
-        autoDetectarDevoluciones();
-      }catch(e){} })();
-    }
+    _aplicarSnap(snapData);
+    autoDetectarDevoluciones();
+    // ── 3. Si el servidor está atrasado (el cron no corrió), sincronizar ahora en segundo plano ──
+    if(_minutosDesde(snapData.updated_at)>15) syncEnSegundoPlano();
   }catch(e){
     if(!csSnap&&!csRec)
       document.getElementById('v-hoy').innerHTML='<div class="empty">⚠️ No se pudieron cargar los datos.<br><small>'+esc(e.message||e)+'</small><br><br><span class="fchip on" onclick="cargarTodo()">Reintentar</span></div>';
@@ -1035,7 +1035,13 @@ function autoCerrarEntregados(){
 // Auto-detección de envíos FLEX que estuvieron en camino y fueron cancelados.
 // Si no tienen caso en D1, se crea uno automático como driver_devolver.
 // Se llama después de cargar snapshot + reclamos; el Map evita duplicados en la misma sesión.
-async function autoDetectarDevoluciones(){
+// Una sola corrida a la vez (se llama desde la carga, el refresco y la sincronización).
+let _autoDetProm=null;
+function autoDetectarDevoluciones(){
+  if(!_autoDetProm) _autoDetProm=_autoDetectarDevoluciones().finally(()=>{ _autoDetProm=null; });
+  return _autoDetProm;
+}
+async function _autoDetectarDevoluciones(){
   if(!_snap) return;
   // Map rápido: shippingId → item del snapshot actual
   const snapMap=new Map((_snap.envios||[]).map(e=>[String(e.shipping&&e.shipping.id||''),e]));
@@ -1103,25 +1109,46 @@ function actualizarBadges(){
   const b=document.getElementById('badgeRes');
   if(b){ if(_resCount>0){ b.textContent=_resCount; b.style.display=''; } else b.style.display='none'; }
   const rc=document.getElementById('resCount'); if(rc)rc.innerHTML='<span class="n">'+_resCount+'</span><span class="u">casos</span>';
-  // Badge reprogramados
-  const nRep=reprogItems().length; _repCount=nRep;
+  // Badge reprogramados (conteo directo, sin armar las tarjetas)
+  let nRep=0;
+  if(_snap) for(const e of (_snap.envios||[])){ if(_esReprogItem(e.shipping)) nRep++; }
+  _repCount=nRep;
   const br=document.getElementById('badgeRep');
   if(br){ if(nRep>0){ br.textContent=nRep; br.style.display=''; } else br.style.display='none'; }
   const rrc=document.getElementById('repCount'); if(rrc)rrc.innerHTML='<span class="n">'+nRep+'</span><span class="u">envíos</span>';
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   REPROGRAMADOS — todos los envíos Flex con _state=='reprogramado',
-   agrupados por fecha estimada de entrega (nueva fecha post-rescheduleo).
+   REPROGRAMADOS / SIN ENTREGAR — mismo criterio que la vista "⚠️ 7d" de la
+   versión vieja: (1) los que ML marca como reprogramados (ausente, demorado,
+   reprogramado por comprador/ML…) y (2) los que SALIERON A REPARTIR un día
+   anterior y todavía no se entregaron. Agrupados por fecha de entrega.
 ══════════════════════════════════════════════════════════════════ */
+const SIN_ENTREGAR_DIAS=7;
+// Salió a repartir con entrega comprometida para un día ANTERIOR a hoy (hasta 7 días) y
+// sigue sin entregarse ni cancelarse. Los de hoy todavía están a tiempo (salen en Hoy).
+function _esSinEntregar(sh){
+  if(!sh||sh.logistic_type!=='self_service') return false;
+  const h=sh.status_history||{};
+  if(!h.date_shipped||h.date_delivered) return false;
+  if(sh.status!=='shipped'&&sh.status!=='not_delivered') return false;
+  const d=new Date(_fechaPromesa(sh)||h.date_shipped); if(isNaN(d)) return false;
+  d.setHours(0,0,0,0);
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  return d.getTime()<hoy.getTime() && hoy.getTime()-d.getTime()<=SIN_ENTREGAR_DIAS*86400000;
+}
+function _esReprogItem(sh){
+  if(!sh||sh.logistic_type!=='self_service') return false;
+  const rec=_reclamosMap.get(String(sh.id));
+  if(rec&&RESUELTOS.has(rec.estado)) return false;   // ya volvió / se cerró el caso
+  return getOrderState(sh)==='reprogramado' || _esSinEntregar(sh);
+}
 function reprogItems(){
   if(!_snap) return [];
-  return (_snap.envios||[]).filter(e=>{
-    const sh=e.shipping; if(!sh||sh.logistic_type!=='self_service') return false;
-    return getOrderState(sh)==='reprogramado';
-  }).map(e=>{
+  return (_snap.envios||[]).filter(e=>_esReprogItem(e.shipping)).map(e=>{
     const sh=e.shipping, o=(e.orders||[])[0]||{};
-    sh._state='reprogramado';
+    sh._state=getOrderState(sh);
+    sh._sinEntregar=sh._state!=='reprogramado';
     sh._zona=zonaDe(sh);
     enrichShippingData(sh);
     return { shipping:sh, order:o, cuentaNombre:sellerToCuenta[String(o.seller&&o.seller.id)]||'', ra:sh.receiver_address||{} };
@@ -1154,7 +1181,7 @@ function _fmtFechaGrupo(d){
 function renderReprog(){
   const cont=document.getElementById('v-rep');
   const items=reprogItems();
-  if(!items.length){ cont.innerHTML='<div class="empty">No hay envíos reprogramados 🎉</div>'; return; }
+  if(!items.length){ cont.innerHTML='<div class="empty">No hay envíos reprogramados ni sin entregar 🎉</div>'; return; }
   // Agrupar por fecha (o "Sin fecha" si no tiene)
   const grupos=new Map();
   items.forEach(i=>{
@@ -1189,8 +1216,9 @@ function _reprogCard(i){
   const cuentaBadge=cn?`<span class="pk-cuenta" style="background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
   // Motivo / tipo de reprogramación (del enrichShippingData → _problems o substatus label)
   const sub=(sh.substatus||'').toLowerCase();
-  let motivo='REPROGRAMADO';
-  if(sub==='receiver_absent'||(sh._problems&&sh._problems[0]&&sh._problems[0].type==='receiver_absent')) motivo='COMPRADOR AUSENTE';
+  let motivo='REPROGRAMADO', badge='b-log';
+  if(sh._sinEntregar){ motivo='SIN ENTREGAR'; badge='b-camino'; }
+  else if(sub==='receiver_absent'||(sh._problems&&sh._problems[0]&&sh._problems[0].type==='receiver_absent')) motivo='COMPRADOR AUSENTE';
   else if(sub==='delayed') motivo='DEMORADO';
   else if(sub==='delivery_failed') motivo='INTENTO FALLIDO';
   else if(sub.includes('return')) motivo='EN DEVOLUCIÓN';
@@ -1199,7 +1227,7 @@ function _reprogCard(i){
     <span class="pk-ic pk-ic-sm ic-log">🔄</span>
     <div class="pk-main"><div class="pk-zona"><span class="z">${esc(zona)}</span></div>
       <div class="pk-sub">📍 <span class="calle">${esc(calle)}</span></div></div>
-    <div class="pk-right"><span class="state b-log">${esc(motivo)}</span></div>
+    <div class="pk-right"><span class="state ${badge}">${esc(motivo)}</span></div>
     <span class="chev">›</span></div>
     <div class="pk-det">
       <div class="info" style="cursor:pointer" onclick="verEnMapa('${sid}')">📍 <span class="addr">${esc(calle)}</span>, ${esc(zona)} <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>
@@ -1247,7 +1275,7 @@ function renderHoy(){
   // (feriado con reprogramados del viernes → igual salta al martes). Hasta 7 saltos para
   // cubrir feriados largos. Cada snapshot nuevo resetea el contador para re-evaluar.
   const itemsReales=items.filter(i=>i.shipping._state!=='reprogramado');
-  if(itemsReales.length===0&&_isAutoTarget&&_autoAdvanceCount<7&&_snap&&(_snap.envios||[]).length>0){
+  if(itemsReales.length===0&&_isAutoTarget&&_datosFrescos&&_autoAdvanceCount<7&&_snap&&(_snap.envios||[]).length>0){
     _autoAdvanceCount++;
     const sig=new Date(TARGET.getTime()); sig.setDate(sig.getDate()+1);
     while(sig.getDay()===0||sig.getDay()===6) sig.setDate(sig.getDate()+1);
@@ -1301,11 +1329,19 @@ function renderHoy(){
   bindLongPress();
 }
 // Cambios/entregas pendientes que se coordinan (aparecen en Hoy para seguirlos)
+// Sección plegable: arranca cerrada (solo el resumen) y recuerda si la abriste.
+let _ceAbierto=(()=>{ try{ return localStorage.getItem('_v2_ce_open')==='1'; }catch(e){ return false; } })();
+function toggleCE(){ _ceAbierto=!_ceAbierto; try{ localStorage.setItem('_v2_ce_open',_ceAbierto?'1':'0'); }catch(e){} renderHoy(); }
+function _ceVencido(r){ const f=_parseFechaFlexible(r.fechaEstimada); if(!f) return false; const h=new Date(); h.setHours(0,0,0,0); const d=new Date(f); d.setHours(0,0,0,0); return d.getTime()<h.getTime(); }
 function _ceHoySection(){
   const ce=[]; _reclamosMap.forEach(r=>{ if((r.tipo==='cambio'||r.tipo==='entrega') && esActivo(r)) ce.push(r); });
   if(!ce.length)return '';
   ce.sort((a,b)=>(Number(String(a.id).replace(/\D/g,''))||0)-(Number(String(b.id).replace(/\D/g,''))||0));
-  return `<div class="zona-h">🔁 Cambios / entregas<span class="ln"></span>${ce.length}</div>`+ce.map(_ceHoyCard).join('');
+  const venc=ce.filter(_ceVencido).length;
+  const head=`<div class="ce-head${_ceAbierto?' open':''}" onclick="toggleCE()">
+    <span class="ce-chev">›</span><span class="ce-t">🔁 Cambios / entregas</span><span class="ce-n">${ce.length}</span>
+    ${venc?`<span class="ce-venc">⚠️ ${venc} vencido${venc>1?'s':''}</span>`:''}</div>`;
+  return head+(_ceAbierto?`<div class="ce-list">${ce.map(_ceHoyCard).join('')}</div>`:'');
 }
 function _ceHoyCard(r){
   const cam=r.tipo!=='entrega'; const art=(r.notas||'').split(' · ')[0]||'';
@@ -1390,7 +1426,7 @@ function hoyCard(i){
   const cn=i.cuentaNombre||'';
   const cuentaBadge=cn?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:10px;white-space:nowrap;background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
   const oid=o.id?String(o.id):'';
-  const ordenLine=oid?`<div class="info"><a href="https://www.mercadolibre.com.ar/ventas/${esc(oid)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(oid)}</a> ${cuentaBadge}</div>`:(cuentaBadge?`<div class="info">${cuentaBadge}</div>`:'');
+  const ordenLine=oid?`<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(oid)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(oid)}</a> ${cuentaBadge}</div>`:(cuentaBadge?`<div class="info">${cuentaBadge}</div>`:'');
   return `<div class="pk ${stt[2]}" data-sid="${sid}"><div class="pk-row" onclick="tgCard(this)">
     <span class="pk-ic ${ic[1]}">${ic[0]}</span>
     <div class="pk-main"><div class="pk-zona"><span class="z">${esc(barrio)}</span></div>
@@ -1579,7 +1615,7 @@ function resolverCard(r){
   const needRefund=_needRefund(r);
   const _e=_shipById.get(sid);
   const dirLine=_e?('<div class="info" style="cursor:pointer" onclick="verEnMapa(\''+esc(sid)+'\')">📍 <span class="addr">'+esc(calleDe(_e.shipping))+'</span>, '+esc(_e.shipping._zona||zonaDe(_e.shipping))+' <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>'):(r.zona?('<div class="info">📍 '+esc(r.zona)+'</div>'):'');
-  const ordenLine = ROL==='owner'&&r.orderId ? `<div class="info"><a href="https://www.mercadolibre.com.ar/ventas/${esc(r.orderId)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(r.orderId)}</a></div>` : '';
+  const ordenLine = ROL==='owner'&&r.orderId ? `<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(r.orderId)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(r.orderId)}</a></div>` : '';
   let btns='<button class="abtn ab-blue" onclick="verTimeline(\''+sid+'\')">🔍 Historial</button>';
   if(ROL==='log'&&!needRefund){
     if(r.tipo==='entrega'){
@@ -2137,6 +2173,7 @@ function cambiarRol(){
 }
 function aplicarRol(){
   // La logística ve todo (Hoy/A resolver/Historial) pero sin acciones sensibles ni menú de exportar.
+  if(ROL==='owner') sincronizarCatalogoBg();
   renderResolver(); renderHistorial();
 }
 function exportCSV(){
@@ -2163,7 +2200,7 @@ function exportEnviosHoyCSV(){
       (o&&o.date_created||'').split('T')[0],
       sh._zona||'', _addrName(ra.street_name)||ra.street_name||'', ra.street_number||'',
       _addrName(ra.city)||'', _addrName(ra.state)||'', ra.zip_code||'',
-      oid?('https://www.mercadolibre.com.ar/ventas/'+oid+'/detalle'):''
+      oid?('https://vendedores.mercadolibre.com.ar/ventas/'+oid+'/detalle'):''
     ]);
   });
   const csv=rows.map(row=>row.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -2223,11 +2260,24 @@ function abrirMapa(){
   if(!leafletMap){
     setTimeout(()=>{ try{
       leafletMap=L.map('mapFrame').setView([-34.6037,-58.3816],11);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(leafletMap);
+      _ponerTiles();
       markersLayer=L.layerGroup().addTo(leafletMap);
       setTimeout(()=>{ leafletMap.invalidateSize(); pintarMapa(); },120);
     }catch(err){ console.error('mapa',err); toast('No se pudo abrir el mapa'); } },200);
   } else { setTimeout(()=>{ leafletMap.invalidateSize(); pintarMapa(); },100); }
+}
+// Fondo del mapa. OpenStreetMap bloquea (403 "Access blocked") cuando no recibe la página de
+// origen, que es lo que pasa al abrir el HTML desde el disco (file://). Publicada en https
+// funciona. Si se abre desde el disco, o si OSM falla varias veces, se usa el mapa de Esri.
+let _tileLayer=null, _tileErr=0;
+function _ponerTiles(alternativo){
+  if(_tileLayer){ leafletMap.removeLayer(_tileLayer); _tileLayer=null; }
+  const alt = alternativo || location.protocol==='file:';
+  _tileLayer = alt
+    ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:19})
+    : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
+  if(!alt){ _tileErr=0; _tileLayer.on('tileerror',()=>{ if(++_tileErr===4) _ponerTiles(true); }); }
+  _tileLayer.addTo(leafletMap);
 }
 function cerrarMapa(){ document.getElementById('mapModal').classList.remove('active'); if(history.state&&history.state.mikraMap)history.back(); }
 window.addEventListener('popstate',()=>{ const m=document.getElementById('mapModal'); if(m&&m.classList.contains('active'))m.classList.remove('active'); });
@@ -2257,7 +2307,7 @@ function pintarMapa(){
     const oid=(order&&order.id)||'';
     const dir=calle+(ciudad?', '+ciudad:'');
     const gmaps=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dir||zona)}`;
-    const oUrl=oid?`https://www.mercadolibre.com.ar/ventas/${encodeURIComponent(oid)}/detalle`:'';
+    const oUrl=oid?`https://vendedores.mercadolibre.com.ar/ventas/${encodeURIComponent(oid)}/detalle`:'';
     const acct=cuentaNombre?`<span style="font-size:10px;color:#999;margin-left:4px">${esc(cuentaNombre)}</span>`:'';
     marker.bindPopup(
       `<div style="min-width:180px;font-family:-apple-system,BlinkMacSystemFont,sans-serif">` +
@@ -2286,7 +2336,19 @@ function pintarMapa(){
 document.getElementById('dselT') && (document.getElementById('dselT').textContent=dselLabel());
 arrancar();     // usa el rol guardado, o pide el PIN si no hay sesión
 cargarTodo();
-setInterval(updFresh,60000);
+// Cada minuto: actualizar el "hace X min" y, si la app está a la vista y los datos del
+// servidor tienen más de 15 min (cron atrasado), sincronizar solo en segundo plano.
+function _autoSyncSiHaceFalta(){
+  if(document.visibilityState!=='visible'||!_snap) return;
+  if(_minutosDesde(_snap.updated_at)>15) syncEnSegundoPlano();
+}
+setInterval(()=>{ updFresh(); _autoSyncSiHaceFalta(); },60000);
+// Al volver a la app (desde otra app o con la pantalla apagada): traer lo último del servidor.
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!_snap) return;
+  updFresh();
+  if(_minutosDesde(_snap.updated_at)>5) fetchSnapshot(14).then(_aplicarSnap).then(_autoSyncSiHaceFalta).catch(()=>{});
+});
 
 /* ══════════════════════════════════════════════════════════════════
    GESTOS TÁCTILES — swipe horizontal (cambiar día) + pull to refresh
