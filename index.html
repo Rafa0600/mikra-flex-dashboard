@@ -316,7 +316,7 @@
   .scan-top .x{margin-left:auto;color:var(--ink-3);cursor:pointer;font-size:14px;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:1px solid var(--line)}
   .scan-video-wrap{position:relative;width:100%;aspect-ratio:1;background:#000;overflow:hidden}
   #scanVideo{width:100%;height:100%;object-fit:cover;display:block}
-  .scan-frame{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+  .scan-frame{position:absolute;inset:14% 6%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.28)}
   .scan-msg{padding:14px 15px;text-align:center;font-size:13px;font-weight:700;color:var(--ink-2)}
 
   .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(20px);opacity:0;
@@ -378,9 +378,12 @@
     <div class="sheet-card">
       <div class="sheet-h">Nuevo caso <span class="x" onclick="closeSheet('newcase')">✕</span></div>
       <div id="nc-find">
-        <button class="scanbig" onclick="abrirEscanerQR()">📷 Escanear QR de la etiqueta</button>
+        <button class="scanbig" onclick="abrirEscanerQR()">📷 Escanear etiqueta (QR o barras)</button>
         <div class="or">— o escribí el número —</div>
         <div class="fld"><input id="nc-input" inputmode="numeric" placeholder="N° de venta / envío…"><button class="scanmini" onclick="ncBuscar()">🔍</button></div>
+        <div class="or">— o buscá por comprador —</div>
+        <div class="fld"><input id="nc-name" inputmode="text" placeholder="Usuario del comprador (aunque sea el principio)…" onkeydown="if(event.key==='Enter')ncBuscarNombre()"><button class="scanmini" onclick="ncBuscarNombre()">🔍</button></div>
+        <div id="nc-name-res"></div>
         <div class="or">— o —</div>
         <button id="nc-manual-btn" class="save" style="background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="ncManual()">✍️ Cargar caso manual (sin Mercado Libre)</button>
       </div>
@@ -433,7 +436,7 @@
   <div class="scan-card">
     <div class="scan-top">📷 Escanear etiqueta <span class="x" onclick="cerrarEscanerQR()">✕</span></div>
     <div class="scan-video-wrap"><video id="scanVideo" playsinline muted></video><div class="scan-frame"></div></div>
-    <div class="scan-msg" id="scanMsg">Apuntá la cámara al QR de la etiqueta…</div>
+    <div class="scan-msg" id="scanMsg">Apuntá la cámara al código (QR o barras)…</div>
     <canvas id="scanCanvas" style="display:none"></canvas>
   </div>
 </div>
@@ -447,6 +450,7 @@ const SNAPSHOT_URL = 'https://mikra-envios-snapshot.rafaelassir.workers.dev';
 const GAS_RECLAMOS = 'https://mikra-reclamos-api.rafaelassir.workers.dev';
 const _PIN_OWNER = '9148', _PIN_LOGISTICA = '1234';
 const sellerToCuenta = { '667099747':'Mikra', '215796327':'Chaya' };
+const cuentaToSeller = { 'Mikra':'667099747', 'Chaya':'215796327' };
 const cuentaColor = { Mikra:'mikra', Chaya:'chaya' };
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1906,17 +1910,75 @@ function openSheet(id){ if(id==='newcase')ncReset(); if(id==='search')srReset();
 function closeSheet(id){ document.getElementById(id).classList.remove('on'); }
 
 /* --- Nuevo caso: escanear/buscar venta ML → autocompletar --- */
-function ncReset(){ document.getElementById('nc-find').style.display=''; document.getElementById('nc-done').style.display='none'; const i=document.getElementById('nc-input'); if(i)i.value=''; const mb=document.getElementById('nc-manual-btn'); if(mb)mb.style.display=ROL==='owner'?'':'none'; }
+function ncReset(){ document.getElementById('nc-find').style.display=''; document.getElementById('nc-done').style.display='none'; const i=document.getElementById('nc-input'); if(i)i.value=''; const n=document.getElementById('nc-name'); if(n)n.value=''; const nr=document.getElementById('nc-name-res'); if(nr)nr.innerHTML=''; const mb=document.getElementById('nc-manual-btn'); if(mb)mb.style.display=ROL==='owner'?'':'none'; }
+// ── Buscar venta por nombre de comprador (snapshot + Mercado Libre) ──
+function _nameHit(sh,o,cuentaN){
+  const nick=(o.buyer&&o.buyer.nickname)||'';
+  const it=((o.order_items||[])[0]||{}).item; const prod=(it&&it.title)||'Producto';
+  const dstr=o.date_created||o.date_closed||sh.date_created||'';
+  const d=dstr?new Date(dstr):null; const ts=(d&&!isNaN(d))?d.getTime():0;
+  let dias=''; if(ts){ const n=Math.floor((Date.now()-ts)/86400000); dias=n<=0?'hoy':(n===1?'hace 1 día':'hace '+n+' días'); }
+  return { sid:String(sh.id||''), nick, prod, zona:(sh.receiver_address?zonaDe(sh):''), cuenta:cuentaN||sellerToCuenta[String(o.seller&&o.seller.id)]||'', dias, ts };
+}
+let _ncNameBusy=false;
+async function ncBuscarNombre(){
+  const raw=(document.getElementById('nc-name').value||'').trim();
+  const box=document.getElementById('nc-name-res');
+  if(raw.length<3){ box.innerHTML='<div class="or">Escribí al menos 3 letras del usuario.</div>'; return; }
+  if(_ncNameBusy)return; _ncNameBusy=true;
+  const q=normalizar(raw);
+  box.innerHTML='<div class="loading"><div class="spinner"></div>Buscando ventas de “'+esc(raw)+'”…</div>';
+  const vistos=new Set(), hits=[];
+  (_snap&&_snap.envios||[]).forEach(e=>{
+    const o=(e.orders||[])[0], sh=e.shipping; if(!o||!sh)return;
+    if(!normalizar((o.buyer&&o.buyer.nickname)||'').includes(q))return;
+    const sid=String(sh.id); if(vistos.has(sid))return; vistos.add(sid); hits.push(_nameHit(sh,o));
+  });
+  try{
+    const tokens=await Promise.all(CUENTAS.map(c=>_token(c)));
+    for(let i=0;i<CUENTAS.length;i++){ if(!tokens[i])continue;
+      const seller=cuentaToSeller[CUENTAS[i].nombre]; if(!seller)continue;
+      const d=await _mlGet(CUENTAS[i],tokens[i],'/api/orders/search?seller='+seller+'&q='+encodeURIComponent(raw)+'&sort=date_desc&limit=50');
+      ((d&&d.results)||[]).forEach(o=>{
+        if(!normalizar((o.buyer&&o.buyer.nickname)||'').includes(q))return; // q también matchea títulos
+        const sh=o.shipping||{}; const sid=String(sh.id||''); if(!sid||vistos.has(sid))return; vistos.add(sid);
+        hits.push(_nameHit(sh,o,CUENTAS[i].nombre));
+      });
+    }
+  }catch(e){}
+  _ncNameBusy=false;
+  if(!hits.length){ box.innerHTML='<div class="empty">Sin ventas para “'+esc(raw)+'”.<br><small>Probá con otra parte del usuario, o usá el número.</small></div>'; return; }
+  hits.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  box.innerHTML='<div class="or" style="margin-top:4px">'+hits.length+' resultado'+(hits.length!==1?'s':'')+' · tocá para armar el caso</div>'+hits.slice(0,12).map(h=>`<div class="found">
+    <div class="found-h" style="display:flex;align-items:center;gap:8px"><b>${esc(h.nick||'—')}</b>${h.cuenta?`<span class="state" style="background:var(--surface-2);color:var(--ink-2)">${esc(h.cuenta)}</span>`:''}<span style="margin-left:auto;font-size:12px;color:var(--ink-3)">${esc(h.dias)}</span></div>
+    <div class="pk-line" style="margin:7px 0 4px">${esc(h.prod)}</div>
+    ${h.zona?`<div class="found-r"><span>Zona</span><b>${esc(h.zona)}</b></div>`:''}
+    <button class="save" style="margin-top:10px" onclick="ncUsar('${esc(h.sid)}')">Usar este envío →</button>
+  </div>`).join('');
+}
+function ncUsar(sid){ const i=document.getElementById('nc-input'); if(i)i.value=sid; const nr=document.getElementById('nc-name-res'); if(nr)nr.innerHTML=''; ncBuscar(); }
 // ── Escáner de cámara (QR de la etiqueta) ──
 let _scanStream=null, _scanRAF=null, _scanDetector=null, _scanBusy=false;
 async function abrirEscanerQR(){
   const video=document.getElementById('scanVideo');
   document.getElementById('scanner').classList.add('on');
-  document.getElementById('scanMsg').textContent='Apuntá la cámara al QR de la etiqueta…';
+  document.getElementById('scanMsg').textContent='Apuntá la cámara al código (QR o barras)…';
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ document.getElementById('scanMsg').textContent='Este navegador no permite usar la cámara. Escribí el número.'; return; }
-  try{ _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}}); video.srcObject=_scanStream; await video.play(); }
+  try{
+    _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+    video.srcObject=_scanStream; await video.play();
+    try{ const tr=_scanStream.getVideoTracks()[0]; const caps=tr.getCapabilities?tr.getCapabilities():{}; if(caps.focusMode&&caps.focusMode.includes('continuous'))await tr.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch(e){}
+  }
   catch(e){ document.getElementById('scanMsg').textContent='No se pudo abrir la cámara (permiso denegado). Escribí el número.'; return; }
-  _scanDetector=null; if('BarcodeDetector' in window){ try{ _scanDetector=new BarcodeDetector({formats:['qr_code']}); }catch(e){ _scanDetector=null; } }
+  _scanDetector=null;
+  if('BarcodeDetector' in window){
+    try{
+      const want=['qr_code','code_128','ean_13','code_39','itf','ean_8','upc_a','upc_e','codabar'];
+      const sup=await BarcodeDetector.getSupportedFormats();
+      const fmts=want.filter(f=>sup.includes(f));
+      _scanDetector=new BarcodeDetector({formats:fmts.length?fmts:['qr_code']});
+    }catch(e){ try{ _scanDetector=new BarcodeDetector({formats:['qr_code']}); }catch(e2){ _scanDetector=null; } }
+  }
   _scanBusy=false; _tickScan();
 }
 async function _tickScan(){
