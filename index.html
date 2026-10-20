@@ -586,7 +586,7 @@ function _gasReclamo(params){
     const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
     const url=GAS_RECLAMOS+'?'+qs;
     fetch(url,{signal:_withTimeout(9000)}).then(r=>r.ok?r.json():null).then(d=>resolve(d))
-    .catch(()=>{ const cb='_gr'+Date.now(); const sc=document.createElement('script'); const t=setTimeout(()=>{cleanup();resolve(null);},10000);
+    .catch(()=>{ const cb='_gr'+Date.now()+'_'+Math.random().toString(36).slice(2,8); const sc=document.createElement('script'); // único: varias en paralelo no se pisan const t=setTimeout(()=>{cleanup();resolve(null);},10000);
       function cleanup(){clearTimeout(t);delete window[cb];sc.remove();}
       window[cb]=d=>{cleanup();resolve(d);}; sc.onerror=()=>{cleanup();resolve(null);};
       sc.src=url+'&callback='+cb; document.head.appendChild(sc); });
@@ -920,6 +920,8 @@ function _mergeSnap(prev, nuevo){
   return { updated_at: nuevo.updated_at||prev.updated_at, count: out.length, envios: out };
 }
 function _renderTodo(){ updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges(); }
+// Tras crear/cambiar un caso: refrescar TODAS las vistas que muestran casos (Hoy incluye cambios/entregas)
+function _refrescarCasos(){ renderHoy(); renderResolver(); renderHistorial(); actualizarBadges(); }
 // Aplica un snapshot recién bajado (mergeado con lo que había) y lo guarda en caché
 function _aplicarSnap(nuevo){
   const m=_mergeSnap(_snap, nuevo);
@@ -1104,7 +1106,7 @@ async function _autoDetectarDevoluciones(){
   const results=await Promise.all(proms);
   const creados=results.filter(Boolean).length;
   if(creados){
-    renderResolver(); renderHistorial(); actualizarBadges();
+    _refrescarCasos();
     toast(`↩️ ${creados} envío${creados!==1?'s':''} cancelado${creados!==1?'s':''} → A devolver`);
   }
 }
@@ -1522,7 +1524,7 @@ function _accionMasivaGen(estado,label,warning){
     await Promise.all(ids.map(sid=>{ const r=_reclamosMap.get(String(sid)); if(!r)return Promise.resolve(); return _gasReclamo({action:'update_reclamo',shippingId:sid,estado}).then(res=>{ if(res&&res.ok){ const now=new Date().toISOString(); r.estado=estado; if(estado==='descontado'&&!r.fechaDescontado)r.fechaDescontado=now; if(estado==='cerrado'&&!r.fechaDescontado&&_needRefundLike(r))r.fechaDescontado=now; _logDeAccion(sid,estado,label); ok++; } }); }));
     _selMode=false; _selSet.clear();
     toast('✓ '+ok+' casos '+label.toLowerCase());
-    renderResolver(); renderHistorial(); actualizarBadges();
+    _refrescarCasos();
   });
 }
 function _needRefundLike(r){ return (r.estado==='recibido'||r.estado==='entregado')&&r.fechaDescontado; }
@@ -1679,7 +1681,7 @@ function reabrir(sid){
   const sub=(r?esc(r.id)+' · '+esc(r.comprador||''):('#'+sid))+(tuvoDesc?'<br><span style="color:var(--ok);font-weight:800">💵 Se marca como reembolsado (le devolvés lo descontado) y vuelve a A resolver</span>':'<br>Vuelve a A resolver.');
   confirmar('Reabrir caso — ¿seguro?', sub, async ()=>{
     const res=await _gasReclamo({action:'update_reclamo',shippingId:sid,estado:'pendiente'});
-    if(res&&res.ok){ if(r)r.estado='pendiente'; _logEvento(sid, tuvoDesc?'💵 Reembolsado · caso reabierto':'↩️ Caso reabierto', tuvoDesc?'c-green':'c-orange'); toast('✓ Caso reabierto'); renderResolver(); renderHistorial(); actualizarBadges(); }
+    if(res&&res.ok){ if(r)r.estado='pendiente'; _logEvento(sid, tuvoDesc?'💵 Reembolsado · caso reabierto':'↩️ Caso reabierto', tuvoDesc?'c-green':'c-orange'); toast('✓ Caso reabierto'); _refrescarCasos(); }
     else toast('⚠️ No se pudo reabrir');
   });
 }
@@ -1860,7 +1862,7 @@ function accion(sid, estado, okMsg){
         if(estado==='entregado'&&!rec.fechaEntregado) rec.fechaEntregado=now;
         if(estado==='descontado'&&!rec.fechaDescontado) rec.fechaDescontado=now;
       }
-      _logDeAccion(sid,estado,okMsg); toast('✓ '+okMsg); renderResolver(); renderHistorial(); actualizarBadges();
+      _logDeAccion(sid,estado,okMsg); toast('✓ '+okMsg); _refrescarCasos();
     }
     else toast('⚠️ No se pudo guardar');
   });
@@ -1922,6 +1924,10 @@ function _nameHit(sh,o,cuentaN){
 }
 let _ncNameBusy=false;
 async function ncBuscarNombre(){
+  try{ await _ncBuscarNombreCore(); }
+  catch(e){ _ncNameBusy=false; const b=document.getElementById('nc-name-res'); if(b) b.innerHTML='<div class="empty">⚠️ Error buscando. Probá de nuevo.</div>'; }
+}
+async function _ncBuscarNombreCore(){
   const raw=(document.getElementById('nc-name').value||'').trim();
   const box=document.getElementById('nc-name-res');
   if(raw.length<3){ box.innerHTML='<div class="or">Escribí al menos 3 letras del usuario.</div>'; return; }
@@ -1957,9 +1963,42 @@ async function ncBuscarNombre(){
   </div>`).join('');
 }
 function ncUsar(sid){ const i=document.getElementById('nc-input'); if(i)i.value=sid; const nr=document.getElementById('nc-name-res'); if(nr)nr.innerHTML=''; ncBuscar(); }
-// ── Escáner de cámara (QR de la etiqueta) ──
-let _scanStream=null, _scanRAF=null, _scanDetector=null, _scanBusy=false;
+// ── Escáner de cámara (QR + código de barras) ──
+// El BarcodeDetector nativo solo existe en Android/Mac. En Windows/iPhone se usa el mismo lector
+// compilado a WebAssembly (zxing-cpp, ponyfill "barcode-detector"): misma API, lee barras bien.
+let _scanStream=null, _scanTimer=null, _scanDetector=null, _scanBusy=false, _scanTick=0, _bdLoad=null, _scanC2=null;
+const BD_FORMATOS=['qr_code','code_128','code_39','itf','ean_13','ean_8','upc_a','upc_e','codabar'];
+const BD_PONYFILL_URL='https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js';
+function _cargarDetectorWasm(){
+  const G=()=>window.BarcodeDetectionAPI&&window.BarcodeDetectionAPI.BarcodeDetector;
+  if(G()) return Promise.resolve(G());
+  if(_bdLoad) return _bdLoad;
+  _bdLoad=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=BD_PONYFILL_URL; s.onload=()=>G()?res(G()):rej(new Error('ponyfill')); s.onerror=()=>{ _bdLoad=null; rej(new Error('ponyfill')); }; document.head.appendChild(s); });
+  return _bdLoad;
+}
+async function _crearDetector(){
+  if('BarcodeDetector' in window){
+    try{ const sup=await BarcodeDetector.getSupportedFormats(); const f=BD_FORMATOS.filter(x=>sup.includes(x));
+      if(f.includes('code_128')) return new BarcodeDetector({formats:f}); }catch(e){}
+  }
+  const Poly=await _cargarDetectorWasm();
+  return new Poly({formats:BD_FORMATOS});
+}
+// Cuadro de la cámara en un canvas: completo (máx 1280px) o el CENTRO ampliado (zona del marco
+// guía), que rescata el código cuando queda chico porque el celu está lejos.
+function _scanFuente(video,centro){
+  const w=video.videoWidth, h=video.videoHeight;
+  const c=centro?(_scanC2||(_scanC2=document.createElement('canvas'))):document.getElementById('scanCanvas');
+  let sx=0, sy=0, sw=w, sh=h;
+  if(centro){ sw=Math.round(w*.6); sh=Math.round(h*.5); sx=Math.round((w-sw)/2); sy=Math.round((h-sh)/2); }
+  const k=centro?1280/Math.max(sw,sh):Math.min(1,1280/Math.max(sw,sh));
+  const cw=Math.round(sw*k), ch=Math.round(sh*k);
+  if(c.width!==cw)c.width=cw; if(c.height!==ch)c.height=ch;
+  c.getContext('2d',{willReadFrequently:true}).drawImage(video,sx,sy,sw,sh,0,0,cw,ch);
+  return c;
+}
 async function abrirEscanerQR(){
+  if(_scanStream) cerrarEscanerQR(); // no dejar una cámara abierta de antes
   const video=document.getElementById('scanVideo');
   document.getElementById('scanner').classList.add('on');
   document.getElementById('scanMsg').textContent='Apuntá la cámara al código (QR o barras)…';
@@ -1970,41 +2009,48 @@ async function abrirEscanerQR(){
     try{ const tr=_scanStream.getVideoTracks()[0]; const caps=tr.getCapabilities?tr.getCapabilities():{}; if(caps.focusMode&&caps.focusMode.includes('continuous'))await tr.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch(e){}
   }
   catch(e){ document.getElementById('scanMsg').textContent='No se pudo abrir la cámara (permiso denegado). Escribí el número.'; return; }
-  _scanDetector=null;
-  if('BarcodeDetector' in window){
-    try{
-      const want=['qr_code','code_128','ean_13','code_39','itf','ean_8','upc_a','upc_e','codabar'];
-      const sup=await BarcodeDetector.getSupportedFormats();
-      const fmts=want.filter(f=>sup.includes(f));
-      _scanDetector=new BarcodeDetector({formats:fmts.length?fmts:['qr_code']});
-    }catch(e){ try{ _scanDetector=new BarcodeDetector({formats:['qr_code']}); }catch(e2){ _scanDetector=null; } }
-  }
+  _scanTick=0;
+  if(!_scanDetector) _crearDetector().then(d=>{ _scanDetector=d; }).catch(()=>{ document.getElementById('scanMsg').textContent='Sin conexión al lector de barras: solo QR. O escribí el número.'; });
   _scanBusy=false; _tickScan();
 }
 async function _tickScan(){
   if(!_scanStream)return;
   const video=document.getElementById('scanVideo');
-  if(video.readyState>=2 && !_scanBusy){
+  if(video.readyState>=2 && video.videoWidth && !_scanBusy){
     _scanBusy=true; let code=null;
     try{
-      if(_scanDetector){ const bc=await _scanDetector.detect(video); if(bc&&bc.length)code=bc[0].rawValue; }
-      if(!code && window.jsQR){ const c=document.getElementById('scanCanvas'); const w=video.videoWidth,h=video.videoHeight; if(w&&h){ c.width=w;c.height=h; const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(video,0,0,w,h); const img=ctx.getImageData(0,0,w,h); const q=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'}); if(q)code=q.data; } }
+      if(_scanDetector){
+        const centro=(_scanTick++%2)===1; // alterna cuadro completo / centro ampliado
+        const bc=await _scanDetector.detect(_scanFuente(video,centro));
+        if(bc&&bc.length) code=bc[0].rawValue;
+      } else if(window.jsQR){ // mientras carga el lector de barras, al menos QR
+        const c=_scanFuente(video,false), img=c.getContext('2d').getImageData(0,0,c.width,c.height);
+        const q=jsQR(img.data,c.width,c.height,{inversionAttempts:'attemptBoth'}); if(q)code=q.data;
+      }
     }catch(e){}
     _scanBusy=false;
     if(code){ _onQR(code); return; }
   }
-  _scanRAF=requestAnimationFrame(_tickScan);
+  _scanTimer=setTimeout(_tickScan,80);
 }
-function cerrarEscanerQR(){ if(_scanRAF)cancelAnimationFrame(_scanRAF); _scanRAF=null; if(_scanStream){ _scanStream.getTracks().forEach(t=>t.stop()); _scanStream=null; } _scanDetector=null; document.getElementById('scanner').classList.remove('on'); }
+function cerrarEscanerQR(){ if(_scanTimer)clearTimeout(_scanTimer); _scanTimer=null; if(_scanStream){ _scanStream.getTracks().forEach(t=>t.stop()); _scanStream=null; } document.getElementById('scanner').classList.remove('on'); }
 function _onQR(qrText){
-  let num=''; const m=String(qrText).match(/\b(\d{10,})\b/); if(m)num=m[1]; else{ try{ const d=JSON.parse(qrText); if(d&&typeof d==='object')num=String(d.id||d.shipment_id||''); }catch(e){} }
+  // Número de envío/venta = la corrida de dígitos más larga (≥10), aunque venga pegada a letras (ej. MEL…AR)
+  let num='';
+  try{ const d=JSON.parse(qrText); if(d&&typeof d==='object')num=String(d.id||d.shipment_id||'').replace(/\D/g,''); }catch(e){}
+  if(!num){ const runs=String(qrText).match(/\d{10,}/g)||[]; num=runs.sort((a,b)=>b.length-a.length)[0]||''; }
   cerrarEscanerQR();
-  if(!num){ toast('QR no reconocido, probá de nuevo'); return; }
+  if(!num){ toast('Código no reconocido, probá de nuevo o escribí el número'); return; }
   if(navigator.vibrate)navigator.vibrate(30);
   openSheet('newcase'); document.getElementById('nc-input').value=num; ncBuscar();
 }
 let _ncBusy=false;
+// Red de seguridad: si algo falla a mitad de búsqueda, no dejar el spinner girando ni el candado trabado
 async function ncBuscar(){
+  try{ await _ncBuscarCore(); }
+  catch(e){ _ncBusy=false; const d=document.getElementById('nc-done'); if(d) d.innerHTML='<div class="empty">⚠️ Hubo un error buscando la venta.<br><small>'+esc(e&&e.message||String(e))+'</small></div><button class="save" style="margin-top:12px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="ncReset()">↩️ Volver</button>'; }
+}
+async function _ncBuscarCore(){
   const num=(document.getElementById('nc-input').value||'').trim();
   const done=document.getElementById('nc-done');
   if(!num){ toast('Escribí o escaneá un número'); return; }
@@ -2077,7 +2123,7 @@ function ncForm(data){
     + '<label class="fld-l">🏠 Dirección <span class="fl-opt">(opcional)</span></label>'
     + '<input id="ncDir" class="nc-inp" value="'+esc(f.dir)+'" placeholder="Calle y número">'
     + '<label class="fld-l">💵 Valor del producto <span class="fl-req">obligatorio</span></label>'
-    + '<input id="ncVal" class="nc-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="'+(f.valor||'')+'" placeholder="0">'
+    + '<input id="ncVal" class="nc-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="'+(f.valor?Math.round(Number(f.valor)||0):'')+'" placeholder="0">'
     + '<label class="fld-l">⏱️ Vence <span class="fl-opt">(por defecto 2 días hábiles; editable para retroactivos)</span></label>'
     + '<input id="ncVenc" class="nc-inp" type="date" value="'+_isoDate(_venc())+'">'
     + '<button class="save" onclick="ncGuardar()">Guardar caso</button>';
@@ -2088,7 +2134,8 @@ async function ncGuardar(){
   const tsel=document.querySelector('#nc-done .seg-b.on'); const tipo=tsel&&tsel.dataset.tipo;
   if(!tipo){ toast('Elegí Cambio, Entrega o Devolución'); return; }
   const zEl=document.getElementById('ncZona'), vEl=document.getElementById('ncVal');
-  const zona=(zEl.value||'').trim(), valor=Math.round(Number(vEl.value||0))||0;
+  // Valor en pesos: acepta "43.720", "$43.720", "43720" o "43.720,50" (punto = miles, coma = decimales)
+  const zona=(zEl.value||'').trim(), valor=parseInt(String(vEl.value||'').replace(/\./g,'').split(',')[0].replace(/\D/g,''),10)||0;
   const dir=(document.getElementById('ncDir').value||'').trim(), art=(document.getElementById('ncArt').value||'').trim();
   if(!zona){ toast('📍 Falta la zona'); zEl.focus(); return; }
   if(valor<=0){ toast('💵 Falta el valor'); vEl.focus(); return; }
@@ -2101,9 +2148,8 @@ async function ncGuardar(){
   if(!vencDate||isNaN(vencDate)) vencDate=_venc();
   const venc=_fmtDMY(vencDate);
   const res=await _gasReclamo({action:'add_reclamo', shippingId:f.shippingId, orderId:f.orderId||'', comprador:f.comprador||'', zona, cuenta:f.cuenta||'', tipo, valor, fechaEstimada:venc, notas});
-  closeSheet('newcase');
-  if(res&&res.ok){ await fetchReclamos(); toast('✅ Caso creado '+(res.record?res.record.id:'')+(res.duplicate?' (ya existía)':'')); renderResolver(); renderHistorial(); actualizarBadges(); }
-  else toast('⚠️ No se pudo crear el caso');
+  if(res&&res.ok){ closeSheet('newcase'); await fetchReclamos(); toast('✅ Caso creado '+(res.record?res.record.id:'')+(res.duplicate?' (ya existía)':'')); _refrescarCasos(); }
+  else { window._ncForm=f; toast('⚠️ No se pudo guardar (¿sin señal?). Tus datos siguen acá: tocá Guardar de nuevo.'); } // no perder lo cargado
 }
 
 /* --- Buscar caso (etiqueta rota) --- */
