@@ -1077,11 +1077,18 @@ async function cargarTodo(){
 }
 // Auto-cierre: un descontado que a los 15 días NO volvió → se cierra solo. Si volvió,
 // pasa a 'recibido' (ya no es 'descontado') y NO se cierra automático (hay que reembolsar).
+// El cierre de los descontados de +15 días lo hace el cron diario del worker de casos (Cloudflare).
+// Esto queda de respaldo por si el cron no corrió todavía. Una sola vez por caso y por sesión.
+const _autoCerrados=new Set();
 function autoCerrarViejos(){
   _reclamosMap.forEach(r=>{
     if(r.estado!=='descontado')return;
     const d=diasCaso(r);                 // antigüedad del caso (lo que se ve como "X días")
-    if(d!=null && d>15){ r.estado='cerrado'; _logEvento(String(r.shippingId),'🔒 Cerrado automático (+15 días descontado)','c-desc'); _gasReclamo({action:'update_reclamo',shippingId:r.shippingId,estado:'cerrado'}).catch(()=>{}); }
+    if(d==null||d<=15) return;
+    r.estado='cerrado';
+    const sid=String(r.shippingId); if(_autoCerrados.has(sid)) return; _autoCerrados.add(sid);
+    _logEvento(sid,'🔒 Cerrado automático (+15 días descontado)','c-desc');
+    _gasReclamo({action:'update_reclamo',shippingId:r.shippingId,estado:'cerrado',motivo:'auto15'}).catch(()=>{});
   });
 }
 // Auto-cierre por entrega: si el envío de ML figura como entregado y el caso es de
@@ -1094,8 +1101,9 @@ function autoCerrarEntregados(){
     const sh=e&&e.shipping;
     if(sh&&sh.status_history&&sh.status_history.date_delivered){
       r.estado='cerrado';
-      _logEvento(String(r.shippingId),'🔒 Cerrado automático · entregado por ML','c-desc');
-      _gasReclamo({action:'update_reclamo',shippingId:r.shippingId,estado:'cerrado'}).catch(()=>{});
+      const sid=String(r.shippingId); if(_autoCerrados.has(sid)) return; _autoCerrados.add(sid);
+      _logEvento(sid,'🔒 Cerrado automático · entregado por ML','c-desc');
+      _gasReclamo({action:'update_reclamo',shippingId:r.shippingId,estado:'cerrado',motivo:'auto_entregado'}).catch(()=>{});
     }
   });
 }
@@ -1650,8 +1658,8 @@ function vistaReclamo(r){
 function resolverItems(){
   const out=[];
   _reclamosMap.forEach(r=>{ if(esActivo(r)) out.push(r); });
-  // orden por antigüedad: el más viejo (más días) primero
-  return out.sort((a,b)=>{ const fa=_parseFechaFlexible(a.fechaAlta), fb=_parseFechaFlexible(b.fechaAlta); return (fa?fa.getTime():9e15)-(fb?fb.getTime():9e15); });
+  // más reciente primero, el más viejo abajo
+  return out.sort((a,b)=>{ const fa=_parseFechaFlexible(a.fechaAlta), fb=_parseFechaFlexible(b.fechaAlta); return (fb?fb.getTime():0)-(fa?fa.getTime():0); });
 }
 // Días de CALENDARIO desde el alta (no de 24 h): cargado ayer a las 14 h → hoy a la mañana dice "ayer"
 function diasCaso(r){ const f=_parseFechaFlexible(r.fechaAlta); if(!f)return null; const a=new Date(f); a.setHours(0,0,0,0); const h=new Date(); h.setHours(0,0,0,0); return Math.round((h.getTime()-a.getTime())/86400000); }
@@ -1873,6 +1881,7 @@ const _FEED_META={
   recibido:['📥','ic-ok','s-ok','l-ok'], entregado:['📬','ic-ok','s-ok','l-ok'], cerrado:['🔒','ic-desc','s-desc','l-desc'],
   reembolso:['💵','ic-ok','s-ok','l-ok'], reabierto:['↩️','ic-log','s-log','l-log'], archivado:['🗃️','ic-desc','s-desc','l-desc'], otro:['•','','','']
 };
+function _txtCierre(r){ return r.motivoCierre==='auto15'?'Cerrado automático (+15 días descontado)':r.motivoCierre==='auto_entregado'?'Cerrado automático · entregado por ML':'Caso cerrado'; }
 function _tipoLog(label){ const l=(label||'').toLowerCase(); if(l.includes('reembols'))return 'reembolso'; if(l.includes('reabier'))return 'reabierto'; if(l.includes('cerrad'))return 'cerrado'; if(l.includes('archiv'))return 'archivado'; if(l.includes('log'))return 'logistica'; return 'otro'; }
 function _stripEmoji(s){ s=s||''; const i=s.indexOf(' '); return (i>0 && /[^\x00-\x7F]/.test(s[0]))?s.slice(i+1):s; }
 function _fmtTs(ts){ const d=new Date(ts); const _p=n=>String(n).padStart(2,'0'); return DIAS_CORTO[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)+' '+_p(d.getHours())+':'+_p(d.getMinutes()); }
@@ -1886,7 +1895,8 @@ function feedEventos(){
     addF(r.fechaDescontado,'descontado','Descontado');
     addF(r.fechaRecibido,'recibido','Recibido en Mikra');
     addF(r.fechaEntregado,'entregado','Entregado al comprador');
-    _logGet(b.sid).forEach(ev=>{ if(!ev.ts||ev.ts>tope)return; evs.push(Object.assign({tipo:_tipoLog(ev.label),label:_stripEmoji(ev.label),ts:ev.ts},b)); });
+    addF(r.fechaCerrado,'cerrado',_txtCierre(r));
+    _logGet(b.sid).forEach(ev=>{ if(!ev.ts||ev.ts>tope)return; if(r.fechaCerrado&&_tipoLog(ev.label)==='cerrado')return; evs.push(Object.assign({tipo:_tipoLog(ev.label),label:_stripEmoji(ev.label),ts:ev.ts},b)); });
   });
   return evs.sort((a,b)=>b.ts-a.ts);
 }
@@ -1998,9 +2008,10 @@ function verTimeline(sid){
     add(rec.fechaRecibido,'📥 Recibido en Mikra','c-green');
     // "Entregado" del caso SOLO si el envío de ML no lo trae ya (evita duplicado; vale el de ML)
     if(rec.fechaEntregado && !(sh&&sh.status_history&&sh.status_history.date_delivered)) add(rec.fechaEntregado,'✅ Entregado','c-green');
+    add(rec.fechaCerrado,'🔒 '+_txtCierre(rec),'c-desc');
   }
   // eventos del log local (cerrado / reabierto / archivado) con su fecha y hora
-  _logGet(sid).forEach(ev=>{ evs.push({ts:ev.ts||0, dtStr:ev.ts?fmtDHAR(new Date(ev.ts).toISOString()):'', label:ev.label, dot:ev.dot||'c-gray'}); });
+  _logGet(sid).forEach(ev=>{ if(rec&&rec.fechaCerrado&&_tipoLog(ev.label)==='cerrado') return; evs.push({ts:ev.ts||0, dtStr:ev.ts?fmtDHAR(new Date(ev.ts).toISOString()):'', label:ev.label, dot:ev.dot||'c-gray'}); });
   evs.sort((a,b)=>(a.ts||0)-(b.ts||0));   // orden cronológico único
   const _cf=(rec&&rec.fechaAlta)?_parseFechaFlexible(rec.fechaAlta):null; const _ct=_cf?_cf.getTime():0;  // ts del caso creado
   let html=repHtml;
@@ -2022,8 +2033,12 @@ function verTimeline(sid){
 ══════════════════════════════════════════════════════════════════ */
 // Registro de eventos (log local con fecha/hora) para la cronología: guarda lo que el
 // backend NO tiene con fecha (cerrado, reabierto, archivado). El resto sale de las fechas del caso.
-function _logGet(sid){ try{ return JSON.parse(localStorage.getItem('_v2_log_'+sid)||'[]'); }catch(e){ return []; } }
-function _logEvento(sid,label,dot){ try{ const l=_logGet(sid); l.push({ts:Date.now(),label,dot:dot||'c-gray'}); localStorage.setItem('_v2_log_'+sid,JSON.stringify(l)); }catch(e){} }
+// Mismo texto dentro de 10 min = repetido (se descarta; también limpia los que ya quedaron guardados)
+function _logGet(sid){ let l=[]; try{ l=JSON.parse(localStorage.getItem('_v2_log_'+sid)||'[]'); }catch(e){ return []; }
+  return l.filter((ev,i)=>!l.slice(0,i).some(x=>x.label===ev.label&&Math.abs((x.ts||0)-(ev.ts||0))<600000)); }
+function _logEvento(sid,label,dot){ try{ const l=_logGet(sid);
+  if(l.some(x=>x.label===label&&(/automático/.test(label)||Date.now()-(x.ts||0)<600000))) return;   // ya está
+  l.push({ts:Date.now(),label,dot:dot||'c-gray'}); localStorage.setItem('_v2_log_'+sid,JSON.stringify(l)); }catch(e){} }
 function _logDeAccion(sid,estado,okMsg){ if(estado==='cerrado')_logEvento(sid,'🔒 '+okMsg,'c-desc'); else if(estado==='entregado')_logEvento(sid,'📬 '+okMsg,'c-ok'); else if(estado==='pendiente')_logEvento(sid,'↩️ Caso reabierto','c-orange'); else if(estado==='archivado')_logEvento(sid,'🗃️ Archivado','c-gray'); }
 function accion(sid, estado, okMsg){
   const rec=_reclamosMap.get(String(sid));
