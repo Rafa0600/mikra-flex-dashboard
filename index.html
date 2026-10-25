@@ -31,16 +31,59 @@
   .icobtn:active{background:var(--line)}
   .abtn:active,.save:active,.seg-b:active,.fchip:active,.moreb:active,.newbtn:active{opacity:.7;transition:opacity .1s}
   .dsel{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;color:var(--ink);padding:0}
-  .dsel-t{font-weight:850;font-size:18px;letter-spacing:-.02em}
+  .dsel-t{font-weight:850;font-size:18px;letter-spacing:-.02em;white-space:nowrap}
   .dsel-c{font-size:12px;color:var(--ink-3)}
   .sectitle{font-weight:850;font-size:18px;letter-spacing:-.02em;display:inline-flex;align-items:baseline;gap:8px}
   .seccount{color:var(--accent);font-family:var(--f-mono);font-weight:900}
   .seccount .n{font-size:22px}
   .seccount .u{font-size:11px;color:var(--ink-3);font-weight:700;margin-left:3px}
-  .fresh{display:inline-flex;align-items:center;gap:6px;color:var(--ink-3);font-size:10.5px;font-weight:650}
-  .fresh .r{font-size:13px;padding:4px 7px;border-radius:7px;color:var(--accent);cursor:pointer;
-    border:1px solid color-mix(in srgb,var(--accent) 34%,transparent)}
-  .fresh .r.spin{display:inline-block;animation:sp .8s linear infinite;pointer-events:none}
+  .fresh{display:inline-flex;align-items:center;gap:7px;color:var(--ink-2);font-size:12px;font-weight:750;cursor:pointer;
+    padding:6px 10px 6px 12px;border-radius:11px;border:1px solid var(--line);background:var(--surface-2);user-select:none}
+  .fresh:active{opacity:.7}
+  .fresh .r{font-size:17px;line-height:1;color:var(--accent);display:inline-block}
+  .fresh.busy{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+  .fresh.busy .r{animation:sp .8s linear infinite}
+  .syncbar{position:fixed;top:0;left:0;right:0;height:3px;overflow:hidden;z-index:10000;opacity:0;transition:opacity .2s;pointer-events:none}
+  .syncbar.on{opacity:1}
+  .syncbar::after{content:'';position:absolute;top:0;left:-40%;width:40%;height:100%;background:var(--accent);animation:syncmov 1.1s ease-in-out infinite}
+  @keyframes syncmov{to{left:100%}}
+  .geo-line{display:flex;gap:8px;margin:0 0 12px}
+  .geo-chip{flex:1;text-align:center;padding:9px 6px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:13px;font-weight:750;color:var(--ink-2)}
+  .geo-chip{cursor:pointer;user-select:none;transition:opacity .15s}
+  .geo-chip:active{transform:scale(.98)}
+  .geo-chip.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--surface-2));color:var(--ink);box-shadow:0 0 0 1px var(--accent) inset}
+  .geo-chip.off{opacity:.45}
+  .geo-chip b{font-size:18px;color:var(--ink);margin-left:3px}
+  .geo-chip small{display:block;font-size:10.5px;font-weight:650;color:var(--ink-3);margin-top:1px}
+  .tar-sec{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:16px 2px 8px;display:flex;align-items:center;gap:8px}
+  .tar-sec:first-child{margin-top:2px}
+  .tar-sec .ln{flex:1;height:1px;background:var(--line)}
+  .tar-vacio{font-size:12.5px;font-weight:700;color:var(--ok);padding:2px 4px 4px}
+  .tar-card{--c:var(--accent);border:1px solid var(--line);border-radius:15px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+  .tc-amber{--c:var(--amber)} .tc-red{--c:var(--devolver)} .tc-cam{--c:var(--cambio)} .tc-log{--c:var(--logistica)}
+  .tar-h{display:flex;align-items:center;gap:11px;padding:12px}
+  .tar-h.tap{cursor:pointer} .tar-h.tap:active,.tar-dia:active{background:var(--surface-2)}
+  .tar-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:19px;flex-shrink:0;background:color-mix(in srgb,var(--c) 17%,transparent)}
+  .tar-tx{flex:1;min-width:0}
+  .tar-tit{font-size:15px;font-weight:800;color:var(--ink)}
+  .tar-que{font-size:12px;color:var(--ink-3);margin-top:2px;line-height:1.35}
+  .tar-cnt{display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
+  .tar-n{font-size:22px;font-weight:850;color:var(--c);min-width:26px;text-align:right;line-height:1.1}
+  .tar-venc{font-size:10.5px;font-weight:800;color:var(--devolver);white-space:nowrap}
+  .tar-chev{color:var(--ink-3);font-size:20px;font-weight:700;margin-left:-2px}
+  .tar-dias{border-top:1px solid var(--line)}
+  .tar-dia{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 16px;cursor:pointer}
+  .tar-dia+.tar-dia{border-top:1px solid var(--line)}
+  .tar-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--ink-3)}
+  .tar-dot.d-pas{background:var(--devolver)} .tar-dot.d-hoy{background:var(--accent)}
+  .tar-dia .dd{flex:1;min-width:0;font-size:14px;color:var(--ink)}
+  .tar-dia .ds{font-size:11.5px;font-weight:800;color:var(--ink-3)} .tar-dia .ds.d-pas{color:var(--devolver)} .tar-dia .ds.d-hoy{color:var(--accent)}
+  .tar-dia small{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+  .tar-dia .dn{font-family:var(--f-mono);font-weight:850;font-size:17px;color:var(--ink)}
+  .tar-back{background:none;border:0;color:var(--accent);font:inherit;font-size:15px;font-weight:800;padding:2px 2px 12px;cursor:pointer}
+  .scan-tools{display:flex;gap:8px;justify-content:center;padding:0 15px 14px}
+  .scan-tools button{font:inherit;font-size:13px;font-weight:750;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+  .scan-tools button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 
   /* ---- calendario ---- */
   .daymenu{position:absolute;top:calc(100% + 4px);left:12px;z-index:40;background:var(--surface);
@@ -106,9 +149,9 @@
   .pk-entrega{font-size:11px;color:var(--ink-3);font-weight:600;margin-top:4px;font-family:var(--f-mono)}
 
   .pk{border:1px solid var(--line);border-left-width:4px;border-radius:13px;background:var(--surface-2);margin-bottom:9px;overflow:hidden}
-  .pk-row{display:flex;align-items:center;gap:11px;padding:12px 13px;cursor:pointer;user-select:none}
-  .pk-ic{font-size:15px;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:var(--line)}
-  .pk-ic-sm{width:26px;height:26px;font-size:12px;border-radius:7px}
+  .pk-row{display:flex;align-items:center;gap:8px;padding:11px 11px;cursor:pointer;user-select:none}
+  .pk-ic{font-size:12px;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;background:var(--line);align-self:flex-start;margin-top:1px}
+  .pk-ic-sm{width:22px;height:22px;font-size:11px;border-radius:6px}
   .ic-camino{background:color-mix(in srgb,var(--camino) 20%,transparent)}
   .ic-pend{background:color-mix(in srgb,var(--pend) 22%,transparent)}
   .ic-dev{background:color-mix(in srgb,var(--devolver) 20%,transparent)}
@@ -118,10 +161,10 @@
   .ic-desc{background:color-mix(in srgb,var(--desc) 20%,transparent)}
   .pk-main{flex:1;min-width:0}
   .pk-zona{font-weight:750;font-size:14.5px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:6px}
-  .pk-zona .z{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pk-zona .z{min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;word-break:break-word;line-height:1.25}
   .pk-fecha{font-size:11px;color:var(--ink-3);font-family:var(--f-mono);font-weight:700;margin-left:auto;flex:0 0 auto}
   .pk-sub{font-size:11.5px;color:var(--ink-3);margin-top:2px}
-  #v-hoy .pk-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pk-sub{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;line-height:1.3}
   .pk-sub .calle{color:var(--ink-2);font-weight:650}
   .pk-sub b{color:var(--ok);font-weight:700;font-family:var(--f-mono)}
   .pk-sub b.tach{color:var(--ink-3);text-decoration:line-through}
@@ -129,7 +172,7 @@
   .l-camino{color:var(--camino)}.l-dev{color:var(--devolver)}.l-log{color:var(--logistica)}
   .l-cam{color:var(--cambio)}.l-ok{color:var(--ok)}.l-desc{color:var(--desc)}
   .loc{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.03em}
-  .state{font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;flex:0 0 auto}
+  .state{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;flex:0 0 auto;letter-spacing:.01em}
   .chev{color:var(--ink-3);font-size:18px;transition:transform .2s;flex:0 0 auto}
   .pk.open .chev{transform:rotate(90deg)}
   .pk-det{display:none;padding:2px 14px 14px 14px;flex-direction:column;gap:10px}
@@ -226,7 +269,7 @@
   .tab .t{font-size:11px;font-weight:700}
   .tab.on{color:var(--accent);opacity:1;background:color-mix(in srgb,var(--accent) 9%,transparent)}
   .tab.on::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:38px;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
-  .tab .badge{display:inline-block;min-width:16px;font-size:9px;font-weight:800;background:var(--devolver);color:#fff;border-radius:20px;padding:0 5px;margin-left:3px;vertical-align:top}
+  .tab .badge{position:absolute;top:4px;left:50%;margin-left:5px;min-width:17px;height:17px;line-height:17px;font-size:9.5px;font-weight:800;background:var(--devolver);color:#fff;border-radius:9px;padding:0 4px;text-align:center;box-shadow:0 0 0 2px var(--bg)}
 
   /* ---- overlays ---- */
   .ov{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);display:none}
@@ -326,13 +369,14 @@
 </style>
 </head>
 <body>
+<div class="syncbar" id="syncBar"></div>
 <div class="app" id="app">
   <div class="top">
     <div id="topLeft">
       <button class="dsel" onclick="toggleDayMenu(event)"><span class="dsel-t" id="dselT">Hoy</span><span class="dsel-c">▾</span></button>
     </div>
     <span class="sp"></span>
-    <div class="fresh" id="freshBox"><span id="freshTxt">—</span> <span class="r" id="freshR" onclick="refrescar()">🔄</span></div>
+    <div class="fresh" id="freshBox" onclick="refrescar()" title="Actualizar con Mercado Libre"><span id="freshTxt">—</span><span class="r" id="freshR">⟳</span></div>
     <button class="icobtn" title="Mapa" onclick="abrirMapa()">🗺️</button>
     <button class="icobtn" title="Escanear / Nuevo caso" onclick="openSheet('newcase')">📷</button>
     <button class="icobtn" title="Menú" onclick="openSheet('menu')">☰</button>
@@ -343,11 +387,13 @@
     <div class="view on" id="v-hoy"><div class="loading"><div class="spinner"></div>Cargando envíos…</div></div>
     <div class="view" id="v-res"><div class="loading"><div class="spinner"></div>Cargando casos…</div></div>
     <div class="view" id="v-rep"><div class="loading"><div class="spinner"></div>Cargando reprogramados…</div></div>
+    <div class="view" id="v-tar"><div class="loading"><div class="spinner"></div>Cargando tareas…</div></div>
     <div class="view" id="v-hist"><div class="loading"><div class="spinner"></div>Cargando historial…</div></div>
   </div>
 
   <div class="tabs">
     <div class="tab on" data-v="hoy" onclick="nav('hoy')"><span class="e">📦</span><span class="t">Hoy</span></div>
+    <div class="tab" data-v="tar" onclick="nav('tar')"><span class="e">📋</span><span class="t">Tareas <span class="badge" id="badgeTar" style="display:none">0</span></span></div>
     <div class="tab" data-v="res" onclick="nav('res')"><span class="e">🔁</span><span class="t">A resolver <span class="badge" id="badgeRes" style="display:none">0</span></span></div>
     <div class="tab" data-v="rep" onclick="nav('rep')"><span class="e">🔄</span><span class="t">Reprog. <span class="badge" id="badgeRep" style="display:none">0</span></span></div>
     <div class="tab" data-v="hist" onclick="nav('hist')"><span class="e">🕐</span><span class="t">Historial</span></div>
@@ -380,7 +426,7 @@
       <div id="nc-find">
         <button class="scanbig" onclick="abrirEscanerQR()">📷 Escanear etiqueta (QR o barras)</button>
         <div class="or">— o escribí el número —</div>
-        <div class="fld"><input id="nc-input" inputmode="numeric" placeholder="N° de venta / envío…"><button class="scanmini" onclick="ncBuscar()">🔍</button></div>
+        <div class="fld"><input id="nc-input" inputmode="numeric" placeholder="N° de venta / envío (o escaneá con el lector)…" onkeydown="if(event.key==='Enter'){event.preventDefault();ncBuscar();}"><button class="scanmini" onclick="ncBuscar()">🔍</button></div>
         <div class="or">— o buscá por comprador —</div>
         <div class="fld"><input id="nc-name" inputmode="text" placeholder="Usuario del comprador (aunque sea el principio)…" onkeydown="if(event.key==='Enter')ncBuscarNombre()"><button class="scanmini" onclick="ncBuscarNombre()">🔍</button></div>
         <div id="nc-name-res"></div>
@@ -437,6 +483,7 @@
     <div class="scan-top">📷 Escanear etiqueta <span class="x" onclick="cerrarEscanerQR()">✕</span></div>
     <div class="scan-video-wrap"><video id="scanVideo" playsinline muted></video><div class="scan-frame"></div></div>
     <div class="scan-msg" id="scanMsg">Apuntá la cámara al código (QR o barras)…</div>
+    <div class="scan-tools" id="scanTools" style="display:none"></div>
     <canvas id="scanCanvas" style="display:none"></canvas>
   </div>
 </div>
@@ -783,6 +830,7 @@ let _tt; function toast(msg){ const t=document.getElementById('toast'); t.textCo
 ══════════════════════════════════════════════════════════════════ */
 let TAB='hoy';
 function nav(v){
+  _tarSel=null;   // cambiar de pestaña (o tocar Tareas de nuevo) vuelve a la lista
   TAB=v;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on','v-'+v===x.id));
@@ -790,7 +838,8 @@ function nav(v){
     hoy: '<button class="dsel" onclick="toggleDayMenu(event)"><span class="dsel-t" id="dselT">'+dselLabel()+'</span><span class="dsel-c">▾</span></button>',
     res: '<span class="sectitle">A resolver <span class="seccount" id="resCount"></span></span>',
     rep: '<span class="sectitle">Reprogramados <span class="seccount" id="repCount"></span></span>',
-    hist: '<span class="sectitle">Historial</span>'
+    hist: '<span class="sectitle">Historial</span>',
+    tar: '<span class="sectitle">Para hacer</span>'
   };
   document.getElementById('topLeft').innerHTML = titulos[v]||titulos.hoy;
   document.getElementById('freshBox').style.display = (v==='hoy')?'inline-flex':'none';
@@ -799,6 +848,7 @@ function nav(v){
   if(v==='res') renderResolver();
   if(v==='rep') renderReprog();
   if(v==='hist') renderHistorial();
+  if(v==='tar') renderTareas();
   if(v==='res'){ const rc=document.getElementById('resCount'); if(rc) rc.innerHTML='<span class="n">'+_resCount+'</span><span class="u">casos</span>'; }
 }
 
@@ -889,16 +939,22 @@ function irADiaHabil(delta){
    FRESH badge
 ══════════════════════════════════════════════════════════════════ */
 function updFresh(){
-  const el=document.getElementById('freshTxt'); if(!el||!_snap)return;
-  if(_syncProm){ el.textContent='sincronizando…'; el.style.color='var(--accent)'; el.style.fontWeight='800'; return; }
-  const up=_snap.updated_at?new Date(_snap.updated_at):null;
-  if(!up){ el.textContent='—'; el.style.color=''; return; }
+  const el=document.getElementById('freshTxt'), box=document.getElementById('freshBox'); if(!el) return;
+  const ocupado=_syncN>0;
+  if(box) box.classList.toggle('busy',ocupado);
+  const bar=document.getElementById('syncBar'); if(bar) bar.classList.toggle('on',ocupado);
+  if(ocupado){ el.textContent='Actualizando…'; el.style.color=''; return; }
+  const up=_snap&&_snap.updated_at?new Date(_snap.updated_at):null;
+  if(!up){ el.textContent='Actualizar'; el.style.color=''; return; }
   const min=Math.max(0,Math.round((Date.now()-up.getTime())/60000));
   el.textContent = min<1?'recién':(min<60?'hace '+min+' min':('hace '+Math.round(min/60)+' h'));
   // Color según antigüedad: amarillo >30 min, rojo >120 min
   el.style.color = min>120 ? 'var(--devolver)' : (min>30 ? 'var(--amber)' : '');
-  el.style.fontWeight = min>30 ? '800' : '';
 }
+// Cuántas actualizaciones hay corriendo: mientras sea >0 la barra de arriba y el ⟳ siguen girando
+let _syncN=0;
+function _syncIni(){ _syncN++; updFresh(); }
+function _syncFin(){ _syncN=Math.max(0,_syncN-1); updFresh(); }
 // Fecha más reciente "relevante" de un envío (para descartar los que ya no entran en ninguna vista)
 function _tsRelevante(e){
   const sh=(e&&e.shipping)||{}, h=sh.status_history||{}, so=sh.shipping_option||{};
@@ -919,9 +975,9 @@ function _mergeSnap(prev, nuevo){
   (prev.envios||[]).forEach(e=>{ const sid=e.shipping&&String(e.shipping.id); if(!sid||seen.has(sid)) return; if(_tsRelevante(e)<corte) return; out.push(e); seen.add(sid); });
   return { updated_at: nuevo.updated_at||prev.updated_at, count: out.length, envios: out };
 }
-function _renderTodo(){ updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); actualizarBadges(); }
+function _renderTodo(){ updFresh(); renderHoy(); renderResolver(); renderReprog(); renderHistorial(); renderTareas(); actualizarBadges(); }
 // Tras crear/cambiar un caso: refrescar TODAS las vistas que muestran casos (Hoy incluye cambios/entregas)
-function _refrescarCasos(){ renderHoy(); renderResolver(); renderHistorial(); actualizarBadges(); }
+function _refrescarCasos(){ renderHoy(); renderResolver(); renderHistorial(); renderTareas(); actualizarBadges(); }
 // Aplica un snapshot recién bajado (mergeado con lo que había) y lo guarda en caché
 function _aplicarSnap(nuevo){
   const m=_mergeSnap(_snap, nuevo);
@@ -931,45 +987,48 @@ function _aplicarSnap(nuevo){
   _renderTodo();
 }
 
-// ── Sincronización con Mercado Libre (en el servidor, ~15 s) ──
-// Una sola a la vez: si ya hay una corriendo, se reusa. Nunca bloquea la pantalla:
-// mientras corre, el header dice "sincronizando…" y al terminar se re-pinta todo.
+// ── Sincronización con Mercado Libre (la hace el servidor, ~15-60 s) ──
+// Una sola a la vez: si ya hay una corriendo, se reusa. Mientras corre se ve la barra arriba
+// y "Actualizando…"; al terminar se re-pinta todo una sola vez.
 let _syncProm=null;
 function syncEnSegundoPlano(){
   if(_syncProm) return _syncProm;
+  _syncIni();
   _syncProm=(async()=>{
     let res=null;
     try{
-      await null;   // dejar que _syncProm quede asignado antes de pintar "sincronizando…"
-      updFresh();
       const r=await fetch(SNAPSHOT_URL+'?action=refresh_hoy',{signal:_withTimeout(90000)});
       res=r.ok?await r.json():null;
       const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]);
-      _syncProm=null;
       _aplicarSnap(s);
       autoDetectarDevoluciones();
-    }catch(e){}
-    finally{ _syncProm=null; updFresh(); }
+    }catch(e){ res=null; }
+    finally{ _syncProm=null; _syncFin(); }
     return res;
   })();
   return _syncProm;
 }
 
-// Botón 🔄 / deslizar hacia abajo:
-//  1) trae al toque lo último que tiene el servidor (1-2 s) y apaga el spinner
-//  2) le pide al servidor que consulte ML ahora, en segundo plano (~15 s) y re-pinta al terminar
+// Botón ⟳ / deslizar hacia abajo. Un solo proceso visible de principio a fin:
+//  1) muestra al toque lo último que tiene el servidor (1-2 s)
+//  2) le pide al servidor que consulte Mercado Libre AHORA y re-pinta al terminar
+// La barra y el ⟳ siguen hasta que termina TODO. Tocar de nuevo no lo duplica.
+let _refrescando=false;
 async function refrescar(){
-  const rBtn=document.getElementById('freshR');
-  if(rBtn)rBtn.classList.add('spin');
+  if(_refrescando||_syncProm){ toast('⟳ Ya se está actualizando, esperá unos segundos…'); return; }
+  _refrescando=true; _syncIni();
+  // Si estabas mirando otro día, refrescar te vuelve a "Hoy" (o al próximo día hábil con envíos)
+  _isAutoTarget=true; _autoAdvanceCount=0; TARGET=hoyHabil(); _hoyFilter=null;
+  { const t=document.getElementById('dselT'); if(t)t.textContent=dselLabel(); }
+  if(_snap) renderHoy();
   try{
-    const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]);
-    _aplicarSnap(s);
-  }catch(e){ toast('No se pudo refrescar (¿sin internet?)'); }
-  if(rBtn)rBtn.classList.remove('spin');
-  const res=await syncEnSegundoPlano();
-  if(res&&res.ok!==undefined) toast(res.casos?`✅ Actualizado · ${res.casos} caso(s) nuevo(s)`:'✅ Actualizado con Mercado Libre');
+    try{ const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]); _aplicarSnap(s); }catch(e){}
+    const res=await syncEnSegundoPlano();
+    if(!res) toast('⚠️ No se pudo actualizar con Mercado Libre (¿sin internet?)');
+    else if(res.ok===false) toast('⚠️ Actualizado en parte (una cuenta no respondió)');
+    else { const g=_geoDia(hoyItems()); toast(`✅ Actualizado · CABA ${g.caba} · Provincia ${g.prov}`+(res.casos?` · ${res.casos} caso(s) nuevo(s)`:'')); }
+  } finally { _refrescando=false; _syncFin(); }
 }
-
 
 /* ══════════════════════════════════════════════════════════════════
    CARGA INICIAL
@@ -1001,18 +1060,20 @@ async function cargarTodo(){
   if(Array.isArray(csRec)){ _reclamosMap=new Map(); csRec.forEach(r=>{ if(r.shippingId)_reclamosMap.set(String(r.shippingId),r); }); }
   if(csSnap||csRec){ autoCerrarViejos(); autoCerrarEntregados(); _renderTodo(); }
 
-  // ── 2. Datos del servidor ──
+  // ── 2. Datos del servidor (barra visible mientras llegan) ──
+  _syncIni();
   try{
     const [snapData]=await Promise.all([ fetchSnapshot(14), fetchReclamos() ]);
     if(_fgLoadId!==myId) return;
     _aplicarSnap(snapData);
     autoDetectarDevoluciones();
-    // ── 3. Si el servidor está atrasado (el cron no corrió), sincronizar ahora en segundo plano ──
-    if(_minutosDesde(snapData.updated_at)>15) syncEnSegundoPlano();
+    // ── 3. Si el servidor tiene +10 min (el cron no corrió: finde, fuera de horario), sincronizar YA ──
+    if(_minutosDesde(snapData.updated_at)>10) syncEnSegundoPlano();
   }catch(e){
     if(!csSnap&&!csRec)
       document.getElementById('v-hoy').innerHTML='<div class="empty">⚠️ No se pudieron cargar los datos.<br><small>'+esc(e.message||e)+'</small><br><br><span class="fchip on" onclick="cargarTodo()">Reintentar</span></div>';
   }
+  finally{ _syncFin(); }
 }
 // Auto-cierre: un descontado que a los 15 días NO volvió → se cierra solo. Si volvió,
 // pasa a 'recibido' (ya no es 'descontado') y NO se cierra automático (hay que reembolsar).
@@ -1113,15 +1174,18 @@ async function _autoDetectarDevoluciones(){
 let _repCount=0;
 function actualizarBadges(){
   const b=document.getElementById('badgeRes');
-  if(b){ if(_resCount>0){ b.textContent=_resCount; b.style.display=''; } else b.style.display='none'; }
+  if(b){ if(_resCount>0){ b.textContent=_resCount>99?'99+':_resCount; b.style.display=''; } else b.style.display='none'; }
   const rc=document.getElementById('resCount'); if(rc)rc.innerHTML='<span class="n">'+_resCount+'</span><span class="u">casos</span>';
   // Badge reprogramados (conteo directo, sin armar las tarjetas)
   let nRep=0;
   if(_snap) for(const e of (_snap.envios||[])){ if(_esReprogItem(e.shipping)) nRep++; }
   _repCount=nRep;
   const br=document.getElementById('badgeRep');
-  if(br){ if(nRep>0){ br.textContent=nRep; br.style.display=''; } else br.style.display='none'; }
+  if(br){ if(nRep>0){ br.textContent=nRep>99?'99+':nRep; br.style.display=''; } else br.style.display='none'; }
   const rrc=document.getElementById('repCount'); if(rrc)rrc.innerHTML='<span class="n">'+nRep+'</span><span class="u">envíos</span>';
+  let nTar=0; if(ROL==='log'){ try{ nTar=_tareasGrupos().reduce((t,g)=>t+g.items.length,0); }catch(e){} }
+  const bt=document.getElementById('badgeTar');
+  if(bt){ if(nTar>0){ bt.textContent=nTar>99?'99+':nTar; bt.style.display=''; } else bt.style.display='none'; }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1184,25 +1248,24 @@ function _fmtFechaGrupo(d){
   if(dif<0) return base+' · hace '+(-dif)+' días';
   return base+' · en '+dif+' días';
 }
-function renderReprog(){
-  const cont=document.getElementById('v-rep');
-  const items=reprogItems();
-  if(!items.length){ cont.innerHTML='<div class="empty">No hay envíos reprogramados ni sin entregar 🎉</div>'; return; }
-  // Agrupar por fecha (o "Sin fecha" si no tiene)
+// Agrupa los reprogramados / sin entregar por fecha: [{key, fecha, items}]
+// Orden: más reciente primero → más viejo abajo → sin fecha al final
+function _reprogGrupos(){
   const grupos=new Map();
-  items.forEach(i=>{
+  reprogItems().forEach(i=>{
     const f=_reprogFecha(i.shipping);
     const key=f?f.getTime():-1;
-    if(!grupos.has(key)) grupos.set(key,{fecha:f,items:[]});
+    if(!grupos.has(key)) grupos.set(key,{key,fecha:f,items:[]});
     grupos.get(key).items.push(i);
   });
-  // Orden: más viejo primero (urgente) → más nuevo → sin fecha al final
-  const orden=[...grupos.entries()].sort((a,b)=>{
-    if(a[0]===-1) return 1; if(b[0]===-1) return -1;
-    return a[0]-b[0];
-  });
+  return [...grupos.values()].sort((a,b)=>{ if(a.key===-1) return 1; if(b.key===-1) return -1; return b.key-a.key; });   // más reciente primero
+}
+function renderReprog(){
+  const cont=document.getElementById('v-rep');
+  const orden=_reprogGrupos();
+  if(!orden.length){ cont.innerHTML='<div class="empty">No hay envíos reprogramados ni sin entregar 🎉</div>'; return; }
   let html='';
-  orden.forEach(([_,g])=>{
+  orden.forEach(g=>{
     const titulo = g.fecha ? _fmtFechaGrupo(g.fecha) : 'Sin fecha estimada';
     // Ordenar dentro del grupo por zona
     g.items.sort((a,b)=>(a.shipping._zona||'').localeCompare(b.shipping._zona||'','es'));
@@ -1219,6 +1282,7 @@ function _reprogCard(i){
   const comprador=(o.buyer&&o.buyer.nickname)||'—';
   const sid=String(sh.id);
   const cn=i.cuentaNombre||'';
+  const ventaId=String(o.pack_id||o.id||'');   // si es un pack, la venta en ML es el pack
   const cuentaBadge=cn?`<span class="pk-cuenta" style="background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
   // Motivo / tipo de reprogramación (del enrichShippingData → _problems o substatus label)
   const sub=(sh.substatus||'').toLowerCase();
@@ -1243,8 +1307,114 @@ function _reprogCard(i){
         <button class="abtn ab-blue" onclick="verTimeline('${sid}')">🔍 Historial</button>
         <button class="abtn ab-blue" onclick="verEtiqueta('${sid}',this)">🏷️ Etiqueta</button>
         <button class="abtn ab-grey" onclick="compartirEnvio('${sid}')">📤 Compartir</button>
+        ${(ROL==='owner'&&ventaId)?`<button class="abtn ab-green" onclick="window.open('https://vendedores.mercadolibre.com.ar/ventas/${esc(ventaId)}/detalle','_blank')">🛒 Ver venta${cn?' · '+esc(cn):''}</button>`:''}
       </div>
     </div></div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAREAS — "¿qué tengo que hacer?" en un solo lugar y en lenguaje simple.
+   Pensado sobre todo para la logística: cada grupo dice qué pasó y qué hacer.
+══════════════════════════════════════════════════════════════════ */
+const _tarAbiertos=new Set();   // (compat)
+// Pantalla de detalle de Tareas: null = lista; {k, dia} = adentro de un grupo (dia = clave del día en "sin entregar")
+var _tarSel=null;   // var: nav() puede correr antes de esta línea
+function abrirTar(k,dia){
+  _tarSel={k, dia:(dia==null?null:Number(dia))};
+  try{ history.pushState({mikraTar:true},''); }catch(e){}
+  renderTareas(); window.scrollTo(0,0); const b=document.getElementById('body'); if(b) b.scrollTop=0;
+}
+function cerrarTar(){
+  if(!_tarSel) return;
+  try{ if(history.state&&history.state.mikraTar){ history.back(); return; } }catch(e){}   // el popstate la cierra
+  _tarSel=null; renderTareas();
+}
+window.addEventListener('popstate',()=>{ if(_tarSel){ _tarSel=null; renderTareas(); } });
+// Conteo CABA / Provincia de los envíos del día (y cuántos faltan entregar)
+function _geoDia(items){ const g={caba:0,prov:0,cabaFalta:0,provFalta:0}; (items||[]).forEach(i=>{ const c=(i.shipping._zona||'').startsWith('CABA'), falta=i.shipping._state!=='entregado'; if(c){g.caba++; if(falta)g.cabaFalta++;} else {g.prov++; if(falta)g.provFalta++;} }); return g; }
+// Filtro CABA / Provincia de Hoy (null = todos). Tocar de nuevo el mismo lo saca.
+let _hoyGeo=null;
+function _esGeo(i,g){ const c=(i.shipping._zona||'').startsWith('CABA'); return g==='caba'?c:!c; }
+function setHoyGeo(g){ _hoyGeo=(_hoyGeo===g)?null:g; _hoyFilter=null; renderHoy(); window.scrollTo(0,0); const b=document.getElementById('body'); if(b)b.scrollTop=0; }
+function _geoLinea(items){
+  if(!items||!items.length) return '';
+  const g=_geoDia(items), f=(n,t)=>(n!==t&&n>0)?`<small>faltan ${n}</small>`:(n===0&&t>0?'<small>todos entregados</small>':'');
+  const on=k=>_hoyGeo===k?' on':'', off=k=>(_hoyGeo&&_hoyGeo!==k)?' off':'';
+  return `<div class="geo-line"><span class="geo-chip${on('caba')}${off('caba')}" onclick="setHoyGeo('caba')">🏙️ CABA <b>${g.caba}</b>${f(g.cabaFalta,g.caba)}</span><span class="geo-chip${on('prov')}${off('prov')}" onclick="setHoyGeo('prov')">🌳 Provincia <b>${g.prov}</b>${f(g.provFalta,g.prov)}</span></div>`;
+}
+function _esCE(r){ return r.tipo==='cambio'||r.tipo==='entrega'; }
+// Ya está en manos de logística (o logística confirmó la entrega): no es "para hacer"
+function _enCurso(r){ return r.estado==='en_deposito'||r.estado==='entregado_repartidor'||(r.tipo==='entrega'&&r.estado==='entregado'); }
+// Orden de la pantalla: primero lo de Mercado Libre (sin entregar por día, cancelados),
+// después lo cargado a mano sin QR (entregas, cambios) y al final lo que ya tiene la logística.
+function _tareasGrupos(){
+  const act=[]; _reclamosMap.forEach(r=>{ if(esActivo(r)) act.push(r); });
+  const orden=(a,b)=>{ const fa=_parseFechaFlexible(a.fechaAlta), fb=_parseFechaFlexible(b.fechaAlta); return (fb?fb.getTime():0)-(fa?fa.getTime():0); };   // más reciente primero
+  const tipo=t=>act.filter(r=>r.tipo===t&&!_enCurso(r)).sort(orden);
+  const dias=_reprogGrupos(), owner=ROL==='owner';
+  return [
+    {k:'rep',    sec:'ml',  ico:'🚚', cls:'tc-amber', tit:'Sin entregar / reprogramados', que:'Mercado Libre todavía no los da por entregados. Tocá un día para ver cuáles.', items:dias.reduce((t,d)=>t.concat(d.items),[]), dias, card:_reprogCard},
+    {k:'cancel', sec:'ml',  ico:'↩️', cls:'tc-red',   tit:'Cancelados', que:'Tienen que volver a Mikra. Cuando lo tengas, marcá "Recibí en logística".', items:tipo('driver_devolver'), card:resolverCard},
+    {k:'entrega',sec:'qr',  ico:'📬', cls:'tc-cam',   tit:'Entregas sin QR', que:'Entregar al cliente y marcar "Confirmé entrega".', items:tipo('entrega'), card:_ceHoyCard},
+    {k:'cambio', sec:'qr',  ico:'🔁', cls:'tc-cam',   tit:'Cambios sin QR', que:'Llevar el nuevo y retirar el cambio. Cuando lo tengas, marcá "Recibí en logística".', items:tipo('cambio'), card:_ceHoyCard},
+    {k:'enLog',  sec:'log', ico:'📦', cls:'tc-log',   tit: owner?'En logística: recibilos en Mikra':'Los tenés vos: traerlos a Mikra', que: owner?'Logística ya los tiene. Cuando lleguen, marcá "Recibí en Mikra".':'Ya los marcaste como recibidos. Falta traerlos a Mikra.', items:act.filter(r=>r.estado==='en_deposito'||r.estado==='entregado_repartidor').sort(orden), card:resolverCard},
+  ];
+}
+const _TAR_SECS=[['ml','Mercado Libre'],['qr','Cargados a mano · sin QR'],['log','Ya los tenés']];
+function _tarDiaInfo(d){
+  if(!d.fecha) return {t:'Sin fecha', s:'', cls:'d-pas'};
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const dif=Math.round((d.fecha.getTime()-hoy.getTime())/86400000);
+  const p=n=>String(n).padStart(2,'0');
+  const t=`${DIAS_LARGO[d.fecha.getDay()]} ${p(d.fecha.getDate())}/${p(d.fecha.getMonth()+1)}`;
+  const s=dif===0?'hoy':dif===-1?'ayer':dif<0?`hace ${-dif} días`:dif===1?'mañana':`en ${dif} días`;
+  return {t, s, cls:dif<0?'d-pas':(dif===0?'d-hoy':'d-fut')};
+}
+function _tarCnt(x){
+  const v=x.items.filter(it=>it&&it.fechaEstimada&&_ceVencido(it)).length;
+  return `<div class="tar-cnt"><span class="tar-n">${x.items.length}</span>${v?`<span class="tar-venc">${v} atrasado${v>1?'s':''}</span>`:''}</div>`;
+}
+function renderTareas(){
+  const cont=document.getElementById('v-tar'); if(!cont) return;
+  if(!_snap){ cont.innerHTML='<div class="loading"><div class="spinner"></div>Cargando…</div>'; return; }
+  const G=_tareasGrupos();
+  if(_tarSel){ _renderTarDetalle(cont,G); return; }
+  let html='';
+  _TAR_SECS.forEach(([sec,nombre])=>{
+    const gs=G.filter(x=>x.sec===sec&&x.items.length);
+    if(!gs.length){ if(sec!=='log') html+=`<div class="tar-sec">${nombre}<span class="ln"></span></div><div class="tar-vacio">✓ Nada pendiente</div>`; return; }
+    html+=`<div class="tar-sec">${nombre}<span class="ln"></span></div>`;
+    gs.forEach(x=>{
+      if(x.dias){
+        // Una sola tarjeta con el total; adentro se separa por día
+        const nSin=x.items.filter(i=>i.shipping._sinEntregar).length, nRep=x.items.length-nSin;
+        const det=[nSin?`${nSin} sin entregar`:'', nRep?`${nRep} reprogramado${nRep>1?'s':''}`:''].filter(Boolean).join(' · ');
+        html+=`<div class="tar-card ${x.cls}"><div class="tar-h tap" onclick="abrirTar('${x.k}')"><span class="tar-ico">${x.ico}</span>
+          <div class="tar-tx"><div class="tar-tit">${x.tit}</div><div class="tar-que">${det}</div></div>${_tarCnt(x)}<span class="tar-chev">›</span></div></div>`;
+      }else{
+        html+=`<div class="tar-card ${x.cls}"><div class="tar-h tap" onclick="abrirTar('${x.k}')"><span class="tar-ico">${x.ico}</span>
+          <div class="tar-tx"><div class="tar-tit">${x.tit}</div><div class="tar-que">${x.que}</div></div>${_tarCnt(x)}<span class="tar-chev">›</span></div></div>`;
+      }
+    });
+  });
+  cont.innerHTML=html;
+}
+function _renderTarDetalle(cont,G){
+  const x=G.find(g=>g.k===_tarSel.k);
+  let items=x?x.items:[], tit=x?x.tit:'', ico=x?x.ico:'', que=x?x.que:'';
+  if(x&&x.dias) que='Separados por día. Tocá cada envío para ver el historial y qué pasó.';
+  let html=`<button class="tar-back" onclick="cerrarTar()">‹ Tareas</button>
+    <div class="tar-card ${x?x.cls:''}"><div class="tar-h"><span class="tar-ico">${ico}</span>
+      <div class="tar-tx"><div class="tar-tit">${esc(tit)}</div><div class="tar-que">${que}</div></div>
+      <div class="tar-cnt"><span class="tar-n">${items.length}</span></div></div></div>`;
+  if(!items.length) html+='<div class="empty">✅ Listo, no queda ninguno.</div>';
+  else if(x.dias) x.dias.forEach(d=>{
+    const di=_tarDiaInfo(d), arr=d.items.slice().sort((a,b)=>(a.shipping._zona||'').localeCompare(b.shipping._zona||'','es'));
+    html+=`<div class="zona-h">${esc(di.t)}${di.s?' · '+esc(di.s):''}<span class="ln"></span>${arr.length}</div>`+arr.map(it=>x.card(it)).join('');
+  });
+  else html+=items.map(it=>x.card(it)).join('');
+  cont.innerHTML=html;
+  bindLongPress();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1275,12 +1445,12 @@ const HOY_ICON={'entregado':['✅','ic-ok'],'en-camino':['🚚','ic-camino'],'re
 const HOY_STATE={'entregado':['ENTREGADO','b-ok','s-ok'],'en-camino':['EN CAMINO','b-camino','s-camino'],'reprogramado':['REPROGRAMADO','b-log','s-log'],'cancelado':['CANCELADO','b-dev','s-dev'],'impreso':['IMPRESO','b-imp','s-imp'],'pendiente':['A IMPRIMIR','b-pend','s-pend']};
 function renderHoy(){
   const cont=document.getElementById('v-hoy');
-  const items=hoyItems();
+  const itemsDia=hoyItems();
   // Auto-avanzar al siguiente día hábil si no hay entregas REALES para hoy.
   // Solo cuando el día lo eligió la app (no el usuario). Los reprogramados no cuentan
   // (feriado con reprogramados del viernes → igual salta al martes). Hasta 7 saltos para
   // cubrir feriados largos. Cada snapshot nuevo resetea el contador para re-evaluar.
-  const itemsReales=items.filter(i=>i.shipping._state!=='reprogramado');
+  const itemsReales=itemsDia.filter(i=>i.shipping._state!=='reprogramado');
   if(itemsReales.length===0&&_isAutoTarget&&_datosFrescos&&_autoAdvanceCount<7&&_snap&&(_snap.envios||[]).length>0){
     _autoAdvanceCount++;
     const sig=new Date(TARGET.getTime()); sig.setDate(sig.getDate()+1);
@@ -1293,6 +1463,7 @@ function renderHoy(){
   // desactivar auto-target hasta que el user toque "Volver a hoy", así refrescos futuros
   // no siguen saltando TARGET hacia el futuro.
   if(_autoAdvanceCount>0) _isAutoTarget=false;
+  const items=_hoyGeo?itemsDia.filter(i=>_esGeo(i,_hoyGeo)):itemsDia;   // CABA / Provincia elegido
   const nEntreg=items.filter(i=>i.shipping._state==='entregado').length;
   const nCamino=items.filter(i=>i.shipping._state==='en-camino').length;
   const nPend=items.filter(i=>i.shipping._state==='pendiente').length;
@@ -1323,6 +1494,7 @@ function renderHoy(){
   const byRegion={}; visItems.forEach(i=>{ const r=regionDe(i.shipping._zona); (byRegion[r]=byRegion[r]||[]).push(i); });
   let html=`<div class="stats" style="grid-template-columns:repeat(${visStats.length},1fr)">
     ${visStats.map(d=>mkStat(d.cls,d.n,d.lbl,d.st)).join('')}</div>`;
+  html+=_geoLinea(itemsDia);  // cuántos van a CABA y cuántos a Provincia (para mandar motos)
   html+=_ceHoySection();   // cambios / entregas pendientes a coordinar
   if(items.length===0){ cont.innerHTML=html+`<div class="empty">No hay envíos Flex para ${esHoy(TARGET)?'hoy':fmtDMY(TARGET)}.</div>`; bindLongPress(); return; }
   REGION_ORDER.forEach(region=>{
@@ -1339,14 +1511,20 @@ function renderHoy(){
 let _ceAbierto=(()=>{ try{ return localStorage.getItem('_v2_ce_open')==='1'; }catch(e){ return false; } })();
 function toggleCE(){ _ceAbierto=!_ceAbierto; try{ localStorage.setItem('_v2_ce_open',_ceAbierto?'1':'0'); }catch(e){} renderHoy(); }
 function _ceVencido(r){ const f=_parseFechaFlexible(r.fechaEstimada); if(!f) return false; const h=new Date(); h.setHours(0,0,0,0); const d=new Date(f); d.setHours(0,0,0,0); return d.getTime()<h.getTime(); }
+function _mismoDia(a,b){ return !!(a&&b)&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
+// Solo los CARGADOS el día que se está mirando (Hoy, o el lunes con lo cargado el finde).
+// Los de días anteriores NO van acá: están en Tareas.
 function _ceHoySection(){
-  const ce=[]; _reclamosMap.forEach(r=>{ if((r.tipo==='cambio'||r.tipo==='entrega') && esActivo(r)) ce.push(r); });
+  // Rango de carga: del día hábil anterior (exclusive) al día que se mira. Lunes → incluye lo cargado sáb/dom.
+  const fin=new Date(TARGET); fin.setHours(23,59,59,999);
+  const ini=new Date(TARGET); ini.setHours(0,0,0,0); ini.setDate(ini.getDate()-1);
+  while(ini.getDay()===0||ini.getDay()===6) ini.setDate(ini.getDate()-1);
+  ini.setDate(ini.getDate()+1);
+  const ce=[]; _reclamosMap.forEach(r=>{ if(!_esCE(r)||!esActivo(r)) return; const f=_parseFechaFlexible(r.fechaAlta); if(f&&f>=ini&&f<=fin) ce.push(r); });
   if(!ce.length)return '';
   ce.sort((a,b)=>(Number(String(a.id).replace(/\D/g,''))||0)-(Number(String(b.id).replace(/\D/g,''))||0));
-  const venc=ce.filter(_ceVencido).length;
   const head=`<div class="ce-head${_ceAbierto?' open':''}" onclick="toggleCE()">
-    <span class="ce-chev">›</span><span class="ce-t">🔁 Cambios / entregas</span><span class="ce-n">${ce.length}</span>
-    ${venc?`<span class="ce-venc">⚠️ ${venc} vencido${venc>1?'s':''}</span>`:''}</div>`;
+    <span class="ce-chev">›</span><span class="ce-t">🔁 Cambios / entregas ${esHoy(TARGET)?'de hoy':'del '+esc(dselLabel())}</span><span class="ce-n">${ce.length}</span></div>`;
   return head+(_ceAbierto?`<div class="ce-list">${ce.map(_ceHoyCard).join('')}</div>`:'');
 }
 function _ceHoyCard(r){
@@ -1431,7 +1609,7 @@ function hoyCard(i){
   const rep=(sh._problems&&sh._problems[0]) ? (sh._problems[0].reputationAffected?'<span class="loc" style="background:color-mix(in srgb,var(--devolver) 15%,transparent);color:var(--devolver)">⚠️ reput.</span>':'') : '';
   const cn=i.cuentaNombre||'';
   const cuentaBadge=cn?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:10px;white-space:nowrap;background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
-  const oid=o.id?String(o.id):'';
+  const oid=(o.pack_id||o.id)?String(o.pack_id||o.id):'';   // pack → la venta en ML es el pack
   const ordenLine=oid?`<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(oid)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(oid)}</a> ${cuentaBadge}</div>`:(cuentaBadge?`<div class="info">${cuentaBadge}</div>`:'');
   return `<div class="pk ${stt[2]}" data-sid="${sid}"><div class="pk-row" onclick="tgCard(this)">
     <span class="pk-ic ${ic[1]}">${ic[0]}</span>
@@ -1475,8 +1653,9 @@ function resolverItems(){
   // orden por antigüedad: el más viejo (más días) primero
   return out.sort((a,b)=>{ const fa=_parseFechaFlexible(a.fechaAlta), fb=_parseFechaFlexible(b.fechaAlta); return (fa?fa.getTime():9e15)-(fb?fb.getTime():9e15); });
 }
-function diasCaso(r){ const f=_parseFechaFlexible(r.fechaAlta); if(!f)return null; return Math.floor((Date.now()-f.getTime())/86400000); }
-function diasChip(r){ const d=diasCaso(r); if(d==null||d<0)return ''; const txt=d===0?'hoy':(d===1?'1 día':d+' días'); let st=''; if(d>15)st='color:var(--devolver);font-weight:800'; else if(d>=10)st='color:var(--amber);font-weight:800'; return `<span class="pk-dias" style="${st}">${txt}</span>`; }
+// Días de CALENDARIO desde el alta (no de 24 h): cargado ayer a las 14 h → hoy a la mañana dice "ayer"
+function diasCaso(r){ const f=_parseFechaFlexible(r.fechaAlta); if(!f)return null; const a=new Date(f); a.setHours(0,0,0,0); const h=new Date(); h.setHours(0,0,0,0); return Math.round((h.getTime()-a.getTime())/86400000); }
+function diasChip(r){ const d=diasCaso(r); if(d==null||d<0)return ''; const txt=d===0?'hoy':(d===1?'ayer':d+' días'); let st=''; if(d>15)st='color:var(--devolver);font-weight:800'; else if(d>=10)st='color:var(--amber);font-weight:800'; return `<span class="pk-dias" style="${st}">${txt}</span>`; }
 function _needRefund(r){ return (r.estado==='recibido'||r.estado==='entregado')&&r.fechaDescontado; }
 // filtro rápido de Hoy (por estado de envío)
 let _hoyFilter=null;
@@ -2001,12 +2180,15 @@ async function abrirEscanerQR(){
   if(_scanStream) cerrarEscanerQR(); // no dejar una cámara abierta de antes
   const video=document.getElementById('scanVideo');
   document.getElementById('scanner').classList.add('on');
-  document.getElementById('scanMsg').textContent='Apuntá la cámara al código (QR o barras)…';
+  document.getElementById('scanMsg').textContent='Apuntá al código. Si se ve borroso, alejá un poco el celu.';
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ document.getElementById('scanMsg').textContent='Este navegador no permite usar la cámara. Escribí el número.'; return; }
   try{
     _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
     video.srcObject=_scanStream; await video.play();
     try{ const tr=_scanStream.getVideoTracks()[0]; const caps=tr.getCapabilities?tr.getCapabilities():{}; if(caps.focusMode&&caps.focusMode.includes('continuous'))await tr.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch(e){}
+    _scanTrack=_scanStream.getVideoTracks()[0]; _scanTorchOn=false;
+    await _scanSetZoom(1);   // zoom moderado de entrada: permite alejar el celu y que ENFOQUE (la causa nº1 de "no lee")
+    _scanHerramientas();
   }
   catch(e){ document.getElementById('scanMsg').textContent='No se pudo abrir la cámara (permiso denegado). Escribí el número.'; return; }
   _scanTick=0;
@@ -2033,17 +2215,73 @@ async function _tickScan(){
   }
   _scanTimer=setTimeout(_tickScan,80);
 }
-function cerrarEscanerQR(){ if(_scanTimer)clearTimeout(_scanTimer); _scanTimer=null; if(_scanStream){ _scanStream.getTracks().forEach(t=>t.stop()); _scanStream=null; } document.getElementById('scanner').classList.remove('on'); }
+function cerrarEscanerQR(){ if(_scanTimer)clearTimeout(_scanTimer); _scanTimer=null; if(_scanStream){ _scanStream.getTracks().forEach(t=>t.stop()); _scanStream=null; } _scanTrack=null; const tb=document.getElementById('scanTools'); if(tb)tb.style.display='none'; document.getElementById('scanner').classList.remove('on'); }
+// ── Zoom y linterna (solo si el celu los soporta: Chrome Android sí; iPhone/PC en general no) ──
+let _scanTrack=null, _scanZoomIdx=0, _scanTorchOn=false;
+const SCAN_ZOOMS=[1,1.6,2.5];
+function _scanCaps(){ try{ return (_scanTrack&&_scanTrack.getCapabilities)?_scanTrack.getCapabilities():{}; }catch(e){ return {}; } }
+async function _scanSetZoom(idx){
+  const c=_scanCaps(); if(!c.zoom||!(c.zoom.max>1)) return;
+  _scanZoomIdx=idx;
+  const z=Math.max(c.zoom.min||1, Math.min(c.zoom.max, SCAN_ZOOMS[idx]));
+  try{ await _scanTrack.applyConstraints({advanced:[{zoom:z}]}); }catch(e){}
+  const b=document.getElementById('scanZoomB'); if(b) b.textContent='🔍 '+SCAN_ZOOMS[idx]+'×';
+}
+function _scanZoomSig(){ _scanSetZoom((_scanZoomIdx+1)%SCAN_ZOOMS.length); }
+async function _scanTorch(){
+  if(!_scanTrack) return; _scanTorchOn=!_scanTorchOn;
+  try{ await _scanTrack.applyConstraints({advanced:[{torch:_scanTorchOn}]}); }catch(e){ _scanTorchOn=false; }
+  const b=document.getElementById('scanTorchB'); if(b) b.classList.toggle('on',_scanTorchOn);
+}
+function _scanHerramientas(){
+  const box=document.getElementById('scanTools'); if(!box) return;
+  const c=_scanCaps(); let h='';
+  if(c.zoom&&c.zoom.max>1) h+=`<button id="scanZoomB" onclick="_scanZoomSig()">🔍 ${SCAN_ZOOMS[_scanZoomIdx]}×</button>`;
+  if(c.torch) h+=`<button id="scanTorchB" onclick="_scanTorch()">🔦 Linterna</button>`;
+  box.innerHTML=h; box.style.display=h?'':'none';
+}
+// Saca el N° de envío/venta de lo que llegue: QR de ML (JSON), código de barras, o lo que
+// manda el LECTOR físico de la PC, que cambia caracteres por la distribución del teclado:
+// {"id":"48199115388","t":"lm"} llega como ¨[id[Ñ[48199115388[,[t[Ñ[lm[*
+function _extraerCodigo(raw){
+  const s=String(raw||'').trim(); if(!s) return '';
+  try{ const d=JSON.parse(s); if(d&&typeof d==='object'){ const n=String(d.id||d.shipment_id||'').replace(/\D/g,''); if(n) return n; } }catch(e){}
+  const m=s.match(/(?:^|[^a-z_])id[^a-z0-9]{0,6}(\d{8,})/i); if(m) return m[1];   // "id" aunque " y : vengan cambiados
+  const runs=s.match(/\d{8,}/g)||[];
+  return runs.find(x=>x.length===16)                        // N° de venta / pack
+      || runs.find(x=>x.length>=10&&x.length<=13)           // N° de envío
+      || runs.sort((a,b)=>b.length-a.length)[0]
+      || s.replace(/\D/g,'');
+}
+function _beep(){ try{ const A=window.AudioContext||window.webkitAudioContext; if(!A)return; const c=_beep.c||(_beep.c=new A()); const o=c.createOscillator(), g=c.createGain(); o.frequency.value=1300; o.type='square'; g.gain.value=0.06; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.09); }catch(e){} }
 function _onQR(qrText){
-  // Número de envío/venta = la corrida de dígitos más larga (≥10), aunque venga pegada a letras (ej. MEL…AR)
-  let num='';
-  try{ const d=JSON.parse(qrText); if(d&&typeof d==='object')num=String(d.id||d.shipment_id||'').replace(/\D/g,''); }catch(e){}
-  if(!num){ const runs=String(qrText).match(/\d{10,}/g)||[]; num=runs.sort((a,b)=>b.length-a.length)[0]||''; }
+  const num=_extraerCodigo(qrText);
   cerrarEscanerQR();
-  if(!num){ toast('Código no reconocido, probá de nuevo o escribí el número'); return; }
-  if(navigator.vibrate)navigator.vibrate(30);
+  if(!num||num.length<8){ toast('Código no reconocido, probá de nuevo o escribí el número'); return; }
+  _beep(); if(navigator.vibrate)navigator.vibrate(40);
   openSheet('newcase'); document.getElementById('nc-input').value=num; ncBuscar();
 }
+// ── Lector físico (pistola) en la PC ──
+// Escribe muy rápido y termina en Enter. Si no estás escribiendo en una casilla, se captura
+// desde cualquier pantalla y abre el caso directo: no hace falta tocar nada antes de escanear.
+(function(){
+  let buf='', t0=0, tl=0;
+  document.addEventListener('keydown',e=>{
+    const el=e.target, tag=(el&&el.tagName)||'';
+    if(/INPUT|TEXTAREA|SELECT/.test(tag)||(el&&el.isContentEditable)) return;   // en una casilla escribe normal
+    if(e.ctrlKey||e.altKey||e.metaKey) return;
+    const now=performance.now();
+    if(now-tl>120) buf='';                 // pausa larga entre teclas = es una persona, no el lector
+    tl=now;
+    if(e.key==='Enter'){
+      const rapido = buf.length>=8 && (now-t0)/buf.length < 50;   // el lector tipea ~5-30 ms por carácter
+      const code=buf; buf='';
+      if(rapido){ e.preventDefault(); _onQR(code); }
+      return;
+    }
+    if(e.key.length===1){ if(!buf) t0=now; buf+=e.key; }   // ignora Shift, teclas muertas, etc.
+  },true);
+})();
 let _ncBusy=false;
 // Red de seguridad: si algo falla a mitad de búsqueda, no dejar el spinner girando ni el candado trabado
 async function ncBuscar(){
@@ -2051,7 +2289,8 @@ async function ncBuscar(){
   catch(e){ _ncBusy=false; const d=document.getElementById('nc-done'); if(d) d.innerHTML='<div class="empty">⚠️ Hubo un error buscando la venta.<br><small>'+esc(e&&e.message||String(e))+'</small></div><button class="save" style="margin-top:12px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="ncReset()">↩️ Volver</button>'; }
 }
 async function _ncBuscarCore(){
-  const num=(document.getElementById('nc-input').value||'').trim();
+  const inp=document.getElementById('nc-input');
+  const num=_extraerCodigo(inp.value); if(num) inp.value=num;   // si vino del lector con caracteres raros, queda limpio
   const done=document.getElementById('nc-done');
   if(!num){ toast('Escribí o escaneá un número'); return; }
   if(_ncBusy) return;
@@ -2080,12 +2319,36 @@ async function _ncBuscarCore(){
       ${ROL==='owner'
         ? (exist.tipo==='entrega'
             ? `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','cerrado','Entrega confirmada')">✅ Confirmar entrega</button>`
-            : `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','recibido','Recibido en Mikra')">📥 Recibí en Mikra (cerrar caso)</button>`)
+            : (exist.fechaDescontado
+                ? `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','recibido','Volvió a Mikra · a reembolsar')">📥 Volvió a Mikra (reembolsar)</button>`
+                : `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','recibido','Recibido en Mikra')">📥 Recibí en Mikra (cerrar caso)</button>`))
         : (exist.tipo==='entrega'
             ? `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','entregado','Entrega confirmada por logística')">✅ Confirmé entrega</button>`
             : `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','en_deposito','Recibido en logística')">📥 Recibí en logística</button>`)
       }
       <button class="save" style="margin-top:8px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="closeSheet('newcase');verTimeline('${esc(String(sh.id))}')">🔍 Ver el caso</button>`;
+    _ncBusy=false; return;
+  }
+  if(exist && !esActivo(exist)){   // ya tuvo un caso y está cerrado/resuelto → NO ofrecer crear otro
+    const tt=exist.tipo==='cambio'?'Cambio':exist.tipo==='entrega'?'Entrega':exist.tipo==='driver_devolver'?'Cancelación':'Demorado';
+    const sidE=esc(String(sh.id)); const fd=_parseFechaFlexible(exist.fechaDescontado);
+    const fdTxt=fd?(' el '+fd.getDate()+'/'+(fd.getMonth()+1)):'';
+    const verBtn=`<button class="save" style="margin-top:8px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)" onclick="closeSheet('newcase');verTimeline('${sidE}')">🔍 Ver el caso</button>`;
+    if(exist.fechaDescontado){
+      // Se había DESCONTADO (y el caso se cerró solo a los 15 días). El paquete volvió → hay que reembolsar.
+      done.innerHTML=`<div class="found" style="border-color:color-mix(in srgb,var(--ok) 45%,transparent)"><div class="found-h" style="color:var(--ok)">💵 Este paquete se había descontado${fdTxt} · volvió</div>
+        <div class="found-r"><span>${esc(exist.id)} · ${tt}</span><b>${vistaReclamo(exist).st[0]}</b></div>
+        <div class="found-r"><span>Qué hacer</span><b>Marcalo como recibido → pasa a "Reembolsar"</b></div></div>
+        ${ROL==='owner'
+          ? `<button class="save" onclick="closeSheet('newcase');accion('${sidE}','recibido','Volvió a Mikra · a reembolsar')">📥 Volvió a Mikra (reembolsar)</button>`
+          : `<button class="save" onclick="closeSheet('newcase');accion('${sidE}','en_deposito','Recibido en logística')">📥 Recibí en logística</button>`}
+        ${verBtn}`;
+    } else {
+      done.innerHTML=`<div class="found"><div class="found-h">ℹ️ Este envío ya tuvo un caso y está resuelto</div>
+        <div class="found-r"><span>${esc(exist.id)} · ${tt}</span><b>${vistaReclamo(exist).st[0]}</b></div></div>
+        ${ROL==='owner'?`<button class="save" onclick="closeSheet('newcase');reabrir('${sidE}')">↩️ Reabrir este caso</button>`:''}
+        ${verBtn}`;
+    }
     _ncBusy=false; return;
   }
   if(ROL!=='owner'){
@@ -2267,6 +2530,8 @@ function renderMenu(){
     html+=`<div class="menu-item" onclick="closeSheet('menu');exportCSV()"><span class="e">📤</span>Exportar casos (CSV)</div>`;
     html+=`<div class="menu-item" onclick="closeSheet('menu');exportEnviosHoyCSV()"><span class="e">📦</span>Exportar envíos del día (CSV)</div>`;
   }
+  if(ROL==='owner') html+=`<div class="menu-item" onclick="closeSheet('menu');nav('tar')"><span class="e">📋</span><div>Tareas<br><small style="color:var(--ink-3)">Lo que ve la logística</small></div></div>`;
+  else html+=`<div class="menu-item" onclick="closeSheet('menu');nav('hist')"><span class="e">🕐</span>Historial</div>`;
   html+=`<div class="menu-item" onclick="closeSheet('menu');openSheet('grafico7d')"><span class="e">📊</span>Últimos 7 días</div>`;
   html+=`<div class="menu-item" onclick="closeSheet('menu');refrescar()"><span class="e">🔄</span>Refrescar datos</div>`;
   html+=`<div class="menu-item" onclick="cerrarSesion()"><span class="e">🔓</span>Cerrar sesión</div>`;
@@ -2283,6 +2548,12 @@ function aplicarRol(){
   // La logística ve todo (Hoy/A resolver/Historial) pero sin acciones sensibles ni menú de exportar.
   if(ROL==='owner') sincronizarCatalogoBg();
   renderResolver(); renderHistorial();
+  // Logística: solo Hoy + Tareas (Historial queda en el menú ☰). Dueño: Tareas está en el menú ☰.
+  const vis = ROL==='log' ? ['hoy','tar'] : ['hoy','res','rep','hist'];
+  document.querySelectorAll('.tabs .tab').forEach(t=>{ t.style.display = vis.includes(t.dataset.v) ? '' : 'none'; });
+  if(ROL==='log' && (TAB==='hoy'||TAB==='res'||TAB==='rep')) nav('tar');   // la logística arranca en "Para hacer"
+  if(ROL!=='log' && TAB==='tar') nav('hoy');
+  actualizarBadges();
 }
 function exportCSV(){
   const rows=[['id','shippingId','comprador','zona','cuenta','tipo','estado','valor','fechaAlta']];
@@ -2351,7 +2622,7 @@ function _renderMapFiltros(stateCount){
     return Object.keys(stateCount).some(s=>d.test(s)&&stateCount[s]>0);
   });
   if(!vis.some(d=>d.s===mapStateFilter)) mapStateFilter='all';
-  row.innerHTML=vis.map(d=>`<button class="mapf ${mapStateFilter===d.s?'on':''}" data-s="${d.s}" onclick="mapFiltro('${d.s}')">${d.l}</button>`).join('');
+  row.innerHTML=(_hoyGeo?`<span class="mapf on" style="cursor:default">${_hoyGeo==='caba'?'🏙️ Solo CABA':'🌳 Solo Provincia'}</span>`:'')+vis.map(d=>`<button class="mapf ${mapStateFilter===d.s?'on':''}" data-s="${d.s}" onclick="mapFiltro('${d.s}')">${d.l}</button>`).join('');
 }
 function verEnMapa(sid){
   const e=_shipById.get(String(sid)); const ra=e?(e.shipping.receiver_address||{}):{};
@@ -2363,6 +2634,8 @@ function verEnMapa(sid){
 }
 function abrirMapa(){
   if(typeof L==='undefined'){ toast('🗺️ El mapa necesita internet (Leaflet)'); return; }
+  // Desde el botón 🗺️: arranca mostrando lo mismo que está filtrado en la lista
+  if(!_mapFocus){ const m={pendiente:'imprimir',impreso:'imprimir','en-camino':'en-camino',entregado:'entregado',reprogramado:'reprogramado'}; mapStateFilter=(_hoyFilter&&m[_hoyFilter])||'all'; }
   document.getElementById('mapModal').classList.add('active');
   history.pushState({mikraMap:true},'');
   if(!leafletMap){
@@ -2394,7 +2667,7 @@ function pintarMapa(){
   if(!leafletMap||!markersLayer)return;
   markersLayer.clearLayers();
   // Recolectar items con geo y calcular qué estados existen para los filtros
-  const geoItems=hoyItems().filter(({shipping:sh})=>{ const ra=sh.receiver_address||{}; return ra.latitude&&ra.longitude; });
+  const geoItems=hoyItems().filter(i=>!_hoyGeo||_esGeo(i,_hoyGeo)).filter(({shipping:sh})=>{ const ra=sh.receiver_address||{}; return ra.latitude&&ra.longitude; });
   const stateCount={}; geoItems.forEach(({shipping:sh})=>{ stateCount[sh._state]=(stateCount[sh._state]||0)+1; });
   _renderMapFiltros(stateCount);
   const bounds=[];
@@ -2448,25 +2721,26 @@ cargarTodo();
 // servidor tienen más de 15 min (cron atrasado), sincronizar solo en segundo plano.
 function _autoSyncSiHaceFalta(){
   if(document.visibilityState!=='visible'||!_snap) return;
-  if(_minutosDesde(_snap.updated_at)>15) syncEnSegundoPlano();
+  if(_minutosDesde(_snap.updated_at)>10) syncEnSegundoPlano();
 }
 setInterval(()=>{ updFresh(); _autoSyncSiHaceFalta(); },60000);
 // Al volver a la app (desde otra app o con la pantalla apagada): traer lo último del servidor.
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState!=='visible'||!_snap) return;
   updFresh();
-  if(_minutosDesde(_snap.updated_at)>5) fetchSnapshot(14).then(_aplicarSnap).then(_autoSyncSiHaceFalta).catch(()=>{});
+  if(_minutosDesde(_snap.updated_at)>5){ _syncIni(); fetchSnapshot(14).then(_aplicarSnap).then(_autoSyncSiHaceFalta).catch(()=>{}).finally(_syncFin); }
 });
 
 /* ══════════════════════════════════════════════════════════════════
    GESTOS TÁCTILES — swipe horizontal (cambiar día) + pull to refresh
 ══════════════════════════════════════════════════════════════════ */
 (function(){
-  let sx=0, sy=0, active=false, canPull=false, ptrEl=null;
+  let sx=0, sy=0, active=false, canPull=false, swipeOk=false, ptrEl=null;
   const H_TH=70;      // desplazamiento horizontal mínimo para swipe día
   const V_TH=95;      // desplazamiento vertical mínimo para pull-refresh
   const MAX_PERP=45;  // desviación perpendicular tolerada
-  function _atTop(){ return (window.scrollY||document.documentElement.scrollTop||0) <= 4; }
+  // Lo que scrollea es el panel #body (no la ventana): mirar ESE scroll para saber si estás arriba
+  function _atTop(){ const b=document.getElementById('body'); return (b?b.scrollTop:0)<=4 && (window.scrollY||0)<=4; }
   function _ensurePtr(){
     if(ptrEl) return ptrEl;
     ptrEl=document.createElement('div');
@@ -2478,7 +2752,10 @@ document.addEventListener('visibilitychange',()=>{
   document.addEventListener('touchstart',e=>{
     if(!e.touches||e.touches.length!==1) return;
     // ignorar si el gesto empieza dentro de un modal / sheet / mapa
-    const t=e.target; if(t.closest('.ov')||t.closest('#mapModal')||t.closest('.selbar')||t.closest('.filt')||t.closest('.tabs')||t.closest('.abtn')||t.closest('button')||t.closest('a')||t.closest('.pk')) return;
+    const t=e.target; if(t.closest('.ov')||t.closest('#mapModal')) return;
+    // deslizar-para-actualizar se puede empezar en cualquier lado (incluso sobre una tarjeta);
+    // el swipe lateral de día no, para no chocar con botones/filtros/tarjetas
+    swipeOk=!(t.closest('.selbar')||t.closest('.filt')||t.closest('.tabs')||t.closest('.abtn')||t.closest('button')||t.closest('a')||t.closest('.pk'));
     sx=e.touches[0].clientX; sy=e.touches[0].clientY; active=true; canPull=_atTop();
   },{passive:true});
   document.addEventListener('touchmove',e=>{
@@ -2501,7 +2778,7 @@ document.addEventListener('visibilitychange',()=>{
       return;
     }
     // Swipe horizontal — solo en pestaña Hoy (el calendario es "hoy = el día visible")
-    if(Math.abs(dx)>=H_TH && Math.abs(dy)<MAX_PERP && TAB==='hoy'){
+    if(swipeOk && Math.abs(dx)>=H_TH && Math.abs(dy)<MAX_PERP && TAB==='hoy'){
       irADiaHabil(dx<0 ? +1 : -1);   // deslizar a la IZQUIERDA = día siguiente
     }
   },{passive:true});
