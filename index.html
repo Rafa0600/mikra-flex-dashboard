@@ -1718,7 +1718,12 @@ function _accionMasivaGen(estado,label,warning){
   });
 }
 function _needRefundLike(r){ return (r.estado==='recibido'||r.estado==='entregado')&&r.fechaDescontado; }
-function selDescontar(){ _accionMasivaGen('descontado','Descontar','<span style="color:var(--devolver);font-weight:800">⚠️ Esta acción no se puede revertir fácilmente</span>'); }
+function selDescontar(){
+  const ya=[..._selSet].filter(sid=>{ const r=_reclamosMap.get(String(sid)); return r&&!_descontable(r); });
+  if(ya.length){ ya.forEach(sid=>_selSet.delete(sid)); renderResolver();
+    if(!_selSet.size){ toast('Todos los marcados ya estaban descontados'); return; }
+    toast('Saqué '+ya.length+' que ya estaban descontados'); }
+  _accionMasivaGen('descontado','Descontar','<span style="color:var(--devolver);font-weight:800">⚠️ Esta acción no se puede revertir fácilmente</span>'); }
 function selReembolsar(){ _accionMasivaGen('cerrado','Reembolsar y cerrar','<span style="color:var(--devolver);font-weight:800">⚠️ Esta acción no se puede revertir fácilmente</span>'); }
 function selRecibir(){ _accionMasivaGen('recibido','Marcar como recibido en Mikra',''); }
 function selArchivar(){ _accionMasivaGen('archivado','Archivar',''); }
@@ -1748,6 +1753,7 @@ function renderResolver(){
       +'<span class="sb-count">'+nSel+' seleccionados</span>'
       +'<div class="sb-row">'
         +'<button class="sb-b" onclick="'+(todosMarcados?'selNinguno()':'selMarcarVisibles()')+'">'+(todosMarcados?'○ Ninguno':'✓ Todos visibles')+'</button>'
+        +(items.some(_descontable)?'<button class="sb-b" onclick="selSinDescontar()">💸 Sin descontar</button>':'')
         +(nSel?'<button class="sb-b" onclick="selNinguno()">✕ Limpiar</button>':'')
       +'</div>'
       +(nSel?'<div class="sb-acts">'
@@ -1793,6 +1799,14 @@ function _lineaEntregaOriginal(r, e){
   else txt=`⏱️ Debía entregarse hace ${dias} días (${fecha})`;
   return `<div class="pk-entrega">${txt}</div>`;
 }
+function _diasBox(dias){
+  const t=(dias||'').replace(/<[^>]+>/g,'').trim(); if(!t) return '';
+  const c=/rojo|dev/i.test(dias)?'c-red':(/amber/i.test(dias)?'c-amber':'c-mut');
+  return '<span class="pk-diasx '+c+'">'+esc(t)+'</span>';
+}
+// Se puede descontar: todavía no se descontó y no está para reembolsar
+function _descontable(r){ return r.estado!=='descontado' && !r.fechaDescontado; }
+function selSinDescontar(){ const it=resolverItems().filter(r=>resMatch(r,_resFilter)&&_descontable(r)); _selSet.clear(); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); toast(it.length?('✓ '+it.length+' sin descontar marcados'):'No hay ninguno sin descontar acá'); }
 function resolverCard(r){
   const v=vistaReclamo(r), sid=String(r.shippingId);
   const zona=r.zona||r.comprador||'—';
@@ -1805,7 +1819,8 @@ function resolverCard(r){
     return `<div class="pk ${v.border} ${sel?'sel':''}" data-sid="${esc(sid)}"><div class="pk-row" onclick="toggleSelCard('${esc(sid)}')">
       <span class="selbox ${sel?'on':''}">${sel?'✓':''}</span>
       <div class="pk-main"><div class="pk-zona"><span class="z">${esc(zona)}</span>${cuentaDotSel}</div>
-        <div class="pk-sub"><span class="pk-caseid">#${esc(r.id.replace(/^#/,''))}</span>${r.valor?' · <span class="pk-money">$'+fmtMoney(r.valor).replace(/^\$/,'')+'</span>':''}${dias?' · '+dias:''}</div></div></div></div>`;
+        <div class="pk-sub"><span class="pk-caseid">#${esc(r.id.replace(/^#/,''))}</span>${r.valor?' · <span class="pk-money">$'+fmtMoney(r.valor).replace(/^\$/,'')+'</span>':''}</div></div>
+      <div class="pk-right"><span class="state ${v.st[1]}">${v.st[0]}</span>${_diasBox(dias)}</div></div></div>`;
   }
   const valEl = r.valor?(' · <b class="pk-val" onclick="event.stopPropagation();copiarCaso(\''+sid+'\')" title="Copiar para Excel">'+fmtMoney(r.valor)+'</b>'):'';
   const needRefund=_needRefund(r);
