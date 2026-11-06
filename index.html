@@ -563,7 +563,7 @@ const REPUTACION_HORA_LIMITE = 21;
 function afectaReputacion(shipping){
   const h=shipping?.status_history||{}, st=(shipping?.status||'').toLowerCase(), sub=(shipping?.substatus||'').toLowerCase();
   if(h.date_delivered||st==='cancelled')return false;
-  if(sub.includes('buyer'))return false;
+  if(sub.includes('buyer')||_avisoEntrega(shipping))return false;
   if(!h.date_first_visit)return false;
   const hora=_horaAR(h.date_first_visit);
   return hora!==null&&hora>=REPUTACION_HORA_LIMITE;
@@ -586,7 +586,12 @@ function esEntregaParaFecha(shipping,targetDate){
       if(_m(hist.date_not_delivered))return true; } }
   return false;
 }
+// "Avisar entrega" en ML: el vendedor avisó que el comprador ya lo recibió → ML queda esperando que el
+// comprador confirme (shipped / waiting_for_confirmation) y llena date_first_visit con la hora del aviso
+// (NO es una visita fallida). Para la app ya está entregado.
+function _avisoEntrega(sh){ return !!sh && (sh.status||'').toLowerCase()==='shipped' && (sh.substatus||'').toLowerCase()==='waiting_for_confirmation'; }
 function getOrderState(shipping){
+  if(_avisoEntrega(shipping)) return 'entregado';
   const status=(shipping.status||'').toLowerCase(), substatus=(shipping.substatus||'').toLowerCase();
   const history=shipping.status_history||{}, tags=shipping.tags||[], tagsLower=tags.map(t=>(t||'').toLowerCase());
   if(substatus.includes('reschedul')||substatus==='delayed'||substatus==='returning_to_sender'||substatus==='waiting_for_withdrawal'||substatus==='receiver_absent'||substatus==='out_of_delivery_area'||substatus==='not_delivered_and_returning'||substatus==='delivery_failed'||tagsLower.includes('rescheduled')||tagsLower.includes('delayed')||tagsLower.includes('return_to_sender')) return 'reprogramado';
@@ -607,7 +612,7 @@ function enrichShippingData(shipping){
   if(events.length>0)shipping._trackingEvents=events;
   const problemSubstatuses=new Set(['delayed','delivery_failed','receiver_absent','lost','stolen','damaged']);
   const _subLow=(shipping.substatus||'').toLowerCase();
-  if(history.date_first_visit&&!history.date_delivered&&!_subLow.includes('buyer')){
+  if(history.date_first_visit&&!history.date_delivered&&!_subLow.includes('buyer')&&!_avisoEntrega(shipping)){
     shipping._problems=[{type:'receiver_absent',typeLabel:'Comprador ausente',reputationAffected:afectaReputacion(shipping),time:formatearSoloHora(history.date_first_visit)}];
   } else if(shipping.status==='not_delivered'||problemSubstatuses.has(shipping.substatus)){
     const probSub=shipping.substatus||shipping.status; const probEntry=subHistory.find(e=>e.substatus===probSub); const probTime=probEntry?.date?formatearSoloHora(probEntry.date):null;
@@ -1211,7 +1216,7 @@ const SIN_ENTREGAR_DIAS=7;
 function _esSinEntregar(sh){
   if(!sh||sh.logistic_type!=='self_service') return false;
   const h=sh.status_history||{};
-  if(!h.date_shipped||h.date_delivered) return false;
+  if(!h.date_shipped||h.date_delivered||_avisoEntrega(sh)) return false;
   if(sh.status!=='shipped'&&sh.status!=='not_delivered') return false;
   const d=new Date(_fechaPromesa(sh)||h.date_shipped); if(isNaN(d)) return false;
   d.setHours(0,0,0,0);
@@ -1579,7 +1584,8 @@ function _miniTimeline(sh){
   // En camino
   if(h.date_shipped) steps.push({l:'🚚 En camino',t:fT(h.date_shipped),c:'blue'});
   // Primera visita SOLO si no hubo entrega (si hay date_delivered, la visita fue el momento de entrega)
-  if(h.date_first_visit&&!h.date_delivered){
+  if(_avisoEntrega(sh)) steps.push({l:'✅ Avisaste entrega · falta que confirme',t:fT(h.date_first_visit||sh.last_updated),c:'green'});
+  else if(h.date_first_visit&&!h.date_delivered){
     const vTime=new Date(h.date_first_visit).getTime();
     const isBuyer=sHist.some(e=>(e.substatus||'').toLowerCase().includes('buyer')&&Math.abs(new Date(e.date).getTime()-vTime)<7200000)||(sh.substatus||'').toLowerCase().includes('buyer');
     steps.push({l:isBuyer?'📅 Reprogramado':'🚫 Ausente',t:fT(h.date_first_visit),c:isBuyer?'amber':'red'});
@@ -1999,7 +2005,8 @@ function _tlEventsML(sh){
   if(readyE) events.push({date:readyE.date,label:'🖨️ Impreso',dot:'c-gray'});
   subHistory.forEach(entry=>{ const sub=entry.substatus||''; if(SKIP_SUBSTATUS.has(sub))return; const key=sub+'|'+(entry.date||''); if(seen.has(key))return; seen.add(key); const meta=SUBSTATUS_MAP[sub]||{t:sub,d:'c-gray'}; events.push({date:entry.date,label:meta.t,dot:meta.d}); });
   if(history.date_shipped&&!events.some(e=>e.label.includes('camino'))) events.push({date:history.date_shipped,label:'🚚 En camino',dot:'c-blue'});
-  if(history.date_first_visit&&!history.date_delivered&&!events.some(e=>e.label.includes('ausente')||e.label.includes('reprogram'))){ const _sub=(sh.substatus||'').toLowerCase(); if(_sub.includes('buyer')) events.push({date:history.date_first_visit,label:'📅 El comprador reprogramó',dot:'c-orange'}); else{ const af=afectaReputacion(sh); events.push({date:history.date_first_visit,label:af?'🚫 Comprador ausente · ⚠️ afecta rep.':'🚫 Comprador ausente',dot:'c-red'}); } }
+  if(_avisoEntrega(sh)) events.push({date:history.date_first_visit||sh.last_updated,label:'✅ Avisaste la entrega · falta que el comprador confirme',dot:'c-green'});
+  else if(history.date_first_visit&&!history.date_delivered&&!events.some(e=>e.label.includes('ausente')||e.label.includes('reprogram'))){ const _sub=(sh.substatus||'').toLowerCase(); if(_sub.includes('buyer')) events.push({date:history.date_first_visit,label:'📅 El comprador reprogramó',dot:'c-orange'}); else{ const af=afectaReputacion(sh); events.push({date:history.date_first_visit,label:af?'🚫 Comprador ausente · ⚠️ afecta rep.':'🚫 Comprador ausente',dot:'c-red'}); } }
   if(history.date_not_delivered&&!events.some(e=>e.label.includes('ausente')||e.label.includes('entregar'))) events.push({date:history.date_not_delivered,label:'❌ No se pudo entregar',dot:'c-red'});
   if(history.date_delivered&&!events.some(e=>e.dot==='c-green')) events.push({date:history.date_delivered,label:'✅ Entregado',dot:'c-green'});
   return events;
@@ -2014,7 +2021,7 @@ function verTimeline(sid){
   let repHtml=''; const evs=[]; const _p2=n=>String(n).padStart(2,'0');
   if(sh){
     sh._state=sh._state||getOrderState(sh); enrichShippingData(sh);
-    if(sh.status_history&&sh.status_history.date_first_visit&&!sh.status_history.date_delivered&&!(sh.substatus||'').toLowerCase().includes('buyer')){
+    if(sh.status_history&&sh.status_history.date_first_visit&&!sh.status_history.date_delivered&&!(sh.substatus||'').toLowerCase().includes('buyer')&&!_avisoEntrega(sh)){
       const af=afectaReputacion(sh); repHtml=`<div class="tl-rep ${af?'rep-bad':'rep-ok'}">${af?'⚠️ Afectó reputación · 1ª visita después de las 21:00':'✓ No afectó reputación'}</div>`; }
     _tlEventsML(sh).forEach(ev=>{ const t=ev.date?new Date(ev.date).getTime():0; evs.push({ts:isNaN(t)?0:t, dtStr:ev.date?fmtDHAR(ev.date):'', label:ev.label, dot:ev.dot}); });
   }
