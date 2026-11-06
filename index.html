@@ -1700,9 +1700,9 @@ function dblclickSelCard(sid,ev){ if(ev){ev.stopPropagation();} sid=String(sid);
 function selMarcarVisibles(){ const it=resolverItems().filter(r=>resMatch(r,_resFilter)); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); }
 // Limpia toda la selección sin salir del modo
 function selNinguno(){ _selSet.clear(); renderResolver(); }
-// A=monto · B=vacía (columna CC con fórmula) · C=fecha · D=Paquete #NNN · E=zona
+// A=monto · B=vacía (columna CC con fórmula) · C=fecha · D=Paquete #NNN · E=zona · F=tipo (Cambios / Cancelados / Entregas / Demorados)
 // Signo: descontar = NEGATIVO (como un pago); reembolsar = POSITIVO (se le devuelve)
-function _lineaExcel(r){ const f=_parseFechaFlexible(r.fechaAlta); const fs=f?`${f.getDate()}/${f.getMonth()+1}/${f.getFullYear()}`:''; const v=Math.abs(Number(r.valor)||0); const monto=v?(_needRefund(r)?v:-v):''; return [monto, '', fs, 'Paquete '+r.id, r.zona||''].join('\t'); }
+function _lineaExcel(r){ const f=_parseFechaFlexible(r.fechaAlta); const fs=f?`${f.getDate()}/${f.getMonth()+1}/${f.getFullYear()}`:''; const v=Math.abs(Number(r.valor)||0); const monto=v?(_needRefund(r)?v:-v):''; const tipo=r.tipo==='cambio'?'Cambios':r.tipo==='driver_devolver'?'Cancelados':r.tipo==='entrega'?'Entregas':'Demorados'; return [monto, '', fs, 'Paquete '+r.id, r.zona||'', tipo].join('\t'); }
 function copiarCaso(sid){ const r=_reclamosMap.get(String(sid)); if(!r)return; navigator.clipboard?.writeText(_lineaExcel(r)).then(()=>toast('📋 '+r.id+' copiado (pegá en Excel)')).catch(()=>toast('No se pudo copiar')); }
 function copiarSel(){ if(!_selSet.size){ toast('No seleccionaste ninguno'); return; } const ls=[]; _selSet.forEach(sid=>{ const r=_reclamosMap.get(String(sid)); if(r)ls.push(_lineaExcel(r)); }); navigator.clipboard?.writeText(ls.join('\n')).then(()=>toast('📋 '+ls.length+' casos copiados para Excel')).catch(()=>toast('No se pudo copiar')); }
 // Acciones masivas — cada una es una función independiente para poder tenerlas en la selbar.
