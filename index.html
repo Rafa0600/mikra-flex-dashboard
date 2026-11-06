@@ -2574,9 +2574,22 @@ function renderMenu(){
   else html+=`<div class="menu-item" onclick="closeSheet('menu');nav('hist')"><span class="e">🕐</span>Historial</div>`;
   html+=`<div class="menu-item" onclick="closeSheet('menu');openSheet('grafico7d')"><span class="e">📊</span>Últimos 7 días</div>`;
   html+=`<div class="menu-item" onclick="closeSheet('menu');refrescar()"><span class="e">🔄</span>Refrescar datos</div>`;
+  html+=`<div class="menu-item" onclick="closeSheet('menu');borrarCache()"><span class="e">🧹</span><div>Borrar caché y arrancar de cero<br><small style="color:var(--ink-3)">Versión de la app: ${esc(_versionApp())} · no se pierde nada</small></div></div>`;
   html+=`<div class="menu-item" onclick="cerrarSesion()"><span class="e">🔓</span>Cerrar sesión</div>`;
   document.getElementById('menuList').innerHTML=html;
 }
+// Fecha en que se subió esta versión a GitHub (sirve para ver si el celu tiene la última)
+function _versionApp(){ const d=new Date(document.lastModified); if(isNaN(d)) return '—'; const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+// Borra la copia guardada de la app y de los datos (service worker + caché) y recarga desde internet.
+// NO borra el rol/PIN ni nada guardado: los casos están en Cloudflare.
+async function borrarCache(){
+  toast('🧹 Borrando caché…');
+  try{ if('serviceWorker' in navigator){ const rs=await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r=>r.unregister())); } }catch(e){}
+  try{ if(window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+  const u=new URL(location.href); u.searchParams.set('v',Date.now()); location.replace(u.toString());
+}
+// Si quedó instalado un service worker viejo, pedirle que se actualice (el nuevo ya no guarda datos viejos)
+try{ if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.update().catch(()=>{}))).catch(()=>{}); }catch(e){}
 function cambiarRol(){
   closeSheet('menu');
   pedirPin('Cambiar de rol','Poné tu PIN', (v)=>{
