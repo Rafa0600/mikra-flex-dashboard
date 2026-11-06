@@ -820,7 +820,9 @@ function esActivo(r){
    ESCAPE + helpers UI
 ══════════════════════════════════════════════════════════════════ */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function _withTimeout(ms){ if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout) return AbortSignal.timeout(ms); const ac=new AbortController(); setTimeout(()=>ac.abort(),ms); return ac.signal; }
+// Con setTimeout (no AbortSignal.timeout): ese se PAUSA mientras el celular duerme y un pedido
+// que quedó colgado trababa las actualizaciones al volver a la app. Este corta apenas se despierta.
+function _withTimeout(ms){ const ac=new AbortController(); setTimeout(()=>ac.abort(),ms); return ac.signal; }
 function _minutosDesde(iso){ const t=iso?new Date(iso).getTime():0; return (t&&!isNaN(t))?(Date.now()-t)/60000:Infinity; }
 function fmtMoney(n){ n=Number(n||0); return '$'+n.toLocaleString('es-AR'); }
 let _tt; function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2000); }
@@ -981,7 +983,7 @@ function _refrescarCasos(){ renderHoy(); renderResolver(); renderHistorial(); re
 // Aplica un snapshot recién bajado (mergeado con lo que había) y lo guarda en caché
 function _aplicarSnap(nuevo){
   const m=_mergeSnap(_snap, nuevo);
-  _commitSnapshot(m); _datosFrescos=true;
+  _commitSnapshot(m); _datosFrescos=true; _ultimaTraida=Date.now();
   _guardarSnapCache(m); _lsSet(_LS_REC,[..._reclamosMap.values()]);
   autoCerrarViejos(); autoCerrarEntregados();
   _renderTodo();
@@ -1037,6 +1039,7 @@ let _resCount=0, _fgLoadId=0, _isAutoTarget=true, _autoAdvanceCount=0;
 // true recién cuando llegan datos del servidor: el salto automático de día (feriados)
 // no se decide con la caché vieja del celular.
 let _datosFrescos=false;
+var _ultimaTraida=0;   // última vez que se bajaron datos de Cloudflare (no la del servidor)
 const _LS_SNAP='_v2_snap', _LS_REC='_v2_rec';
 function _lsGet(k){ try{ const s=localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){return null;} }
 function _lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -2732,19 +2735,40 @@ function pintarMapa(){
 document.getElementById('dselT') && (document.getElementById('dselT').textContent=dselLabel());
 arrancar();     // usa el rol guardado, o pide el PIN si no hay sesión
 cargarTodo();
-// Cada minuto: actualizar el "hace X min" y, si la app está a la vista y los datos del
-// servidor tienen más de 15 min (cron atrasado), sincronizar solo en segundo plano.
-function _autoSyncSiHaceFalta(){
-  if(document.visibilityState!=='visible'||!_snap) return;
-  if(_minutosDesde(_snap.updated_at)>10) syncEnSegundoPlano();
+// ── Datos siempre al día, sin tocar nada ──
+// Con la app a la vista: si lo último bajado de Cloudflare tiene +3 min, se vuelve a bajar.
+// Si además el servidor tiene +10 min (fuera del horario del cron), se le pide que consulte
+// Mercado Libre. Al volver a la app (celu desbloqueado, otra app, vuelve internet) se hace YA.
+// Si falla (el celu recién despierta y todavía no hay red) reintenta solo.
+const FRESCO_MIN=3;
+let _traerProm=null;
+function _traerDeCloudflare(){
+  if(_traerProm||_syncProm||_refrescando||!_snap) return _traerProm;
+  _syncIni();
+  _traerProm=(async()=>{
+    for(const espera of [0,2000,5000,10000]){
+      if(espera) await new Promise(r=>setTimeout(r,espera));
+      try{
+        const [s]=await Promise.all([fetchSnapshot(14), fetchReclamos()]);
+        _aplicarSnap(s);
+        if(_minutosDesde(s.updated_at)>10) syncEnSegundoPlano();
+        return true;
+      }catch(e){}
+    }
+    return false;
+  })().finally(()=>{ _traerProm=null; _syncFin(); });
+  return _traerProm;
 }
-setInterval(()=>{ updFresh(); _autoSyncSiHaceFalta(); },60000);
-// Al volver a la app (desde otra app o con la pantalla apagada): traer lo último del servidor.
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState!=='visible'||!_snap) return;
+function _siHaceFalta(){
+  if(document.visibilityState!=='visible') return;
   updFresh();
-  if(_minutosDesde(_snap.updated_at)>5){ _syncIni(); fetchSnapshot(14).then(_aplicarSnap).then(_autoSyncSiHaceFalta).catch(()=>{}).finally(_syncFin); }
-});
+  if((Date.now()-_ultimaTraida)/60000>FRESCO_MIN) _traerDeCloudflare();
+}
+setInterval(_siHaceFalta,30000);
+document.addEventListener('visibilitychange',_siHaceFalta);
+window.addEventListener('pageshow',e=>{ if(e.persisted) _siHaceFalta(); });
+window.addEventListener('focus',_siHaceFalta);
+window.addEventListener('online',_siHaceFalta);
 
 /* ══════════════════════════════════════════════════════════════════
    GESTOS TÁCTILES — swipe horizontal (cambiar día) + pull to refresh
