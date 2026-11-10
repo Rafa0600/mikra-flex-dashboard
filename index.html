@@ -205,6 +205,15 @@
   .s-desc{border-left-color:var(--desc)} .b-desc{background:color-mix(in srgb,var(--desc) 15%,transparent);color:var(--desc)}
 
   .filt{display:flex;gap:7px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px}
+  .rq{position:relative;margin:-4px 0 12px}
+  .rq input{width:100%;box-sizing:border-box;padding:11px 38px 11px 38px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:inherit;font-size:15px;outline:none}
+  .rq input:focus{border-color:var(--accent)}
+  .rq .rq-i{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.7;pointer-events:none}
+  .rq .rq-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--ink-3);font-size:18px;padding:6px 8px;cursor:pointer}
+  .rq-info{font-size:12px;color:var(--ink-3);margin:-6px 2px 10px}
+  .rq-info a{color:var(--accent);font-weight:800;cursor:pointer}
+  .pk-art{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.35}
+  .pk-art mark{background:color-mix(in srgb,var(--amber) 35%,transparent);color:var(--ink);border-radius:3px;padding:0 1px}
   .filt::-webkit-scrollbar{display:none}
   .fchip{flex:0 0 auto;font-size:12px;font-weight:700;padding:7px 13px;border-radius:20px;border:1px solid var(--line);
     background:var(--surface-2);color:var(--ink-2);cursor:pointer}
@@ -1694,7 +1703,87 @@ function resMatch(r,f){
   if(f==='demorado')return r.tipo==='demorado';
   return true;
 }
-function setResFilter(f){ _resFilter=f; renderResolver(); }   // modo select se mantiene al cambiar filtro
+function setResFilter(f){ _resFilter=f; renderResolver(); }
+// ── Buscador de A resolver: busca por artículo (lo que se compró), zona, nº de caso, comprador o notas ──
+let _resQ='';
+const _resArtCache=new Map();   // sid → texto de artículos de casos que no están en el snapshot (se traen de ML)
+try{ const c=JSON.parse(localStorage.getItem('mikra_res_art')||'{}'); Object.keys(c).forEach(k=>_resArtCache.set(k,c[k])); }catch(e){}
+function _norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+// Lista corta de lo que tiene el paquete: "Calza Oxford · Negro · M ×2"
+function _artsDe(orders){
+  try{
+    // si el catálogo no tiene el SKU (queda solo el número), usar el título de Mercado Libre
+    const filas=_agruparFilas(_pedidoItems(orders).flatMap(p=>{ const d=_desglosarProducto(p); return d.some(x=>/^\d+$/.test(String(x.nombre||'')))?[{sku:p.sku,nombre:p.titulo,color:'',talle:'',cantidad:p.cantidad,mult:1,tipo:'normal'}]:d; })).filter(g=>!_esTecSku(g.sku));
+    return filas.map(g=>[g.nombre,g.color,g.talle].filter(Boolean).join(' · ')+(g.u>1?' ×'+g.u:''));
+  }catch(err){ return _pedidoItems(orders).map(x=>x.titulo); }
+}
+function _resArticulos(r){
+  const sid=String(r.shippingId), e=_shipById.get(sid);
+  if(!e||!(e.orders||[]).length) return _resArtCache.get(sid)||[];
+  return _artsDe(e.orders);
+}
+function _resPalabras(){ return _norm(_resQ).split(/\s+/).filter(Boolean); }
+function _resQMatch(r){
+  const ws=_resPalabras(); if(!ws.length) return true;
+  const e=_shipById.get(String(r.shippingId)), o=e&&(e.orders||[])[0];
+  const txt=_norm([r.id, r.zona, r.comprador, r.notas, r.cuenta, r.orderId, r.shippingId, o&&o.buyer&&o.buyer.nickname,
+    ..._resArticulos(r), ...(e?_pedidoItems(e.orders).map(x=>x.titulo+' '+x.sku):[])].join(' | '));
+  return ws.every(w=>txt.includes(w));
+}
+function _resVisibles(){ return resolverItems().filter(r=>resMatch(r,_resFilter)&&_resQMatch(r)); }
+function _resMark(t){
+  let h=esc(t); const ws=_resPalabras(); if(!ws.length) return h;
+  // resalta ignorando acentos: busca en la versión normalizada y marca las mismas posiciones
+  const n=_norm(t); const marks=new Array(t.length).fill(false);
+  ws.forEach(w=>{ let i=n.indexOf(w); while(i>=0){ for(let k=i;k<i+w.length;k++) marks[k]=true; i=n.indexOf(w,i+w.length); } });
+  if(n.length!==t.length) return h;
+  let out='', on=false; for(let k=0;k<t.length;k++){ if(marks[k]&&!on){ out+='<mark>'; on=true; } if(!marks[k]&&on){ out+='</mark>'; on=false; } out+=esc(t[k]); } if(on) out+='</mark>';
+  return out;
+}
+let _resQTimer=null;
+function resBuscar(v){
+  _resQ=v||''; clearTimeout(_resQTimer);
+  const x=document.querySelector('.rq .rq-x'); if(x) x.style.display=_resQ?'':'none';
+  _resQTimer=setTimeout(_resPintarLista,120);
+  _resCompletarArticulos();
+}
+function resBorrar(){ const i=document.getElementById('res-q'); if(i){ i.value=''; i.focus(); } resBuscar(''); }
+// Solo repinta la lista (no el buscador) para que no se cierre el teclado del celu
+function _resPintarLista(){
+  const box=document.getElementById('res-list'); if(!box){ renderResolver(); return; }
+  box.innerHTML=_resListaHtml(); if(!_selMode) bindLongPress();
+}
+function _resListaHtml(){
+  const items=_resVisibles();
+  let info='';
+  if(_resPalabras().length){
+    const enTodos=resolverItems().filter(_resQMatch).length;
+    info=`<div class="rq-info">${items.length} caso${items.length===1?'':'s'}${_resFilter!=='todos'&&enTodos>items.length?` · <a onclick="setResFilter('todos')">ver ${enTodos} en Todos</a>`:''}${_resTrayendo?' · buscando artículos de casos viejos…':''}</div>`;
+  }
+  if(!items.length) return info+'<div class="empty">'+(_resPalabras().length?'No encontré nada con eso.':'Sin casos en este filtro.')+'</div>';
+  return info+items.map(r=>resolverCard(r)).join('');
+}
+// Casos más viejos que el snapshot (14 días) no tienen el pedido: se traen de Mercado Libre una sola vez
+let _resTrayendo=false;
+async function _resCompletarArticulos(){
+  if(_resTrayendo||!_resPalabras().length) return;
+  const faltan=resolverItems().filter(r=>{ const sid=String(r.shippingId); return /^\d{8,}$/.test(sid)&&!_shipById.get(sid)&&!_resArtCache.has(sid); });
+  if(!faltan.length) return;
+  _resTrayendo=true; _resPintarLista();
+  for(let i=0;i<faltan.length;i+=3){
+    await Promise.all(faltan.slice(i,i+3).map(async r=>{
+      const sid=String(r.shippingId);
+      try{ const ml=await _fetchEnvioML(sid); let ords=ml&&ml.order&&ml.order.id?[ml.order]:[];
+        // el envío a veces se lee con la otra cuenta: probar la orden en cada una
+        const oid=(ml&&ml.shipping&&ml.shipping.order_id)||r.orderId;
+        if(!ords.length&&oid){ for(const c of CUENTAS){ const t=await _token(c); if(!t) continue; const o=await _mlGet(c,t,'/api/orders/'+oid); if(o&&o.id){ ords=[o]; break; } } }
+        _resArtCache.set(sid,_artsDe(ords));
+      }catch(e){ _resArtCache.set(sid,[]); }
+    }));
+  }
+  try{ const o={}; _resArtCache.forEach((v,k)=>{ if(v&&v.length) o[k]=v; }); localStorage.setItem('mikra_res_art',JSON.stringify(o)); }catch(e){}
+  _resTrayendo=false; _resPintarLista();
+}   // modo select se mantiene al cambiar filtro
 // selección masiva + copiado a Excel + acciones masivas (descontar, reembolsar, marcar recibido).
 // Modo select activo desde botón "Seleccionar" o desde doble-clic en cualquier card.
 let _selMode=false; const _selSet=new Set();
@@ -1703,7 +1792,7 @@ function toggleSelCard(sid){ sid=String(sid); if(_selSet.has(sid))_selSet.delete
 // Doble-clic activa modo select y selecciona esa card. Si ya estaba en modo, actúa como toggle.
 function dblclickSelCard(sid,ev){ if(ev){ev.stopPropagation();} sid=String(sid); const yaModo=_selMode; if(!_selMode) _selMode=true; if(yaModo&&_selSet.has(sid)) _selSet.delete(sid); else _selSet.add(sid); renderResolver(); }
 // Marca TODOS los casos que matchean el filtro activo (respetando el filtro visible)
-function selMarcarVisibles(){ const it=resolverItems().filter(r=>resMatch(r,_resFilter)); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); }
+function selMarcarVisibles(){ const it=_resVisibles(); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); }
 // Limpia toda la selección sin salir del modo
 function selNinguno(){ _selSet.clear(); renderResolver(); }
 // A=monto · B=vacía (columna CC con fórmula) · C=fecha · D=Paquete #NNN · E=zona · F=tipo (Cambios / Cancelados / Entregas / Demorados)
@@ -1738,7 +1827,7 @@ function renderResolver(){
   const FILTERS = ROL==='log'?LOG_FILTERS:RES_FILTERS;
   if(ROL==='log') _selMode=false;
   const all=resolverItems(); _resCount=all.length; actualizarBadges();
-  const items=all.filter(r=>resMatch(r,_resFilter));
+  const items=all.filter(r=>resMatch(r,_resFilter)&&_resQMatch(r));
   const puedeSel = ROL==='owner';
   // Solo mostrar filtros con resultados
   const visFilters=FILTERS.filter(([k])=>k==='todos'||all.some(r=>resMatch(r,k)));
@@ -1751,6 +1840,7 @@ function renderResolver(){
       +'</div>';
   }
   html+='<div class="filt">'+visFilters.map(([k,l])=>`<div class="fchip ${_resFilter===k?'on':''}" onclick="setResFilter('${k}')">${l}</div>`).join('')+'</div>';
+  html+=`<div class="rq"><span class="rq-i">🔍</span><input id="res-q" type="text" inputmode="search" enterkeyhint="search" placeholder="Buscar: calza oxford, zona, #caso…" value="${esc(_resQ)}" oninput="resBuscar(this.value)" autocomplete="off"><button class="rq-x" onclick="resBorrar()" style="${_resQ?'':'display:none'}">✕</button></div>`;
   if(_selMode&&puedeSel){
     const nSel=_selSet.size;
     const visSel=items.filter(r=>_selSet.has(String(r.shippingId))).length;
@@ -1774,8 +1864,7 @@ function renderResolver(){
   }else if(puedeSel){
     html+='<div class="sb-hint">💡 Doble-clic en cualquier caso para entrar en modo selección</div>';
   }
-  if(!items.length){ cont.innerHTML=html+'<div class="empty">Sin casos en este filtro.</div>'; return; }
-  items.forEach(r=>html+=resolverCard(r));
+  html+='<div id="res-list">'+_resListaHtml()+'</div>';
   cont.innerHTML=html; if(!_selMode)bindLongPress();
 }
 // Para casos "A devolver" (driver_devolver): calcula la fecha original de entrega del envío
@@ -1812,20 +1901,23 @@ function _diasBox(dias){
 }
 // Se puede descontar: todavía no se descontó y no está para reembolsar
 function _descontable(r){ return r.estado!=='descontado' && !r.fechaDescontado; }
-function selSinDescontar(){ const it=resolverItems().filter(r=>resMatch(r,_resFilter)&&_descontable(r)); _selSet.clear(); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); toast(it.length?('✓ '+it.length+' sin descontar marcados'):'No hay ninguno sin descontar acá'); }
+function selSinDescontar(){ const it=_resVisibles().filter(_descontable); _selSet.clear(); it.forEach(r=>_selSet.add(String(r.shippingId))); renderResolver(); toast(it.length?('✓ '+it.length+' sin descontar marcados'):'No hay ninguno sin descontar acá'); }
 function resolverCard(r){
   const v=vistaReclamo(r), sid=String(r.shippingId);
   const zona=r.zona||r.comprador||'—';
   const tipoTxt = r.tipo==='cambio'?'Cambio':r.tipo==='entrega'?'Entrega':r.tipo==='driver_devolver'?'Cancelación':'Demorado';
   const dias=diasChip(r);
   const cuentaHtml = r.cuenta ? `<span class="pk-cuenta" style="background:${r.cuenta==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${r.cuenta==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(r.cuenta)}</span>` : '';
+  const artLine=(TAB==='res'&&_resPalabras().length)?(()=>{ const a=_resArticulos(r);
+    if(a.length) return `<div class="pk-art">📦 ${a.map(_resMark).join('<br>📦 ')}</div>`;
+    return r.notas?`<div class="pk-art">📝 ${_resMark(String(r.notas))}</div>`:''; })():'';
   if(_selMode){
     const sel=_selSet.has(sid);
     const cuentaDotSel = r.cuenta ? `<span class="pk-dot" title="${esc(r.cuenta)}" style="background:${r.cuenta==='Mikra'?'var(--desc)':'var(--logistica)'}"></span>` : '';
     return `<div class="pk ${v.border} ${sel?'sel':''}" data-sid="${esc(sid)}"><div class="pk-row" onclick="toggleSelCard('${esc(sid)}')">
       <span class="selbox ${sel?'on':''}">${sel?'✓':''}</span>
       <div class="pk-main"><div class="pk-zona"><span class="z">${esc(zona)}</span>${cuentaDotSel}</div>
-        <div class="pk-sub"><span class="pk-caseid">#${esc(r.id.replace(/^#/,''))}</span>${r.valor?' · <span class="pk-money">$'+fmtMoney(r.valor).replace(/^\$/,'')+'</span>':''}</div></div>
+        <div class="pk-sub"><span class="pk-caseid">#${esc(r.id.replace(/^#/,''))}</span>${r.valor?' · <span class="pk-money">$'+fmtMoney(r.valor).replace(/^\$/,'')+'</span>':''}</div>${artLine}</div>
       <div class="pk-right"><span class="state ${v.st[1]}">${v.st[0]}</span>${_diasBox(dias)}</div></div></div>`;
   }
   const valEl = r.valor?(' · <b class="pk-val" onclick="event.stopPropagation();copiarCaso(\''+sid+'\')" title="Copiar para Excel">'+fmtMoney(r.valor)+'</b>'):'';
@@ -1869,7 +1961,7 @@ function resolverCard(r){
     <span class="pk-ic pk-ic-sm ${v.ic[1]}">${v.ic[0]}</span>
     <div class="pk-main">
       <div class="pk-zona"><span class="z">${esc(zona)}</span>${cuentaDot}</div>
-      <div class="pk-sub">${subParts.join(' · ')}</div>
+      <div class="pk-sub">${subParts.join(' · ')}</div>${artLine}
     </div>
     <div class="pk-right"><span class="state ${v.st[1]}">${v.st[0]}</span>${diasBox}</div>
     <span class="chev">›</span></div>
