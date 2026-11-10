@@ -1952,6 +1952,70 @@ function feedCard(c){
     <span class="chev">›</span></div></div>`;
 }
 function setHistFilter(f){ _histFilter=f; _histMore=false; renderHistorial(); }
+// ── Resumen de lo que volvió hoy a Mikra (para mandar por WhatsApp) ──
+// Por cada paquete: zona, nº de caso, valor y si hay que reembolsarlo (solo si antes se había descontado).
+function _recibidosHoy(){
+  const hoy=new Date(), out=[];
+  _reclamosMap.forEach(r=>{ const d=_parseFechaFlexible(r.fechaRecibido); if(d&&esMismoDia(d,hoy)) out.push({r,ts:d.getTime()}); });
+  return out.sort((a,b)=>a.ts-b.ts).map(x=>{
+    const r=x.r, desc=!!r.fechaDescontado, reemb=desc&&r.estado==='cerrado';
+    return { id:String(r.id||''), zona:r.zona||r.comprador||'—', valor:Number(r.valor)||0,
+      tipo:r.tipo==='cambio'?'Cambio':r.tipo==='driver_devolver'?'Cancelado':r.tipo==='entrega'?'Entrega':'Demorado',
+      est: reemb?'ya':(desc?'reemb':'no') };   // reemb = hay que reembolsar · ya = ya reembolsado · no = nunca se descontó
+  });
+}
+function _recibidosTexto(L){
+  const hoy=new Date(), fm=v=>'$'+fmtMoney(v).replace(/^\$/,'');
+  const ER={reemb:'💵 REEMBOLSAR', ya:'✅ ya reembolsado', no:'— no se había descontado'};
+  let t=`📥 *Recibidos en Mikra · ${DIAS_CORTO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1}*\n${L.length} paquete${L.length>1?'s':''}\n\n`;
+  L.forEach(x=>{ t+=`${x.id} · ${x.zona} · ${fm(x.valor)}\n   ${ER[x.est]}\n`; });
+  const re=L.filter(x=>x.est==='reemb');
+  t+=`\n*A reembolsar: ${re.length}${re.length?' · '+fm(re.reduce((s,x)=>s+x.valor,0)):''}*`;
+  return t;
+}
+function _recibidosImagen(L){
+  const W=1080, P=56, RH=112, HEAD=250, FOOT=170, H=HEAD+L.length*RH+FOOT, sc=1;
+  const c=document.createElement('canvas'); c.width=W*sc; c.height=H*sc; const g=c.getContext('2d'); g.scale(sc,sc);
+  const F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fm=v=>'$'+fmtMoney(v).replace(/^\$/,'');
+  const cut=(t,max)=>{ if(g.measureText(t).width<=max) return t; while(t.length>1&&g.measureText(t+'…').width>max) t=t.slice(0,-1); return t+'…'; };
+  const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
+  g.fillStyle='#0f1420'; g.fillRect(0,0,W,H);
+  const hoy=new Date();
+  g.fillStyle='#ffffff'; g.font=`800 54px ${F}`; g.fillText('Recibidos en Mikra',P,100);
+  g.fillStyle='#93a0b8'; g.font=`600 34px ${F}`; g.fillText(`${DIAS_LARGO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1} · ${L.length} paquete${L.length>1?'s':''}`,P,156);
+  g.fillStyle='#283247'; g.fillRect(P,HEAD-40,W-2*P,2);
+  const EST={reemb:['REEMBOLSAR','#ef4444','#3a1d22'], ya:['YA REEMBOLSADO','#22c55e','#163222'], no:['NO SE DESCONTÓ','#93a0b8','#222b3b']};
+  L.forEach((x,i)=>{
+    const y=HEAD+i*RH;
+    if(i%2===0) pill(P-16,y-6,W-2*P+32,RH-8,18,'#151c2b');
+    const e=EST[x.est];
+    g.font=`800 34px ${F}`; g.fillStyle='#7aa2ff'; g.fillText(x.id,P,y+44);
+    g.font=`700 34px ${F}`; g.fillStyle='#ffffff'; g.fillText(cut(x.zona,500),P+130,y+44);
+    g.font=`600 28px ${F}`; g.fillStyle='#93a0b8'; g.fillText(x.tipo,P+130,y+86);
+    g.font=`800 36px ${F}`; g.fillStyle=x.est==='reemb'?'#ffffff':'#93a0b8'; g.textAlign='right'; g.fillText(fm(x.valor),W-P,y+44);
+    g.font=`800 24px ${F}`; const tw=g.measureText(e[0]).width+32; pill(W-P-tw,y+60,tw,40,20,e[2]); g.fillStyle=e[1]; g.fillText(e[0],W-P-16,y+88); g.textAlign='left';
+  });
+  const re=L.filter(x=>x.est==='reemb'), yF=HEAD+L.length*RH+30;
+  pill(P-16,yF,W-2*P+32,110,22,re.length?'#3a1d22':'#163222');
+  g.font=`800 40px ${F}`; g.fillStyle=re.length?'#ef4444':'#22c55e';
+  g.fillText(re.length?`A reembolsar: ${re.length}`:'Nada para reembolsar',P+10,yF+68);
+  if(re.length){ g.textAlign='right'; g.fillStyle='#ffffff'; g.fillText(fm(re.reduce((s,x)=>s+x.valor,0)),W-P-10,yF+68); g.textAlign='left'; }
+  return new Promise(res=>c.toBlob(res,'image/png'));
+}
+async function compartirRecibidos(){
+  const L=_recibidosHoy(); if(!L.length){ toast('Hoy no se recibió nada'); return; }
+  const txt=_recibidosTexto(L);
+  let blob=null; try{ blob=await _recibidosImagen(L); }catch(e){}
+  const hoy=new Date(), nombre=`recibidos-${hoy.getDate()}-${hoy.getMonth()+1}.png`;
+  const file=blob?new File([blob],nombre,{type:'image/png'}):null;
+  try{
+    if(file&&navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file], text:txt}); return; }
+    if(navigator.share){ await navigator.share({text:txt}); return; }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  // Sin "compartir" (PC): baja la imagen y copia el texto
+  if(blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+  try{ await navigator.clipboard.writeText(txt); toast('🖼️ Imagen descargada · texto copiado'); }catch(e){ toast('🖼️ Imagen descargada'); }
+}
 function renderHistorial(){
   const cont=document.getElementById('v-hist'); const hoy=new Date();
   const allEvs=feedEventos();
@@ -1966,6 +2030,8 @@ function renderHistorial(){
   if(!visFilters.some(([k])=>k===_histFilter)) _histFilter='todos';
   let evs=evsInWin.filter(ev=>_histFilter==='todos'?true:_histFilter==='hoy'?esMismoDia(new Date(ev.ts),hoy):ev.tipo===_histFilter);
   let html='<div class="filt">'+visFilters.map(([k,l])=>`<div class="fchip ${_histFilter===k?'on':''}" onclick="setHistFilter('${k}')">${l}</div>`).join('')+'</div>';
+  const nRec=_recibidosHoy().length;
+  if(nRec) html+=`<button class="newbtn" style="margin:0 0 12px" onclick="compartirRecibidos()">📤 Compartir lo recibido hoy (${nRec})</button>`;
   const clusters=feedClusters(evs);
   if(!clusters.length){ cont.innerHTML=html+'<div class="empty">Sin movimientos en este filtro.</div>'; return; }
   html+=clusters.map(feedCard).join('');
@@ -2352,10 +2418,14 @@ async function _ncBuscarCore(){
   const _valorTotal = _allOrd.reduce((s,x)=>s+(Number(x.total_amount)||0),0);
   const _pre={ shippingId:String(sh.id), orderId:String(o.id||sh.order_id||''), comprador:(o.buyer&&o.buyer.nickname)||'', cuenta, zona:zonaDe(sh), dir:calleDe(sh), valor:_valorTotal };
   const exist=_reclamosMap.get(String(sh.id));
+  // Qué artículo es (para chequear el paquete antes de darlo por recibido)
+  const pedBox=_pedidoHTML(sh,_allOrd)||'';
+  if(pedBox) setTimeout(()=>{ _pedidoRefreshIfLate(); },0);
   if(exist && esActivo(exist)){   // ya hay un caso abierto para este envío → ofrecer recibirlo
     const v=vistaReclamo(exist); const tt=exist.tipo==='cambio'?'Cambio':exist.tipo==='entrega'?'Entrega':exist.tipo==='driver_devolver'?'Cancelación':'Demorado';
     done.innerHTML=`<div class="found" style="border-color:color-mix(in srgb,var(--pend) 40%,transparent)"><div class="found-h" style="color:var(--pend)">⚠️ Este envío ya tiene un caso abierto</div>
       <div class="found-r"><span>${esc(exist.id)} · ${tt}</span><b>${v.st[0]}</b></div>${exist.notas?`<div class="found-r"><span>Detalle</span><b>${esc(exist.notas)}</b></div>`:''}</div>
+      ${pedBox}
       ${ROL==='owner'
         ? (exist.tipo==='entrega'
             ? `<button class="save" onclick="closeSheet('newcase');accion('${esc(String(sh.id))}','cerrado','Entrega confirmada')">✅ Confirmar entrega</button>`
@@ -2379,6 +2449,7 @@ async function _ncBuscarCore(){
       done.innerHTML=`<div class="found" style="border-color:color-mix(in srgb,var(--ok) 45%,transparent)"><div class="found-h" style="color:var(--ok)">💵 Este paquete se había descontado${fdTxt} · volvió</div>
         <div class="found-r"><span>${esc(exist.id)} · ${tt}</span><b>${vistaReclamo(exist).st[0]}</b></div>
         <div class="found-r"><span>Qué hacer</span><b>Marcalo como recibido → pasa a "Reembolsar"</b></div></div>
+        ${pedBox}
         ${ROL==='owner'
           ? `<button class="save" onclick="closeSheet('newcase');accion('${sidE}','recibido','Volvió a Mikra · a reembolsar')">📥 Volvió a Mikra (reembolsar)</button>`
           : `<button class="save" onclick="closeSheet('newcase');accion('${sidE}','en_deposito','Recibido en logística')">📥 Recibí en logística</button>`}
@@ -2386,6 +2457,7 @@ async function _ncBuscarCore(){
     } else {
       done.innerHTML=`<div class="found"><div class="found-h">ℹ️ Este envío ya tuvo un caso y está resuelto</div>
         <div class="found-r"><span>${esc(exist.id)} · ${tt}</span><b>${vistaReclamo(exist).st[0]}</b></div></div>
+        ${pedBox}
         ${ROL==='owner'?`<button class="save" onclick="closeSheet('newcase');reabrir('${sidE}')">↩️ Reabrir este caso</button>`:''}
         ${verBtn}`;
     }
