@@ -252,6 +252,14 @@
   .selbox{width:22px;height:22px;border-radius:6px;border:2px solid var(--ink-3);display:grid;place-items:center;flex:0 0 auto;font-size:13px;font-weight:800;color:#fff}
   .selbox.on{background:var(--accent);border-color:var(--accent)}
   .pk.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+  .pk{position:relative}
+  .rec-ck{position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:900;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.4);pointer-events:none}
+  #recBar{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:30;width:calc(100% - 24px);max-width:496px;display:flex;align-items:center;gap:8px;padding:10px 10px 10px 16px;border-radius:16px;background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:var(--raise);box-sizing:border-box}
+  body.rec-on .app{padding-bottom:84px}
+  #recBar .rb-n{flex:1;font-weight:850;font-size:15px;color:var(--accent)}
+  #recBar button{border:0;border-radius:11px;font:inherit;font-weight:850;cursor:pointer}
+  #recBar .rb-x{background:var(--surface-2);color:var(--ink-2);padding:10px 13px;font-size:15px}
+  #recBar .rb-go{background:var(--accent);color:#fff;padding:10px 15px;font-size:14.5px}
   .selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:12px;font-size:12.5px;font-weight:700}
   .selbar span{color:var(--ink-2)}
   .selbar button{font-size:12px;font-weight:800;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap}
@@ -1298,7 +1306,7 @@ function renderReprog(){
     g.items.forEach(i=>html+=_reprogCard(i));
   });
   cont.innerHTML=html;
-  bindLongPress();
+  bindLongPress(); _recPintar();
 }
 function _reprogCard(i){
   const sh=i.shipping, o=i.order;
@@ -1318,7 +1326,7 @@ function _reprogCard(i){
   else if(sub==='delivery_failed') motivo='INTENTO FALLIDO';
   else if(sub.includes('return')) motivo='EN DEVOLUCIÓN';
   else if(sub.includes('reschedul')||sub.includes('buyer')) motivo='REPROGRAMADO';
-  return `<div class="pk s-log" data-sid="${sid}"><div class="pk-row" onclick="tgCard(this)">
+  return `<div class="pk s-log${_recSel.has(sid)?' sel':''}" data-sid="${sid}" data-rec="1"><div class="pk-row" onclick="tgCard(this)" ondblclick="recDbl('${sid}',event)">
     <span class="pk-ic pk-ic-sm ic-log">🔄</span>
     <div class="pk-main"><div class="pk-zona"><span class="z">${esc(zona)}</span></div>
       <div class="pk-sub">📍 <span class="calle">${esc(calle)}</span></div></div>
@@ -1439,7 +1447,7 @@ function _renderTarDetalle(cont,G){
   });
   else html+=items.map(it=>x.card(it)).join('');
   cont.innerHTML=html;
-  bindLongPress();
+  bindLongPress(); _recPintar();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1529,7 +1537,7 @@ function renderHoy(){
     arr.forEach(i=>html+=hoyCard(i));
   });
   cont.innerHTML=html;
-  bindLongPress();
+  bindLongPress(); _recPintar();
 }
 // Cambios/entregas pendientes que se coordinan (aparecen en Hoy para seguirlos)
 // Sección plegable: arranca cerrada (solo el resumen) y recuerda si la abriste.
@@ -1637,7 +1645,7 @@ function hoyCard(i){
   const cuentaBadge=cn?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:10px;white-space:nowrap;background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
   const oid=(o.pack_id||o.id)?String(o.pack_id||o.id):'';   // pack → la venta en ML es el pack
   const ordenLine=oid?`<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(oid)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(oid)}</a> ${cuentaBadge}</div>`:(cuentaBadge?`<div class="info">${cuentaBadge}</div>`:'');
-  return `<div class="pk ${stt[2]}" data-sid="${sid}"><div class="pk-row" onclick="tgCard(this)">
+  return `<div class="pk ${stt[2]}${_recSel.has(sid)?' sel':''}" data-sid="${sid}" data-rec="1"><div class="pk-row" onclick="tgCard(this)" ondblclick="recDbl('${sid}',event)">
     <span class="pk-ic ${ic[1]}">${ic[0]}</span>
     <div class="pk-main"><div class="pk-zona"><span class="z">${esc(barrio)}</span></div>
       <div class="pk-sub">📍 <span class="calle">${esc(calle)}</span></div></div>
@@ -2096,17 +2104,19 @@ function _recibidosImagen(L){
 }
 async function compartirRecibidos(){
   const L=_recibidosHoy(); if(!L.length){ toast('Hoy no se recibió nada'); return; }
-  const txt=_recibidosTexto(L);
   let blob=null; try{ blob=await _recibidosImagen(L); }catch(e){}
-  const hoy=new Date(), nombre=`recibidos-${hoy.getDate()}-${hoy.getMonth()+1}.png`;
-  const file=blob?new File([blob],nombre,{type:'image/png'}):null;
-  try{
-    if(file&&navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file], text:txt}); return; }
-    if(navigator.share){ await navigator.share({text:txt}); return; }
-  }catch(e){ if(e&&e.name==='AbortError') return; }
-  // Sin "compartir" (PC): baja la imagen y copia el texto
-  if(blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
-  try{ await navigator.clipboard.writeText(txt); toast('🖼️ Imagen descargada · texto copiado'); }catch(e){ toast('🖼️ Imagen descargada'); }
+  if(!blob){ toast('No se pudo armar la imagen'); return; }
+  const hoy=new Date(); await _compartirImagen(blob,`recibidos-${hoy.getDate()}-${hoy.getMonth()+1}.png`);
+}
+// Comparte SOLO la imagen (sin texto). En la PC: la copia al portapapeles (para pegar en WhatsApp Web) y la descarga.
+async function _compartirImagen(blob,nombre){
+  const file=new File([blob],nombre,{type:'image/png'});
+  try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); return true; } }
+  catch(e){ if(e&&e.name==='AbortError') return false; }
+  let copiada=false; try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); copiada=true; } }catch(e){}
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast(copiada?'🖼️ Imagen copiada (pegala con Ctrl+V) y descargada':'🖼️ Imagen descargada');
+  return true;
 }
 function renderHistorial(){
   const cont=document.getElementById('v-hist'); const hoy=new Date();
@@ -2136,7 +2146,81 @@ function renderHistorial(){
    INTERACCIONES tarjetas
 ══════════════════════════════════════════════════════════════════ */
 let _lp=false;
-function tgCard(row){ if(_lp)return; row.parentElement.classList.toggle('open'); }
+function tgCard(row){
+  if(_lp)return;
+  const pk=row.parentElement;
+  if(_recSel.size&&pk.dataset.rec){ recToggle(pk.dataset.sid); return; }   // en modo reclamo, tocar = (des)marcar
+  pk.classList.toggle('open');
+}
+// ── RECLAMAR ENVÍOS ── doble toque en un envío (Hoy / Reprogramados / Tareas) lo marca; con uno marcado,
+// tocar otros los suma. La barra de abajo arma una imagen cortita (zona, dirección, estado) para mandar.
+const _recSel=new Set();
+function recDbl(sid,ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  sid=String(sid);
+  document.querySelectorAll('.pk[data-sid="'+sid+'"]').forEach(pk=>pk.classList.remove('open'));   // el 1er toque la abrió: cerrarla
+  if(!_recSel.has(sid)) _recSel.add(sid); else _recSel.delete(sid);
+  if(navigator.vibrate) navigator.vibrate(15);
+  _recPintar();
+}
+function recToggle(sid){ sid=String(sid); if(_recSel.has(sid)) _recSel.delete(sid); else _recSel.add(sid); _recPintar(); }
+function recSalir(){ _recSel.clear(); _recPintar(); }
+function _recPintar(){
+  document.querySelectorAll('.pk[data-rec]').forEach(pk=>{
+    const on=_recSel.has(pk.dataset.sid); pk.classList.toggle('sel',on);
+    let ck=pk.querySelector('.rec-ck'); if(on&&!ck){ ck=document.createElement('span'); ck.className='rec-ck'; ck.textContent='✓'; pk.appendChild(ck); } if(!on&&ck) ck.remove();
+  });
+  document.body.classList.toggle('rec-on',_recSel.size>0);
+  let bar=document.getElementById('recBar');
+  if(!_recSel.size){ if(bar) bar.remove(); return; }
+  if(!bar){ bar=document.createElement('div'); bar.id='recBar'; document.body.appendChild(bar); }
+  const n=_recSel.size;
+  bar.innerHTML=`<span class="rb-n">${n} envío${n>1?'s':''}</span><button class="rb-x" onclick="recSalir()">✕</button><button class="rb-go" onclick="compartirReclamo()">📤 Reclamar · imagen</button>`;
+}
+function _envioDe(sid){ const e=_shipById.get(String(sid)); return e?{shipping:e.shipping, order:(e.orders||[])[0]||{}}:null; }
+// Estado cortito para el reclamo
+function _estadoReclamo(sh){
+  const st=getOrderState(sh), sub=(sh.substatus||'').toLowerCase(), h=sh.status_history||{};
+  if(st==='reprogramado'){
+    if(sub.includes('buyer')) return ['REPROGRAMADO POR COMPRADOR','#f4b53c','#3a3017'];
+    if(sub==='receiver_absent'||(h.date_first_visit&&!h.date_delivered)) return ['COMPRADOR AUSENTE','#fb923c','#3a2a17'];
+    if(sub==='delayed') return ['DEMORADO','#fb923c','#3a2a17'];
+    return ['REPROGRAMADO','#fb923c','#3a2a17'];
+  }
+  if(st==='en-camino') return [_esSinEntregar(sh)?'EN CAMINO · NO SE ENTREGÓ':'EN CAMINO','#38bdf8','#15303d'];
+  const t=(HOY_STATE[st]||[st.toUpperCase()])[0];
+  return [t, st==='entregado'?'#43c96a':st==='cancelado'?'#f4626b':'#a3b0c2', st==='entregado'?'#163222':st==='cancelado'?'#3a1d22':'#222b3b'];
+}
+function _recImagen(L){
+  const W=1080, P=56, RH=166, HEAD=210, FOOT=40, H=HEAD+L.length*RH+FOOT;
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  const F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  const cut=(t,max)=>{ t=String(t||''); if(g.measureText(t).width<=max) return t; while(t.length>1&&g.measureText(t+'…').width>max) t=t.slice(0,-1); return t+'…'; };
+  const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
+  const p2=n=>String(n).padStart(2,'0'), fd=d=>{ const x=new Date(d); return isNaN(x)?'':`${DIAS_CORTO[x.getDay()].toLowerCase()} ${x.getDate()}/${x.getMonth()+1} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
+  g.fillStyle='#0f1420'; g.fillRect(0,0,W,H);
+  const hoy=new Date();
+  g.fillStyle='#ffffff'; g.font=`800 52px ${F}`; g.fillText(L.length>1?'Envíos para revisar':'Envío para revisar',P,94);
+  g.fillStyle='#93a0b8'; g.font=`600 32px ${F}`; g.fillText(`${DIAS_LARGO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1} · ${L.length} envío${L.length>1?'s':''}`,P,146);
+  L.forEach((x,i)=>{
+    const sh=x.shipping, y=HEAD+i*RH, e=_estadoReclamo(sh), h=sh.status_history||{};
+    pill(P-16,y-10,W-2*P+32,RH-14,20,'#151c2b');
+    g.font=`800 38px ${F}`; g.fillStyle='#ffffff'; g.fillText(cut(sh._zona||zonaDe(sh),W-2*P-20),P,y+38);
+    g.font=`600 32px ${F}`; g.fillStyle='#c9d3e3'; g.fillText(cut('📍 '+calleDe(sh),W-2*P-20),P,y+82);
+    g.font=`800 24px ${F}`; const tw=g.measureText(e[0]).width+32; pill(P,y+98,tw,38,19,e[2]); g.fillStyle=e[1]; g.fillText(e[0],P+16,y+125);
+    const det=h.date_first_visit&&!h.date_delivered?'visita '+fd(h.date_first_visit):(h.date_shipped?'salió '+fd(h.date_shipped):'');
+    if(det){ g.font=`600 24px ${F}`; g.fillStyle='#7d8ca1'; g.fillText(cut(det,W-2*P-tw-40),P+tw+18,y+125); }
+  });
+  return new Promise(res=>c.toBlob(res,'image/png'));
+}
+async function compartirReclamo(){
+  const L=[..._recSel].map(_envioDe).filter(Boolean).map(x=>{ x.shipping._zona=x.shipping._zona||zonaDe(x.shipping); return x; });
+  if(!L.length){ toast('No hay envíos marcados'); return; }
+  let blob=null; try{ blob=await _recImagen(L); }catch(e){}
+  if(!blob){ toast('No se pudo armar la imagen'); return; }
+  const hoy=new Date();
+  if(await _compartirImagen(blob,`reclamo-${hoy.getDate()}-${hoy.getMonth()+1}.png`)) recSalir();
+}
 function tgo(b){ const a=b.nextElementSibling; const on=a.classList.toggle('show'); b.innerHTML = on?'<span>⋯</span> Ocultar':'<span>⋯</span> Más opciones'; }
 function bindLongPress(){
   document.querySelectorAll('.pk-row').forEach(row=>{
