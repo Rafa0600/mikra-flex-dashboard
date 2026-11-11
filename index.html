@@ -579,9 +579,12 @@ function _horaAR(dateStr){ if(!dateStr)return null; try{ return Number(_fmtHoraA
 const REPUTACION_HORA_LIMITE = 21;
 function afectaReputacion(shipping){
   const h=shipping?.status_history||{}, st=(shipping?.status||'').toLowerCase(), sub=(shipping?.substatus||'').toLowerCase();
+  // Lo que dice ML en la página de la venta (lo trae el userscript de choferes) es la palabra final
+  const ch=_chofer(shipping);
+  if(ch&&ch.avisoSub){ if(/afect[oó] tu reputaci/i.test(ch.avisoSub)) return true; if(/no va a afectar/i.test(ch.avisoSub)) return false; }
   if(h.date_delivered||st==='cancelled')return false;
   if(sub.includes('buyer')||_avisoEntrega(shipping))return false;
-  if(!h.date_first_visit)return false;
+  if(!h.date_first_visit) return _esSinEntregar(shipping);   // nunca lo visitaron y ya pasó el día: la demora afecta
   const hora=_horaAR(h.date_first_visit);
   return hora!==null&&hora>=REPUTACION_HORA_LIMITE;
 }
@@ -787,8 +790,12 @@ async function fetchSnapshot(days=14){
   if(!r.ok) throw new Error('HTTP '+r.status);
   return r.json();
 }
+// Transportista + aviso oficial de ML por envío: {sid:{chofer, aviso, avisoSub, eventos:[{l,tipo,reg:[]}]}}
+let _choferes={};
+async function _traerChoferes(){ try{ const r=await fetch(GAS_RECLAMOS+'?action=get_choferes&dias=21',{signal:_withTimeout(9000)}); const d=r.ok?await r.json():null; if(d&&d.choferes) _choferes=d.choferes; }catch(e){} }
+function _chofer(sh){ return sh&&_choferes[String(sh.id)]||null; }
 async function fetchReclamos(){
-  const d=await _gasReclamo({action:'get_reclamos'});
+  const [d]=await Promise.all([_gasReclamo({action:'get_reclamos'}), _traerChoferes()]);
   _reclamosMap=new Map();
   (d&&d.records||[]).forEach(r=>{ if(r.shippingId) _reclamosMap.set(String(r.shippingId),r); });
   return _reclamosMap;
@@ -1335,6 +1342,8 @@ function _reprogCard(i){
     <div class="pk-det">
       <div class="info" style="cursor:pointer" onclick="verEnMapa('${sid}')">📍 <span class="addr">${esc(calle)}</span>, ${esc(zona)} <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>
       <div class="info">👤 ${esc(comprador)} ${cuentaBadge}</div>
+      ${_chofer(sh)&&_chofer(sh).chofer?`<div class="info">🏍️ ${esc(_chofer(sh).chofer)}</div>`:''}
+      ${afectaReputacion(sh)?'<div class="info" style="color:var(--devolver);font-weight:800">⚠️ Afectó la reputación</div>':''}
       ${_miniTimeline(sh)}
       <div class="pk-btns">
         <button class="abtn ab-blue" onclick="verTimeline('${sid}')">🔍 Historial</button>
@@ -1640,7 +1649,7 @@ function hoyCard(i){
   const calle=calleDe(sh);
   const comprador=(o.buyer&&o.buyer.nickname)||'—';
   const sid=String(sh.id);
-  const rep=(sh._problems&&sh._problems[0]) ? (sh._problems[0].reputationAffected?'<span class="loc" style="background:color-mix(in srgb,var(--devolver) 15%,transparent);color:var(--devolver)">⚠️ reput.</span>':'') : '';
+  const rep=afectaReputacion(sh)?'<span class="loc" style="background:color-mix(in srgb,var(--devolver) 15%,transparent);color:var(--devolver)">⚠️ reput.</span>':'';
   const cn=i.cuentaNombre||'';
   const cuentaBadge=cn?`<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:10px;white-space:nowrap;background:${cn==='Mikra'?'color-mix(in srgb,var(--desc) 18%,transparent)':'color-mix(in srgb,var(--logistica) 18%,transparent)'};color:${cn==='Mikra'?'var(--desc)':'var(--logistica)'}">${esc(cn)}</span>`:'';
   const oid=(o.pack_id||o.id)?String(o.pack_id||o.id):'';   // pack → la venta en ML es el pack
@@ -1654,6 +1663,7 @@ function hoyCard(i){
       <div class="info" style="cursor:pointer" onclick="verEnMapa('${sid}')">📍 <span class="addr">${esc(calle)}</span>, ${esc(sh._zona)} <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>
       ${ordenLine}
       <div class="info">👤 ${esc(comprador)} ${rep}</div>
+      ${_chofer(sh)&&_chofer(sh).chofer?`<div class="info">🏍️ ${esc(_chofer(sh).chofer)}</div>`:''}
       ${_miniTimeline(sh)}
       <button class="moreb" onclick="tgo(this)"><span>⋯</span> Más opciones</button>
       <div class="pk-acts">
@@ -2191,25 +2201,55 @@ function _estadoReclamo(sh){
   const t=(HOY_STATE[st]||[st.toUpperCase()])[0];
   return [t, st==='entregado'?'#43c96a':st==='cancelado'?'#f4626b':'#a3b0c2', st==='entregado'?'#163222':st==='cancelado'?'#3a1d22':'#222b3b'];
 }
+// Cronología corta del envío: [[cuándo, qué]]. Usa lo que muestra ML en la venta (con "muy cerca", etc.);
+// si no está, la arma con los datos del envío.
+function _recCrono(sh){
+  const ch=_chofer(sh), out=[];
+  if(ch&&ch.eventos&&ch.eventos.length){
+    ch.eventos.forEach(e=>(e.reg||[]).forEach(t=>{ const m=String(t).split(' | '); out.push([m.length>1?m[0]:'', (m.length>1?m[1]:m[0]).replace(/\.\s*$/,'')]); }));
+    if(out.length) return out;
+  }
+  const p2=n=>String(n).padStart(2,'0');
+  _tlEventsML(sh).forEach(ev=>{ const l=_stripEmoji(ev.label).replace(/\s*·\s*⚠️.*$/,''); if(/orden creada|impreso/i.test(l)) return;
+    const x=new Date(ev.date); out.push([isNaN(x)?'':`${DIAS_CORTO[x.getDay()].toLowerCase()} ${x.getDate()}/${x.getMonth()+1} ${p2(x.getHours())}:${p2(x.getMinutes())}`, l]); });
+  return out;
+}
 function _recImagen(L){
-  const W=1080, P=56, RH=166, HEAD=210, FOOT=40, H=HEAD+L.length*RH+FOOT;
+  const W=1080, P=56, HEAD=210, FOOT=40, F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  // alto de cada tarjeta según lo que lleva
+  const filas=L.map(x=>{ const sh=x.shipping, ch=_chofer(sh); return { sh, e:_estadoReclamo(sh), af:afectaReputacion(sh), chofer:ch&&ch.chofer||'', crono:_recCrono(sh) }; });
+  filas.forEach(f=>{ f.h=36+46+50+(f.chofer?46:0)+(f.crono.length?14+f.crono.length*38:0)+26; });
+  const H=HEAD+filas.reduce((s,f)=>s+f.h+18,0)+FOOT;
   const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
-  const F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
   const cut=(t,max)=>{ t=String(t||''); if(g.measureText(t).width<=max) return t; while(t.length>1&&g.measureText(t+'…').width>max) t=t.slice(0,-1); return t+'…'; };
   const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
-  const p2=n=>String(n).padStart(2,'0'), fd=d=>{ const x=new Date(d); return isNaN(x)?'':`${DIAS_CORTO[x.getDay()].toLowerCase()} ${x.getDate()}/${x.getMonth()+1} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
   g.fillStyle='#0f1420'; g.fillRect(0,0,W,H);
   const hoy=new Date();
   g.fillStyle='#ffffff'; g.font=`800 52px ${F}`; g.fillText(L.length>1?'Envíos para revisar':'Envío para revisar',P,94);
   g.fillStyle='#93a0b8'; g.font=`600 32px ${F}`; g.fillText(`${DIAS_LARGO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1} · ${L.length} envío${L.length>1?'s':''}`,P,146);
-  L.forEach((x,i)=>{
-    const sh=x.shipping, y=HEAD+i*RH, e=_estadoReclamo(sh), h=sh.status_history||{};
-    pill(P-16,y-10,W-2*P+32,RH-14,20,'#151c2b');
-    g.font=`800 38px ${F}`; g.fillStyle='#ffffff'; g.fillText(cut(sh._zona||zonaDe(sh),W-2*P-20),P,y+38);
-    g.font=`600 32px ${F}`; g.fillStyle='#c9d3e3'; g.fillText(cut('📍 '+calleDe(sh),W-2*P-20),P,y+82);
-    g.font=`800 24px ${F}`; const tw=g.measureText(e[0]).width+32; pill(P,y+98,tw,38,19,e[2]); g.fillStyle=e[1]; g.fillText(e[0],P+16,y+125);
-    const det=h.date_first_visit&&!h.date_delivered?'visita '+fd(h.date_first_visit):(h.date_shipped?'salió '+fd(h.date_shipped):'');
-    if(det){ g.font=`600 24px ${F}`; g.fillStyle='#7d8ca1'; g.fillText(cut(det,W-2*P-tw-40),P+tw+18,y+125); }
+  let y=HEAD;
+  filas.forEach(f=>{
+    const sh=f.sh, x0=P-16, w0=W-2*P+32;
+    if(f.af){ pill(x0-3,y-13,w0+6,f.h+6,23,'#ef4444'); }       // borde rojo si afectó la reputación
+    pill(x0,y-10,w0,f.h,20,f.af?'#2a1519':'#151c2b');
+    let yy=y+30;
+    g.font=`800 38px ${F}`; g.fillStyle='#ffffff'; g.fillText(cut(sh._zona||zonaDe(sh),W-2*P-20),P,yy); yy+=46;
+    g.font=`600 32px ${F}`; g.fillStyle='#c9d3e3'; g.fillText(cut('📍 '+calleDe(sh),W-2*P-20),P,yy); yy+=18;
+    g.font=`800 24px ${F}`; let px=P; const tw=g.measureText(f.e[0]).width+32; pill(px,yy,tw,38,19,f.e[2]); g.fillStyle=f.e[1]; g.fillText(f.e[0],px+16,yy+27); px+=tw+12;
+    if(f.af){ const t='⚠️ AFECTÓ LA REPUTACIÓN'; const w2=g.measureText(t).width+32; pill(px,yy,w2,38,19,'#ef4444'); g.fillStyle='#ffffff'; g.fillText(t,px+16,yy+27); }
+    yy+=38;
+    if(f.chofer){ yy+=40; g.font=`700 30px ${F}`; g.fillStyle='#e6edf3'; g.fillText(cut('🏍️ Transportista: '+f.chofer,W-2*P-20),P,yy); }
+    if(f.crono.length){
+      yy+=14;
+      f.crono.forEach((ev,k)=>{
+        yy+=38; const malo=/ausente|no se pudo|fallid|demor|reprogram|devoluci/i.test(ev[1]);
+        g.fillStyle=malo?'#f87171':(k===f.crono.length-1?'#38bdf8':'#93a0b8'); g.beginPath(); g.arc(P+8,yy-9,7,0,Math.PI*2); g.fill();
+        if(k<f.crono.length-1){ g.fillStyle='#2a3340'; g.fillRect(P+6,yy-1,4,30); }
+        g.font=`600 26px ${F}`; g.fillStyle='#7d8ca1'; g.fillText(ev[0],P+30,yy);
+        g.font=`${malo?'800':'600'} 27px ${F}`; g.fillStyle=malo?'#fca5a5':'#e6edf3'; g.fillText(cut(ev[1],W-2*P-250),P+250,yy);
+      });
+    }
+    y+=f.h+18;
   });
   return new Promise(res=>c.toBlob(res,'image/png'));
 }
@@ -2263,8 +2303,12 @@ function verTimeline(sid){
   let repHtml=''; const evs=[]; const _p2=n=>String(n).padStart(2,'0');
   if(sh){
     sh._state=sh._state||getOrderState(sh); enrichShippingData(sh);
-    if(sh.status_history&&sh.status_history.date_first_visit&&!sh.status_history.date_delivered&&!(sh.substatus||'').toLowerCase().includes('buyer')&&!_avisoEntrega(sh)){
-      const af=afectaReputacion(sh); repHtml=`<div class="tl-rep ${af?'rep-bad':'rep-ok'}">${af?'⚠️ Afectó reputación · 1ª visita después de las 21:00':'✓ No afectó reputación'}</div>`; }
+    const _ch=_chofer(sh), _h=sh.status_history||{};
+    if((_h.date_first_visit||_esSinEntregar(sh)||(_ch&&_ch.avisoSub))&&!_h.date_delivered&&!(sh.substatus||'').toLowerCase().includes('buyer')&&!_avisoEntrega(sh)){
+      const af=afectaReputacion(sh);
+      const por=(_ch&&_ch.avisoSub)?'según ML':(_h.date_first_visit?'1ª visita después de las 21:00':'demora: no se entregó a tiempo');
+      repHtml=`<div class="tl-rep ${af?'rep-bad':'rep-ok'}">${af?'⚠️ Afectó reputación · '+por:'✓ No afectó reputación'}</div>`; }
+    if(_ch&&_ch.chofer) repHtml+=`<div class="tl-rep" style="color:var(--ink-2)">🏍️ Transportista: <b>${esc(_ch.chofer)}</b></div>`;
     _tlEventsML(sh).forEach(ev=>{ const t=ev.date?new Date(ev.date).getTime():0; evs.push({ts:isNaN(t)?0:t, dtStr:ev.date?fmtDHAR(ev.date):'', label:ev.label, dot:ev.dot}); });
   }
   if(rec){
