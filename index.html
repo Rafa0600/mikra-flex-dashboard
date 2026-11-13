@@ -1025,11 +1025,13 @@ async function _completarDatosCasos(){
   if(_datosCorriendo||!_snap) return; _datosCorriendo=true;
   try{
     const casos=[]; _reclamosMap.forEach(r=>{ const sid=String(r.shippingId||''); if(!/^\d{8,}$/.test(sid)||_datosIntentados.has(sid)) return;
-      const ch=_choferes[sid]; if(!r.direccion||(!r.chofer&&ch&&ch.chofer)) casos.push(r); });
+      const ch=_choferes[sid], e=_shipById.get(sid), hc=_historiaCaso(r);
+      const histNueva=e&&_historiaML(e.shipping), histMas=histNueva&&(!hc||histNueva.ev.length>hc.ev.length);
+      if(!r.direccion||(!r.chofer&&ch&&ch.chofer)||!r.historia||histMas) casos.push(r); });
     if(!casos.length) return;
     // los que ya no están en los envíos recientes: buscarlos en lo que guardó Cloudflare (hasta 60 días)
     let viejos=null;
-    if(casos.some(r=>!r.direccion&&!_shipById.get(String(r.shippingId)))){
+    if(casos.some(r=>(!r.direccion||!r.historia)&&!_shipById.get(String(r.shippingId)))){
       try{ _snapViejoProm=_snapViejoProm||fetch(SNAPSHOT_URL+'?action=get_snapshot&days=60',{signal:_withTimeout(60000)}).then(x=>x.json());
         const d=await _snapViejoProm; viejos=new Map(); (d.envios||[]).forEach(e=>{ if(e.shipping) viejos.set(String(e.shipping.id),e.shipping); }); }catch(e){ _snapViejoProm=null; }
     }
@@ -1037,9 +1039,10 @@ async function _completarDatosCasos(){
       const sid=String(r.shippingId); _datosIntentados.add(sid);
       const e=_shipById.get(sid), sh=(e&&e.shipping)||(viejos&&viejos.get(sid));
       const dir=r.direccion?'':(sh?_dirCompleta(sh):''), ch=_choferes[sid], chofer=(!r.chofer&&ch&&ch.chofer)||'';
-      if(!dir&&!chofer) continue;
-      const res=await _gasReclamo({action:'update_reclamo', shippingId:sid, direccion:dir, chofer});
-      if(res&&res.ok){ if(dir) r.direccion=dir; if(chofer) r.chofer=chofer; }
+      let historia=''; if(sh){ const hn=_historiaML(sh), hc=_historiaCaso(r); if(hn.ev.length&&(!hc||hn.ev.length>hc.ev.length)) historia=JSON.stringify(hn); }
+      if(!dir&&!chofer&&!historia) continue;
+      const res=await _gasReclamo({action:'update_reclamo', shippingId:sid, direccion:dir, chofer, historia});
+      if(res&&res.ok){ if(dir) r.direccion=dir; if(chofer) r.chofer=chofer; if(historia) r.historia=historia; }
     }
     _lsSet(_LS_REC,[..._reclamosMap.values()]);
   }finally{ _datosCorriendo=false; }
@@ -1376,6 +1379,7 @@ function _reprogCard(i){
         <button class="abtn ab-blue" onclick="verTimeline('${sid}')">🔍 Historial</button>
         <button class="abtn ab-blue" onclick="verEtiqueta('${sid}',this)">🏷️ Etiqueta</button>
         <button class="abtn ab-grey" onclick="compartirEnvio('${sid}')">📤 Compartir</button>
+        ${ROL==='log'?`<button class="abtn ab-amber" onclick="reclamar('${sid}')">📣 Reclamar</button>`:''}
         ${(ROL==='owner'&&ventaId)?`<button class="abtn ab-green" onclick="window.open('https://vendedores.mercadolibre.com.ar/ventas/${esc(ventaId)}/detalle','_blank')">🛒 Ver venta${cn?' · '+esc(cn):''}</button>`:''}
       </div>
     </div></div>`;
@@ -1626,7 +1630,7 @@ function _ceHoyCard(r){
     <div class="pk-det">
       ${(r.notas&&ROL==='owner')?('<div class="info" style="color:var(--amber);font-weight:700">📦 '+esc(r.notas)+'</div>'):''}
       <div class="info"><span style="font-weight:800;color:var(--cambio)">${cam?'🔁 Cambio':'📬 Entrega'}</span> · ${esc(r.comprador||'—')}</div>
-      <div class="pk-btns"><button class="abtn ab-blue" onclick="verTimeline('${sid}')">🔍 Historial</button>${btn}</div>
+      <div class="pk-btns"><button class="abtn ab-blue" onclick="verTimeline('${sid}')">🔍 Historial</button>${btn}${ROL==='log'?`<button class="abtn ab-amber" onclick="reclamar('${sid}')">📣 Reclamar</button>`:''}</div>
     </div></div>`;
 }
 function _miniTimeline(sh){
@@ -1703,6 +1707,7 @@ function hoyCard(i){
         <button class="abtn ab-green" onclick="verTimeline('${sid}')">🔍 Historial</button>
         ${sh._state!=='pendiente' ? `<button class="abtn ab-blue" onclick="verEtiqueta('${sid}',this)">🏷️ Etiqueta</button>` : ''}
         <button class="abtn ab-grey" onclick="compartirEnvio('${sid}')">📤 Compartir</button>
+        ${ROL==='log'?`<button class="abtn ab-amber" onclick="reclamar('${sid}')">📣 Reclamar</button>`:''}
       </div>
     </div></div>`;
 }
@@ -1981,6 +1986,7 @@ function resolverCard(r){
   const choferLine=_chN?'<div class="info">🏍️ '+esc(_chN)+'</div>':'';
   const ordenLine = ROL==='owner'&&r.orderId ? `<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(r.orderId)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(r.orderId)}</a></div>` : '';
   let btns='<button class="abtn ab-blue" onclick="verTimeline(\''+sid+'\')">🔍 Historial</button>';
+  if(ROL==='log') btns+='<button class="abtn ab-amber" onclick="reclamar(\''+sid+'\')">📣 Reclamar</button>';
   if(ROL==='log'&&!needRefund){
     if(r.tipo==='entrega'){
       btns+='<button class="abtn ab-green" onclick="accion(\''+sid+'\',\'entregado\',\'Entrega confirmada por logística\')">✅ Confirmé entrega</button>';
@@ -2342,6 +2348,93 @@ function _recImagen(L){
   });
   return new Promise(res=>c.toBlob(res,'image/png'));
 }
+// "10 nov 19:06" (como lo escribe ML) → Date
+function _parseRegFecha(t,anio){
+  const M={ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,set:8,oct:9,nov:10,dic:11};
+  const m=String(t||'').toLowerCase().match(/(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(\d{1,2}):(\d{2})/); if(!m||M[m[2]]==null) return null;
+  const d=new Date(anio,M[m[2]],+m[1],+m[3],+m[4]); return isNaN(d)?null:d;
+}
+// Historia del envío en ML: {entrega: fecha prometida, ev:[[ts,texto],…]}. Mezcla el estado del envío
+// con lo que muestra la página de la venta (muy cerca, ausente…). Se guarda en el caso porque ML la borra al cancelar.
+function _historiaML(sh){
+  const ev=[]; const add=(ts,l)=>{ if(!ts||isNaN(ts)) return; if(ev.some(x=>Math.abs(x[0]-ts)<180000&&x[1].slice(0,8)===l.slice(0,8))) return; ev.push([ts,l]); };
+  _tlEventsML(sh).forEach(e=>add(new Date(e.date).getTime(), _stripEmoji(e.label).replace(/\s*·\s*⚠️.*$/,'').replace(/\.\s*$/,'')));
+  const h=sh.status_history||{};
+  if(h.date_cancelled) add(new Date(h.date_cancelled).getTime(),'Venta cancelada');
+  if(h.date_returned) add(new Date(h.date_returned).getTime(),'Devuelto');
+  const ch=_choferes[String(sh.id)], y=new Date(sh.date_created||Date.now()).getFullYear();
+  if(ch&&ch.eventos) ch.eventos.forEach(e=>(e.reg||[]).forEach(t=>{ const m=String(t).split(' | '); if(m.length<2) return;
+    const d=_parseRegFecha(m[0],y); if(!d) return; const l=m[1].replace(/\.\s*$/,'');
+    if(ev.some(x=>Math.abs(x[0]-d.getTime())<180000)) return; ev.push([d.getTime(),l]); }));
+  ev.sort((a,b)=>a[0]-b[0]);
+  return {entrega:_fechaPromesa(sh)||'', ev};
+}
+function _historiaCaso(r){ try{ const o=JSON.parse(r&&r.historia||''); return o&&Array.isArray(o.ev)?o:null; }catch(e){ return null; } }
+// Todo lo que hace falta para la imagen de reclamo de un envío (con o sin caso)
+function _reclamoDatos(sid){
+  sid=String(sid); const r=_reclamosMap.get(sid), e=_shipById.get(sid), sh=e&&e.shipping;
+  if(!r&&!sh) return null;
+  const hist=sh?_historiaML(sh):(_historiaCaso(r)||{entrega:'',ev:[]});
+  const ra=(sh&&sh.receiver_address)||{}, calle=sh?calleDe(sh):'';
+  const dir=(sh&&calle&&calle!=='—'&&!/\*\*/.test(calle))?[calle,(ra.comment||'').trim()].filter(Boolean).join(' · '):(r&&r.direccion||'');
+  let est;
+  if(r){ est=r.tipo==='driver_devolver'?['CANCELADO · TIENE QUE VOLVER A MIKRA','#f87171','#3a1d22']:r.tipo==='cambio'?['CAMBIO · RETIRAR Y TRAER','#a78bfa','#2a2340']:r.tipo==='entrega'?['ENTREGA AL CLIENTE','#38bdf8','#15303d']:['DEMORADO','#fbbf24','#3a3017']; }
+  else est=_estadoReclamo(sh);
+  const crono=hist.ev.map(x=>({ts:x[0],l:x[1],caso:false}));
+  if(r){ const addC=(raw,l)=>{ const d=_parseFechaFlexible(raw); if(d) crono.push({ts:d.getTime(),l,caso:true}); };
+    addC(r.fechaAlta,'Caso '+r.id+' creado'); addC(r.fechaDeposito,'Recibido en logística'); addC(r.fechaDescontado,'Descontado');
+    addC(r.fechaRecibido,'Recibido en Mikra'); addC(r.fechaEntregado,'Entregado al cliente'); }
+  crono.sort((a,b)=>a.ts-b.ts);
+  const ent=hist.entrega?new Date(hist.entrega):null;
+  return { caso:r?r.id:'', zona:sh?(sh._zona||zonaDe(sh)):(r.zona||'—'), dir, est, af:sh?afectaReputacion(sh):false,
+    chofer:(r&&r.chofer)||(_choferes[sid]&&_choferes[sid].chofer)||'', entrega:ent&&!isNaN(ent)?ent:null, crono, envio:sid };
+}
+function _reclamoImagen(d){
+  const W=1080, P=56, F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  const meas=document.createElement('canvas').getContext('2d');
+  const wrap=(t,font,max)=>{ meas.font=font; const out=[]; let line=''; String(t||'').split(/\s+/).forEach(w=>{ const tt=line?line+' '+w:w; if(meas.measureText(tt).width>max&&line){ out.push(line); line=w; } else line=tt; }); if(line) out.push(line); return out.slice(0,3); };
+  const fZona=`900 66px ${F}`, fDir=`600 34px ${F}`;
+  const zl=wrap(d.zona,fZona,W-2*P), dl=wrap('📍 '+(d.dir||'(sin dirección guardada)'),fDir,W-2*P);
+  const H=170+zl.length*74+dl.length*44+70+(d.entrega?54:0)+(d.chofer?54:0)+(d.crono.length?70+d.crono.length*44:0)+50;
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
+  const p2=n=>String(n).padStart(2,'0'), fd=ts=>{ const x=new Date(ts); return `${DIAS_CORTO[x.getDay()].toLowerCase()} ${x.getDate()}/${x.getMonth()+1} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
+  g.fillStyle=d.af?'#1a0f13':'#0f1420'; g.fillRect(0,0,W,H);
+  if(d.af){ g.fillStyle='#ef4444'; g.fillRect(0,0,W,10); }
+  const hoy=new Date();
+  g.font=`800 32px ${F}`; g.fillStyle='#fbbf24'; g.fillText('📣 RECLAMO'+(d.caso?' · CASO '+d.caso:''),P,70);
+  g.font=`600 26px ${F}`; g.fillStyle='#7d8ca1'; g.textAlign='right'; g.fillText(`${DIAS_CORTO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1} ${p2(hoy.getHours())}:${p2(hoy.getMinutes())}`,W-P,70); g.textAlign='left';
+  g.font=`600 24px ${F}`; g.fillText('Envío #'+d.envio,P,108);
+  let y=150;
+  g.font=fZona; g.fillStyle='#ffffff'; zl.forEach(l=>{ y+=66; g.fillText(l,P,y); y+=8; });
+  g.font=fDir; g.fillStyle='#d6deea'; y+=6; dl.forEach(l=>{ y+=40; g.fillText(l,P,y); y+=4; });
+  y+=22; g.font=`800 26px ${F}`; let px=P; const tw=g.measureText(d.est[0]).width+34; pill(px,y,tw,44,22,d.est[2]); g.fillStyle=d.est[1]; g.fillText(d.est[0],px+17,y+31); px+=tw+12;
+  if(d.af){ const t='⚠️ AFECTÓ LA REPUTACIÓN'; const w2=g.measureText(t).width+34; pill(px,y,w2,44,22,'#ef4444'); g.fillStyle='#fff'; g.fillText(t,px+17,y+31); }
+  y+=44;
+  if(d.entrega){ y+=50; const h0=new Date(); h0.setHours(0,0,0,0); const e0=new Date(d.entrega); e0.setHours(0,0,0,0); const dias=Math.round((h0-e0)/86400000);
+    g.font=`700 32px ${F}`; g.fillStyle=dias>0?'#fbbf24':'#93a0b8';
+    g.fillText(`📅 Debía entregarse: ${DIAS_LARGO[e0.getDay()].toLowerCase()} ${e0.getDate()}/${e0.getMonth()+1}`+(dias>0?` · hace ${dias} día${dias>1?'s':''}`:dias===0?' · hoy':''),P,y); }
+  if(d.chofer){ y+=54; g.font=`700 32px ${F}`; g.fillStyle='#e6edf3'; g.fillText('🏍️ Transportista: '+d.chofer,P,y); }
+  if(d.crono.length){
+    y+=40; g.fillStyle='#283247'; g.fillRect(P,y,W-2*P,2); y+=30;
+    g.font=`800 26px ${F}`; g.fillStyle='#93a0b8'; g.fillText('CRONOLOGÍA',P,y);
+    d.crono.forEach((ev,k)=>{
+      y+=44; const malo=!ev.caso&&/ausente|no se pudo|fallid|demor|cancel|reprogram|devoluci/i.test(ev.l);
+      const col=ev.caso?'#7aa2ff':malo?'#f87171':(/entreg/i.test(ev.l)?'#43c96a':'#93a0b8');
+      g.fillStyle=col; g.beginPath(); g.arc(P+9,y-10,8,0,Math.PI*2); g.fill();
+      if(k<d.crono.length-1){ g.fillStyle='#2a3340'; g.fillRect(P+7,y,4,34); }
+      g.font=`600 26px ${F}`; g.fillStyle='#7d8ca1'; g.fillText(fd(ev.ts),P+34,y);
+      g.font=`${malo||ev.caso?'800':'600'} 28px ${F}`; g.fillStyle=malo?'#fca5a5':ev.caso?'#a9c2ff':'#e6edf3'; g.fillText(ev.l,P+270,y);
+    });
+  }
+  return new Promise(res=>c.toBlob(res,'image/png'));
+}
+async function reclamar(sid){
+  const d=_reclamoDatos(sid); if(!d){ toast('No encontré ese envío'); return; }
+  let blob=null; try{ blob=await _reclamoImagen(d); }catch(e){}
+  if(!blob){ toast('No se pudo armar la imagen'); return; }
+  await _compartirImagen(blob,`reclamo-${(d.caso||d.envio).replace('#','')}.png`);
+}
 async function compartirReclamo(){
   const L=[..._recSel].map(_envioDe).filter(Boolean).map(x=>{ x.shipping._zona=x.shipping._zona||zonaDe(x.shipping); return x; });
   if(!L.length){ toast('No hay envíos marcados'); return; }
@@ -2399,6 +2492,12 @@ function verTimeline(sid){
       repHtml=`<div class="tl-rep ${af?'rep-bad':'rep-ok'}">${af?'⚠️ Afectó reputación · '+por:'✓ No afectó reputación'}</div>`; }
     if(_ch&&_ch.chofer) repHtml+=`<div class="tl-rep" style="color:var(--ink-2)">🏍️ Transportista: <b>${esc(_ch.chofer)}</b></div>`;
     _tlEventsML(sh).forEach(ev=>{ const t=ev.date?new Date(ev.date).getTime():0; evs.push({ts:isNaN(t)?0:t, dtStr:ev.date?fmtDHAR(ev.date):'', label:ev.label, dot:ev.dot}); });
+  } else if(rec&&_historiaCaso(rec)){
+    // el envío ya no está en los recientes (o ML lo borró al cancelar): usar la historia guardada en el caso
+    const _p=n=>String(n).padStart(2,'0');
+    _historiaCaso(rec).ev.forEach(([ts,l])=>{ const d=new Date(ts); const malo=/ausente|no se pudo|fallid|demor|cancel|reprogram/i.test(l);
+      evs.push({ts, dtStr:`${DIAS_CORTO[d.getDay()]} ${d.getDate()}/${d.getMonth()+1} ${_p(d.getHours())}:${_p(d.getMinutes())}`, label:(malo?'🚫 ':/entreg/i.test(l)?'✅ ':'🚚 ')+l, dot:malo?'c-red':/entreg/i.test(l)?'c-green':'c-blue'}); });
+    if(rec.chofer) repHtml+=`<div class="tl-rep" style="color:var(--ink-2)">🏍️ Transportista: <b>${esc(rec.chofer)}</b></div>`;
   }
   if(rec){
     const add=(raw,label,dot)=>{ if(!raw)return; const d=_parseFechaFlexible(raw); const hasTime=/\d:\d/.test(String(raw)); const dtStr=d?(`${DIAS_CORTO[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`+(hasTime?` ${_p2(d.getHours())}:${_p2(d.getMinutes())}`:'')):''; evs.push({ts:d?d.getTime():0, dtStr, label, dot}); };
@@ -2417,7 +2516,7 @@ function verTimeline(sid){
   let html=repHtml;
   // Bloque "Pedido" con imagen/nombre/color/talle — solo para dueño y con envío en snapshot
   if(ROL==='owner' && e){ html += _pedidoHTML(sh, e.orders||[]); }
-  if(!sh&&rec) html+='<div class="info" style="margin-bottom:12px">Sin datos de envío en el snapshot (caso manual o viejo).</div>';
+  if(!sh&&rec&&!_historiaCaso(rec)) html+='<div class="info" style="margin-bottom:12px">Sin datos de envío en el snapshot (caso manual o viejo).</div>';
   html += evs.length ? evs.map(ev=>{ const pre=(_ct && ev.ts && ev.ts<_ct); const dot=pre?'c-gray':ev.dot; return `<div class="utl-item" style="${pre?'opacity:.6':''}"><div class="utl-dot ${dot}"></div><div class="utl-b"><div class="utl-label"${pre?' style="color:var(--ink-3);font-weight:600"':''}>${ev.label}${pre?' <span style="font-size:10px;color:var(--ink-3)">· envío original</span>':''}</div><div class="utl-dt t-muted">${ev.dtStr}</div></div></div>`; }).join('') : '<div class="empty">Sin historial disponible.</div>';
   if(ROL==='owner' && rec && !esActivo(rec)){
     html+=`<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"><button class="abtn ab-grey" style="width:100%;text-align:center" onclick="closeSheet('timeline');reabrir('${esc(sid)}')">↩️ Reabrir caso</button></div>`;
