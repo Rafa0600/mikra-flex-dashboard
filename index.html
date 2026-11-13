@@ -2378,7 +2378,7 @@ function _reclamoDatos(sid){
   const ra=(sh&&sh.receiver_address)||{}, calle=sh?calleDe(sh):'';
   const dir=(sh&&calle&&calle!=='—'&&!/\*\*/.test(calle))?[calle,(ra.comment||'').trim()].filter(Boolean).join(' · '):(r&&r.direccion||'');
   let est;
-  if(r){ est=r.tipo==='driver_devolver'?['CANCELADO · TIENE QUE VOLVER A MIKRA','#f87171','#3a1d22']:r.tipo==='cambio'?['CAMBIO · RETIRAR Y TRAER','#a78bfa','#2a2340']:r.tipo==='entrega'?['ENTREGA AL CLIENTE','#38bdf8','#15303d']:['DEMORADO','#fbbf24','#3a3017']; }
+  if(r){ est=r.tipo==='driver_devolver'?['CANCELADO · TIENE QUE VOLVER','#f87171','#3a1d22']:r.tipo==='cambio'?['CAMBIO · RETIRAR Y TRAER','#a78bfa','#2a2340']:r.tipo==='entrega'?['ENTREGA AL CLIENTE','#38bdf8','#15303d']:['DEMORADO','#fbbf24','#3a3017']; }
   else est=_estadoReclamo(sh);
   const crono=hist.ev.map(x=>({ts:x[0],l:x[1],caso:false}));
   if(r){ const addC=(raw,l)=>{ const d=_parseFechaFlexible(raw); if(d) crono.push({ts:d.getTime(),l,caso:true}); };
@@ -2386,7 +2386,8 @@ function _reclamoDatos(sid){
     addC(r.fechaRecibido,'Recibido en Mikra'); addC(r.fechaEntregado,'Entregado al cliente'); }
   crono.sort((a,b)=>a.ts-b.ts);
   const ent=hist.entrega?new Date(hist.entrega):null;
-  return { caso:r?r.id:'', zona:sh?(sh._zona||zonaDe(sh)):(r.zona||'—'), dir, est, af:sh?afectaReputacion(sh):false,
+  const valor=r?Math.abs(Number(r.valor)||0):((e&&e.orders)||[]).reduce((t,o)=>t+(Number(o.total_amount)||0),0);
+  return { valor, descontado:!!(r&&r.fechaDescontado), caso:r?r.id:'', zona:sh?(sh._zona||zonaDe(sh)):(r.zona||'—'), dir, est, af:sh?afectaReputacion(sh):false,
     chofer:(r&&r.chofer)||(_choferes[sid]&&_choferes[sid].chofer)||'', entrega:ent&&!isNaN(ent)?ent:null, crono, envio:sid };
 }
 function _reclamoImagen(d){
@@ -2395,7 +2396,7 @@ function _reclamoImagen(d){
   const wrap=(t,font,max)=>{ meas.font=font; const out=[]; let line=''; String(t||'').split(/\s+/).forEach(w=>{ const tt=line?line+' '+w:w; if(meas.measureText(tt).width>max&&line){ out.push(line); line=w; } else line=tt; }); if(line) out.push(line); return out.slice(0,3); };
   const fZona=`900 66px ${F}`, fDir=`600 34px ${F}`;
   const zl=wrap(d.zona,fZona,W-2*P), dl=wrap('📍 '+(d.dir||'(sin dirección guardada)'),fDir,W-2*P);
-  const H=170+zl.length*74+dl.length*44+70+(d.entrega?54:0)+(d.chofer?54:0)+(d.crono.length?70+d.crono.length*44:0)+50;
+  const H=170+zl.length*74+dl.length*44+70+(d.entrega?54:0)+(d.valor?58:0)+(d.chofer?54:0)+(d.crono.length?70+d.crono.length*44:0)+50;
   const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
   const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
   const p2=n=>String(n).padStart(2,'0'), fd=ts=>{ const x=new Date(ts); return `${DIAS_CORTO[x.getDay()].toLowerCase()} ${x.getDate()}/${x.getMonth()+1} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
@@ -2414,6 +2415,10 @@ function _reclamoImagen(d){
   if(d.entrega){ y+=50; const h0=new Date(); h0.setHours(0,0,0,0); const e0=new Date(d.entrega); e0.setHours(0,0,0,0); const dias=Math.round((h0-e0)/86400000);
     g.font=`700 32px ${F}`; g.fillStyle=dias>0?'#fbbf24':'#93a0b8';
     g.fillText(`📅 Debía entregarse: ${DIAS_LARGO[e0.getDay()].toLowerCase()} ${e0.getDate()}/${e0.getMonth()+1}`+(dias>0?` · hace ${dias} día${dias>1?'s':''}`:dias===0?' · hoy':''),P,y); }
+  if(d.valor){ y+=58; const fm='$'+fmtMoney(d.valor).replace(/^\$/,'');
+    g.font=`800 36px ${F}`; g.fillStyle='#ffffff'; g.fillText('💵 Valor del paquete: '+fm,P,y);
+    const w0=g.measureText('💵 Valor del paquete: '+fm).width; g.font=`800 30px ${F}`; g.fillStyle='#f87171';
+    g.fillText(d.descontado?'· descontado -'+fm:'· se descuenta si no vuelve',P+w0+16,y); }
   if(d.chofer){ y+=54; g.font=`700 32px ${F}`; g.fillStyle='#e6edf3'; g.fillText('🏍️ Transportista: '+d.chofer,P,y); }
   if(d.crono.length){
     y+=40; g.fillStyle='#283247'; g.fillRect(P,y,W-2*P,2); y+=30;
