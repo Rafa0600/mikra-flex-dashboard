@@ -1702,12 +1702,12 @@ function hoyCard(i){
       <div class="info">👤 ${esc(comprador)} ${rep}</div>
       ${_chofer(sh)&&_chofer(sh).chofer?`<div class="info">🏍️ ${esc(_chofer(sh).chofer)}</div>`:''}
       ${_miniTimeline(sh)}
+      ${ROL==='log'&&sh._state!=='entregado'?`<div class="pk-btns"><button class="abtn ab-amber" onclick="reclamar('${sid}')">📣 Reclamar</button></div>`:''}
       <button class="moreb" onclick="tgo(this)"><span>⋯</span> Más opciones</button>
       <div class="pk-acts">
         <button class="abtn ab-green" onclick="verTimeline('${sid}')">🔍 Historial</button>
         ${sh._state!=='pendiente' ? `<button class="abtn ab-blue" onclick="verEtiqueta('${sid}',this)">🏷️ Etiqueta</button>` : ''}
         <button class="abtn ab-grey" onclick="compartirEnvio('${sid}')">📤 Compartir</button>
-        ${ROL==='log'?`<button class="abtn ab-amber" onclick="reclamar('${sid}')">📣 Reclamar</button>`:''}
       </div>
     </div></div>`;
 }
