@@ -2118,6 +2118,51 @@ async function compartirRecibidos(){
   if(!blob){ toast('No se pudo armar la imagen'); return; }
   const hoy=new Date(); await _compartirImagen(blob,`recibidos-${hoy.getDate()}-${hoy.getMonth()+1}.png`);
 }
+// ── Resumen de lo DESCONTADO hoy (para que la logística sepa qué paquetes y cuánto se le descuenta) ──
+function _descontadosHoy(){
+  const hoy=new Date(), out=[];
+  _reclamosMap.forEach(r=>{ const d=_parseFechaFlexible(r.fechaDescontado); if(d&&esMismoDia(d,hoy)) out.push(r); });
+  const num=r=>Number(String(r.id||'').replace(/\D/g,''))||0;
+  return out.sort((a,b)=>num(a)-num(b)).map(r=>({ id:String(r.id||''), zona:r.zona||r.comprador||'—', valor:Math.abs(Number(r.valor)||0),
+    tipo:r.tipo==='cambio'?'Cambio':r.tipo==='driver_devolver'?'Cancelado':r.tipo==='entrega'?'Entrega':'Demorado' }));
+}
+function _descontadosImagen(L){
+  const W=1080, P=56, RH=112, HEAD=300, FOOT=170, H=HEAD+L.length*RH+FOOT;
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  const F='system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fm=v=>'$'+fmtMoney(v).replace(/^\$/,'');
+  const cut=(t,max)=>{ if(g.measureText(t).width<=max) return t; while(t.length>1&&g.measureText(t+'…').width>max) t=t.slice(0,-1); return t+'…'; };
+  const pill=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
+  const TIPO={Cancelado:['#f87171','#3a1d22'], Cambio:['#a78bfa','#2a2340'], Entrega:['#38bdf8','#15303d'], Demorado:['#fbbf24','#3a3017']};
+  g.fillStyle='#0f1420'; g.fillRect(0,0,W,H);
+  const hoy=new Date();
+  g.fillStyle='#ffffff'; g.font=`800 54px ${F}`; g.fillText('Descontados',P,100);
+  g.fillStyle='#93a0b8'; g.font=`600 34px ${F}`; g.fillText(`${DIAS_LARGO[hoy.getDay()]} ${hoy.getDate()}/${hoy.getMonth()+1} · ${L.length} paquete${L.length>1?'s':''}`,P,156);
+  // cuántos de cada tipo
+  let px=P; g.font=`800 28px ${F}`;
+  ['Cancelado','Cambio','Demorado','Entrega'].forEach(t=>{ const n=L.filter(x=>x.tipo===t).length; if(!n) return;
+    const tx=`${n} ${t==='Cancelado'?'cancelado':t==='Cambio'?'cambio':t==='Demorado'?'demorado':'entrega'}${n>1?'s':''}`, w=g.measureText(tx).width+36;
+    pill(px,186,w,48,24,TIPO[t][1]); g.fillStyle=TIPO[t][0]; g.fillText(tx,px+18,219); px+=w+12; });
+  g.fillStyle='#283247'; g.fillRect(P,HEAD-40,W-2*P,2);
+  L.forEach((x,i)=>{
+    const y=HEAD+i*RH, tc=TIPO[x.tipo]||TIPO.Demorado;
+    if(i%2===0) pill(P-16,y-6,W-2*P+32,RH-8,18,'#151c2b');
+    g.font=`800 34px ${F}`; g.fillStyle='#7aa2ff'; g.fillText(x.id,P,y+44);
+    g.font=`700 34px ${F}`; g.fillStyle='#ffffff'; g.fillText(cut(x.zona,520),P+130,y+44);
+    g.font=`700 28px ${F}`; g.fillStyle=tc[0]; g.fillText(x.tipo,P+130,y+86);
+    g.font=`800 36px ${F}`; g.fillStyle='#ffffff'; g.textAlign='right'; g.fillText('-'+fm(x.valor),W-P,y+60); g.textAlign='left';
+  });
+  const tot=L.reduce((s,x)=>s+x.valor,0), yF=HEAD+L.length*RH+30;
+  pill(P-16,yF,W-2*P+32,110,22,'#3a1d22');
+  g.font=`800 40px ${F}`; g.fillStyle='#f87171'; g.fillText('Total descontado',P+10,yF+68);
+  g.textAlign='right'; g.fillStyle='#ffffff'; g.fillText('-'+fm(tot),W-P-10,yF+68); g.textAlign='left';
+  return new Promise(res=>c.toBlob(res,'image/png'));
+}
+async function compartirDescontados(){
+  const L=_descontadosHoy(); if(!L.length){ toast('Hoy no se descontó nada'); return; }
+  let blob=null; try{ blob=await _descontadosImagen(L); }catch(e){}
+  if(!blob){ toast('No se pudo armar la imagen'); return; }
+  const hoy=new Date(); await _compartirImagen(blob,`descontados-${hoy.getDate()}-${hoy.getMonth()+1}.png`);
+}
 // Comparte SOLO la imagen (sin texto). En la PC: la copia al portapapeles (para pegar en WhatsApp Web) y la descarga.
 async function _compartirImagen(blob,nombre){
   const file=new File([blob],nombre,{type:'image/png'});
@@ -2143,7 +2188,13 @@ function renderHistorial(){
   let evs=evsInWin.filter(ev=>_histFilter==='todos'?true:_histFilter==='hoy'?esMismoDia(new Date(ev.ts),hoy):ev.tipo===_histFilter);
   let html='<div class="filt">'+visFilters.map(([k,l])=>`<div class="fchip ${_histFilter===k?'on':''}" onclick="setHistFilter('${k}')">${l}</div>`).join('')+'</div>';
   const nRec=_recibidosHoy().length;
-  if(nRec) html+=`<button class="newbtn" style="margin:0 0 12px" onclick="compartirRecibidos()">📤 Compartir lo recibido hoy (${nRec})</button>`;
+  const nDesc=_descontadosHoy().length;
+  if(nRec||nDesc){
+    html+='<div style="display:flex;gap:8px;margin:0 0 12px">';
+    if(nRec) html+=`<button class="newbtn" style="margin:0;flex:1;width:auto" onclick="compartirRecibidos()">📤 Recibido hoy (${nRec})</button>`;
+    if(nDesc) html+=`<button class="newbtn" style="margin:0;flex:1;width:auto" onclick="compartirDescontados()">📤 Descontado hoy (${nDesc})</button>`;
+    html+='</div>';
+  }
   const clusters=feedClusters(evs);
   if(!clusters.length){ cont.innerHTML=html+'<div class="empty">Sin movimientos en este filtro.</div>'; return; }
   html+=clusters.map(feedCard).join('');
