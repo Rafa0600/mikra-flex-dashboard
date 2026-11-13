@@ -1016,6 +1016,33 @@ function _aplicarSnap(nuevo){
   _guardarSnapCache(m); _lsSet(_LS_REC,[..._reclamosMap.values()]);
   autoCerrarViejos(); autoCerrarEntregados();
   _renderTodo();
+  setTimeout(_completarDatosCasos,3000);
+}
+// Guarda en cada caso la dirección completa y el transportista mientras todavía se conocen
+// (ML borra la dirección y el chofer de la venta cuando se cancela). Una vez guardado, queda para siempre.
+const _datosIntentados=new Set(); let _datosCorriendo=false, _snapViejoProm=null;
+async function _completarDatosCasos(){
+  if(_datosCorriendo||!_snap) return; _datosCorriendo=true;
+  try{
+    const casos=[]; _reclamosMap.forEach(r=>{ const sid=String(r.shippingId||''); if(!/^\d{8,}$/.test(sid)||_datosIntentados.has(sid)) return;
+      const ch=_choferes[sid]; if(!r.direccion||(!r.chofer&&ch&&ch.chofer)) casos.push(r); });
+    if(!casos.length) return;
+    // los que ya no están en los envíos recientes: buscarlos en lo que guardó Cloudflare (hasta 60 días)
+    let viejos=null;
+    if(casos.some(r=>!r.direccion&&!_shipById.get(String(r.shippingId)))){
+      try{ _snapViejoProm=_snapViejoProm||fetch(SNAPSHOT_URL+'?action=get_snapshot&days=60',{signal:_withTimeout(60000)}).then(x=>x.json());
+        const d=await _snapViejoProm; viejos=new Map(); (d.envios||[]).forEach(e=>{ if(e.shipping) viejos.set(String(e.shipping.id),e.shipping); }); }catch(e){ _snapViejoProm=null; }
+    }
+    for(const r of casos){
+      const sid=String(r.shippingId); _datosIntentados.add(sid);
+      const e=_shipById.get(sid), sh=(e&&e.shipping)||(viejos&&viejos.get(sid));
+      const dir=r.direccion?'':(sh?_dirCompleta(sh):''), ch=_choferes[sid], chofer=(!r.chofer&&ch&&ch.chofer)||'';
+      if(!dir&&!chofer) continue;
+      const res=await _gasReclamo({action:'update_reclamo', shippingId:sid, direccion:dir, chofer});
+      if(res&&res.ok){ if(dir) r.direccion=dir; if(chofer) r.chofer=chofer; }
+    }
+    _lsSet(_LS_REC,[..._reclamosMap.values()]);
+  }finally{ _datosCorriendo=false; }
 }
 
 // ── Sincronización con Mercado Libre (la hace el servidor, ~15-60 s) ──
@@ -1466,6 +1493,12 @@ function _renderTarDetalle(cont,G){
 // street_name + street_number (address_line como respaldo).
 function _addrName(x){ return (x&&typeof x==='object'&&x.name)?x.name:(typeof x==='string'?x:''); }
 function zonaDe(sh){ const ra=(sh&&sh.receiver_address)||{}; return getZonaDetallada(_addrName(ra.neighborhood),_addrName(ra.city),ra.zip_code||''); }
+// Dirección completa para guardar en el caso: "Calle 123 · 3 B Referencia: … · Barrio". ML la tapa (**) al cancelar.
+function _dirCompleta(sh){
+  const ra=(sh&&sh.receiver_address)||{}; const calle=calleDe(sh);
+  if(!calle||calle==='—'||/\*\*/.test(calle)) return '';
+  return [calle, (ra.comment||'').trim(), zonaDe(sh)].filter(Boolean).join(' · ');
+}
 function calleDe(sh){ const ra=(sh&&sh.receiver_address)||{}; if(ra.street_name) return (ra.street_name+(ra.street_number?' '+ra.street_number:'')).trim(); return ra.address_line||'—'; }
 function hoyItems(){
   if(!_snap)return [];
@@ -1744,7 +1777,7 @@ function _resPalabras(){ return _norm(_resQ).split(/\s+/).filter(Boolean); }
 function _resQMatch(r){
   const ws=_resPalabras(); if(!ws.length) return true;
   const e=_shipById.get(String(r.shippingId)), o=e&&(e.orders||[])[0];
-  const txt=_norm([r.id, r.zona, r.comprador, r.notas, r.cuenta, r.orderId, r.shippingId, o&&o.buyer&&o.buyer.nickname,
+  const txt=_norm([r.id, r.zona, r.comprador, r.notas, r.cuenta, r.orderId, r.shippingId, r.direccion, r.chofer, o&&o.buyer&&o.buyer.nickname,
     ..._resArticulos(r), ...(e?_pedidoItems(e.orders).map(x=>x.titulo+' '+x.sku):[])].join(' | '));
   return ws.every(w=>txt.includes(w));
 }
@@ -1941,7 +1974,11 @@ function resolverCard(r){
   const valEl = r.valor?(' · <b class="pk-val" onclick="event.stopPropagation();copiarCaso(\''+sid+'\')" title="Copiar para Excel">'+fmtMoney(r.valor)+'</b>'):'';
   const needRefund=_needRefund(r);
   const _e=_shipById.get(sid);
-  const dirLine=_e?('<div class="info" style="cursor:pointer" onclick="verEnMapa(\''+esc(sid)+'\')">📍 <span class="addr">'+esc(calleDe(_e.shipping))+'</span>, '+esc(_e.shipping._zona||zonaDe(_e.shipping))+' <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>'):(r.zona?('<div class="info">📍 '+esc(r.zona)+'</div>'):'');
+  const _calleOk=_e&&!/\*\*/.test(calleDe(_e.shipping));
+  const dirLine=_calleOk?('<div class="info" style="cursor:pointer" onclick="verEnMapa(\''+esc(sid)+'\')">📍 <span class="addr">'+esc(calleDe(_e.shipping))+'</span>, '+esc(_e.shipping._zona||zonaDe(_e.shipping))+' <span style="color:var(--accent);font-size:11px;font-weight:700">· ver en mapa ›</span></div>')
+    :(r.direccion?('<div class="info">📍 '+esc(r.direccion)+'</div>'):(r.zona?('<div class="info">📍 '+esc(r.zona)+'</div>'):''));
+  const _chN=r.chofer||(_choferes[sid]&&_choferes[sid].chofer)||'';
+  const choferLine=_chN?'<div class="info">🏍️ '+esc(_chN)+'</div>':'';
   const ordenLine = ROL==='owner'&&r.orderId ? `<div class="info"><a href="https://vendedores.mercadolibre.com.ar/ventas/${esc(r.orderId)}/detalle" target="_blank" style="color:var(--accent);font-weight:750;font-size:12.5px;text-decoration:none">🔗 #${esc(r.orderId)}</a></div>` : '';
   let btns='<button class="abtn ab-blue" onclick="verTimeline(\''+sid+'\')">🔍 Historial</button>';
   if(ROL==='log'&&!needRefund){
@@ -1989,6 +2026,7 @@ function resolverCard(r){
       ${(r.notas&&ROL==='owner')?('<div class="info" style="color:var(--amber);font-weight:700">📦 '+esc(r.notas)+'</div>'):''}
       ${ordenLine}
       ${dirLine}
+      ${choferLine}
       <div class="info">👤 ${esc(r.comprador||'—')}${r.cuenta?' · '+esc(r.cuenta):''} · ${esc(tipoTxt)}</div>
       <div class="pk-btns">${btns}</div>
     </div></div>`;
@@ -2793,7 +2831,9 @@ async function ncGuardar(){
   if(vencEl&&vencEl.value){ const parts=vencEl.value.split('-'); if(parts.length===3) vencDate=new Date(+parts[0], +parts[1]-1, +parts[2]); }
   if(!vencDate||isNaN(vencDate)) vencDate=_venc();
   const venc=_fmtDMY(vencDate);
-  const res=await _gasReclamo({action:'add_reclamo', shippingId:f.shippingId, orderId:f.orderId||'', comprador:f.comprador||'', zona, cuenta:f.cuenta||'', tipo, valor, fechaEstimada:venc, notas});
+  const _e=_shipById.get(String(f.shippingId)), _chf=_e?_chofer(_e.shipping):null;
+  const direccion=(_e&&_dirCompleta(_e.shipping))||dir||'';
+  const res=await _gasReclamo({action:'add_reclamo', shippingId:f.shippingId, orderId:f.orderId||'', comprador:f.comprador||'', zona, cuenta:f.cuenta||'', tipo, valor, fechaEstimada:venc, notas, direccion, chofer:(_chf&&_chf.chofer)||''});
   if(res&&res.ok){ closeSheet('newcase'); await fetchReclamos(); toast('✅ Caso creado '+(res.record?res.record.id:'')+(res.duplicate?' (ya existía)':'')); _refrescarCasos(); }
   else { window._ncForm=f; toast('⚠️ No se pudo guardar (¿sin señal?). Tus datos siguen acá: tocá Guardar de nuevo.'); } // no perder lo cargado
 }
